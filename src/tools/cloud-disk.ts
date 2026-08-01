@@ -1,5 +1,6 @@
 import { Hono } from 'hono';
 import { createDb, DbError } from '../db';
+import { createKv, getKvTableError } from '../kv';
 
 type Bindings = {
   D1_API_TOKEN: string;
@@ -42,15 +43,7 @@ async function ensureTable(token: string, base?: string): Promise<boolean> {
       chunk_size INTEGER NOT NULL DEFAULT 0
     )`);
     await db.query(`CREATE INDEX IF NOT EXISTS idx_disk_chunks_file_id ON kbox_disk_chunks(file_id)`);
-    // 一次性下载令牌表：dt 主键、关联文件、过期时间、是否已用
-    await db.query(`CREATE TABLE IF NOT EXISTS kbox_disk_tokens (
-      dt TEXT PRIMARY KEY,
-      file_id INTEGER NOT NULL,
-      expires_at INTEGER NOT NULL,
-      used INTEGER NOT NULL DEFAULT 0,
-      created_at TEXT DEFAULT (datetime('now','localtime'))
-    )`);
-    await db.query(`CREATE INDEX IF NOT EXISTS idx_disk_tokens_file_id ON kbox_disk_tokens(file_id)`);
+    // 下载令牌已迁移到通用 KV 表（namespace='disk_tokens'），此处不再单独建表
     tableReady = true;
     return true;
   } catch (e) {
@@ -228,9 +221,11 @@ app.post('/files/:id/chunks', async (c) => {
 
 // ─── 生成一次性下载令牌 ───
 // 主鉴权后调用，返回的 dt 仅能用于下载指定文件，5 分钟内一次性有效
+// 令牌存于通用 KV 表：namespace='disk_tokens', key=dt, value={file_id, expires_at, used}
 app.post('/files/:id/download-token', async (c) => {
   if (!await ensureTable(c.env.D1_API_TOKEN, c.env.D1_API_BASE)) return tableError(c);
   const db = getDb(c);
+  const kv = createKv(c.env.D1_API_TOKEN, c.env.D1_API_BASE);
   const fileId = Number(c.req.param('id'));
 
   try {
@@ -245,19 +240,8 @@ app.post('/files/:id/download-token', async (c) => {
     const dt = crypto.randomUUID();
     const expiresAt = Math.floor(Date.now() / 1000) + DOWNLOAD_TOKEN_TTL_SEC;
 
-    await db.execute(
-      `INSERT INTO kbox_disk_tokens (dt, file_id, expires_at, used) VALUES (?, ?, ?, 0)`,
-      [dt, fileId, expiresAt]
-    );
-
-    // 顺带清理过期或已用令牌（不影响主流程）
-    const now = Math.floor(Date.now() / 1000);
-    try {
-      await db.execute(
-        `DELETE FROM kbox_disk_tokens WHERE expires_at < ? OR used = 1`,
-        [now]
-      );
-    } catch { /* 忽略清理失败 */ }
+    // 存入 KV 表（value 是 JSON 对象）
+    await kv.set('disk_tokens', dt, { file_id: fileId, expires_at: expiresAt, used: false });
 
     return c.json({
       dt,
@@ -266,6 +250,7 @@ app.post('/files/:id/download-token', async (c) => {
       url: `/api/tools/disk/files/${fileId}/download?dt=${dt}`,
     });
   } catch (e) {
+    if (getKvTableError()) return c.json({ error: getKvTableError() }, 503);
     return c.json({ error: e instanceof Error ? e.message : '生成下载令牌失败' }, 500);
   }
 });
@@ -274,6 +259,7 @@ app.post('/files/:id/download-token', async (c) => {
 app.get('/files/:id/download', async (c) => {
   if (!await ensureTable(c.env.D1_API_TOKEN, c.env.D1_API_BASE)) return tableError(c);
   const db = getDb(c);
+  const kv = createKv(c.env.D1_API_TOKEN, c.env.D1_API_BASE);
   const fileId = Number(c.req.param('id'));
   const dt = c.req.query('dt')?.trim() || '';
 
@@ -282,13 +268,10 @@ app.get('/files/:id/download', async (c) => {
   }
 
   try {
-    // 验证令牌：存在 + 未使用 + 未过期 + file_id 匹配
-    const tk = await db.queryOne<{ file_id: number; expires_at: number; used: number }>(
-      `SELECT file_id, expires_at, used FROM kbox_disk_tokens WHERE dt = ?`,
-      [dt]
-    );
+    // 从 KV 表读取令牌
+    const tk = await kv.get<{ file_id: number; expires_at: number; used: boolean }>('disk_tokens', dt);
     if (!tk) return c.json({ error: '下载令牌无效' }, 401);
-    if (tk.used === 1) return c.json({ error: '下载令牌已使用' }, 401);
+    if (tk.used) return c.json({ error: '下载令牌已使用' }, 401);
     if (tk.expires_at < Math.floor(Date.now() / 1000)) {
       return c.json({ error: '下载令牌已过期' }, 401);
     }
@@ -296,8 +279,8 @@ app.get('/files/:id/download', async (c) => {
       return c.json({ error: '下载令牌与文件不匹配' }, 403);
     }
 
-    // 立即标记为已用（一次性）
-    await db.execute(`UPDATE kbox_disk_tokens SET used = 1 WHERE dt = ?`, [dt]);
+    // 立即标记为已用（一次性）：整体覆盖写入
+    await kv.set('disk_tokens', dt, { ...tk, used: true });
 
     const file = await db.queryOne<{ name: string; mime_type: string; size: number; chunks: number }>(
       `SELECT name, mime_type, size, chunks FROM kbox_disk_files WHERE id = ?`,
@@ -328,6 +311,7 @@ app.get('/files/:id/download', async (c) => {
       },
     });
   } catch (e) {
+    if (getKvTableError()) return c.json({ error: getKvTableError() }, 503);
     return c.json({ error: e instanceof Error ? e.message : '下载失败' }, 500);
   }
 });

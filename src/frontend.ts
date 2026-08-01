@@ -527,20 +527,29 @@ function mountDispatchTool() {
 
   renderSavedConfigs();
 
-  function renderSavedConfigs() {
-    const configs = JSON.parse(localStorage.getItem('kbox_dispatch_configs') || '[]');
-    if (!configs.length) { savedConfigsBox.innerHTML = ''; return; }
+  // 从数据库加载已保存配置
+  let savedConfigs = []; // [{id, repo, workflow_id, branch, inputs}]
+
+  async function renderSavedConfigs() {
+    try {
+      const data = await api('/api/tools/dispatch-configs');
+      savedConfigs = data.configs || [];
+    } catch (e) {
+      if (e.message === 'UNAUTHORIZED') return;
+      savedConfigsBox.innerHTML = '<span style="font-size:12px;color:var(--text-muted)">配置加载失败</span>';
+      return;
+    }
+    if (!savedConfigs.length) { savedConfigsBox.innerHTML = ''; return; }
     let html = '';
-    for (let i = 0; i < configs.length; i++) {
-      const c = configs[i];
+    for (let i = 0; i < savedConfigs.length; i++) {
+      const c = savedConfigs[i];
       html += '<span class="saved-config" onclick="loadDispatchConfig(' + i + ')">' + esc(c.repo) + ' / ' + esc(c.workflow_id) + '<span class="del" onclick="delDispatchConfig(event,' + i + ')">✕</span></span>';
     }
     savedConfigsBox.innerHTML = html;
   }
 
   window.loadDispatchConfig = function(i) {
-    const configs = JSON.parse(localStorage.getItem('kbox_dispatch_configs') || '[]');
-    const c = configs[i];
+    const c = savedConfigs[i];
     if (!c) return;
     repoInput.value = c.repo || '';
     loadBtn.click();
@@ -565,12 +574,18 @@ function mountDispatchTool() {
     }, 1500);
   };
 
-  window.delDispatchConfig = function(e, i) {
+  window.delDispatchConfig = async function(e, i) {
     e.stopPropagation();
-    const configs = JSON.parse(localStorage.getItem('kbox_dispatch_configs') || '[]');
-    configs.splice(i, 1);
-    localStorage.setItem('kbox_dispatch_configs', JSON.stringify(configs));
-    renderSavedConfigs();
+    const c = savedConfigs[i];
+    if (!c || !c.id) return;
+    try {
+      await api('/api/tools/dispatch-configs/' + encodeURIComponent(c.id), { method: 'DELETE' });
+      toast('已删除', 'success');
+      renderSavedConfigs();
+    } catch (e) {
+      if (e.message === 'UNAUTHORIZED') return;
+      toast('删除失败：' + e.message, 'error');
+    }
   };
 
   loadBtn.onclick = async () => {
@@ -735,7 +750,7 @@ function mountDispatchTool() {
     }
   };
 
-  saveBtn.onclick = () => {
+  saveBtn.onclick = async () => {
     const repo = repoInput.value.trim();
     if (!repo || !selectedWf) { toast('请先选择仓库和工作流', 'error'); return; }
     const inputs = [];
@@ -746,11 +761,18 @@ function mountDispatchTool() {
         if (k) inputs.push([k, v]);
       });
     }
-    const configs = JSON.parse(localStorage.getItem('kbox_dispatch_configs') || '[]');
-    configs.push({ repo, workflow_id: selectedWf, branch: branchSelect.value || 'main', inputs });
-    localStorage.setItem('kbox_dispatch_configs', JSON.stringify(configs));
-    renderSavedConfigs();
-    toast('配置已保存', 'success');
+    try {
+      await api('/api/tools/dispatch-configs', {
+        method: 'POST',
+        body: JSON.stringify({ repo, workflow_id: selectedWf, branch: branchSelect.value || 'main', inputs }),
+        headers: { 'Content-Type': 'application/json' },
+      });
+      toast('配置已保存', 'success');
+      renderSavedConfigs();
+    } catch (e) {
+      if (e.message === 'UNAUTHORIZED') return;
+      toast('保存失败：' + e.message, 'error');
+    }
   };
 }
 

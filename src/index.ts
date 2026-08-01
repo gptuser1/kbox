@@ -1,6 +1,7 @@
 import { Hono } from 'hono';
 import { renderFrontend } from './frontend';
 import disk from './tools/cloud-disk';
+import { createKv, getKvTableError } from './kv';
 
 type Bindings = {
   ACCESS_TOKEN: string;
@@ -211,6 +212,90 @@ app.get('/api/tools/workflow-runs', async (c) => {
     return c.json({ runs });
   } catch (e) {
     return c.json({ error: e instanceof Error ? e.message : '请求失败' }, 500);
+  }
+});
+
+// ─── Dispatch 配置 CRUD（基于通用 KV 表） ───
+// namespace = 'dispatch_configs'，key = '{token}:{id}'，value = { repo, workflow_id, branch, inputs }
+
+interface DispatchConfig {
+  id: string;
+  repo: string;
+  workflow_id: string;
+  branch: string;
+  inputs: Array<[string, string]>;
+  updated_at?: string;
+}
+
+const NS_DISPATCH = 'dispatch_configs';
+
+function kvError(c: any) {
+  return c.json({ error: getKvTableError() || 'KV 表初始化失败，请检查 D1_API_TOKEN' }, 503);
+}
+
+// 列出当前用户所有 dispatch 配置
+app.get('/api/tools/dispatch-configs', async (c) => {
+  const token = c.get('token');
+  const kv = createKv(c.env.D1_API_TOKEN, c.env.D1_API_BASE);
+  try {
+    const items = await kv.list<DispatchConfig>(NS_DISPATCH, token + ':');
+    // key 格式 '{token}:{id}'，提取 id 拼到对象里
+    const configs = items.map(item => ({
+      ...item.value,
+      id: item.key.split(':').slice(1).join(':'),
+    }));
+    return c.json({ configs });
+  } catch (e) {
+    if (getKvTableError()) return kvError(c);
+    return c.json({ error: e instanceof Error ? e.message : '获取配置失败' }, 500);
+  }
+});
+
+// 新增配置（自动生成 id）
+app.post('/api/tools/dispatch-configs', async (c) => {
+  const token = c.get('token');
+  const kv = createKv(c.env.D1_API_TOKEN, c.env.D1_API_BASE);
+
+  let body: any;
+  try { body = await c.req.json(); } catch {
+    return c.json({ error: '请求体必须是有效的JSON' }, 400);
+  }
+
+  const repo = body.repo?.trim();
+  const workflowId = body.workflow_id?.trim();
+  if (!repo || !workflowId) {
+    return c.json({ error: '需要 repo 和 workflow_id 字段' }, 400);
+  }
+
+  const id = Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+  const config: DispatchConfig = {
+    repo,
+    workflow_id: workflowId,
+    branch: body.branch || 'main',
+    inputs: Array.isArray(body.inputs) ? body.inputs : [],
+  };
+
+  try {
+    await kv.set(NS_DISPATCH, token + ':' + id, config);
+    return c.json({ ok: true, id, ...config });
+  } catch (e) {
+    if (getKvTableError()) return kvError(c);
+    return c.json({ error: e instanceof Error ? e.message : '保存配置失败' }, 500);
+  }
+});
+
+// 删除配置
+app.delete('/api/tools/dispatch-configs/:id', async (c) => {
+  const token = c.get('token');
+  const kv = createKv(c.env.D1_API_TOKEN, c.env.D1_API_BASE);
+  const id = c.req.param('id');
+
+  try {
+    await kv.delete(NS_DISPATCH, token + ':' + id);
+    return c.json({ ok: true });
+  } catch (e) {
+    if (getKvTableError()) return kvError(c);
+    return c.json({ error: e instanceof Error ? e.message : '删除配置失败' }, 500);
   }
 });
 
