@@ -67,29 +67,61 @@ function tableError(c: any) {
   return c.json({ error: tableInitError || '数据库初始化失败，请检查 D1_API_TOKEN' }, 503);
 }
 
+// ─── 全库占用统计 ───
+// 优先用 dbstat 虚拟表（含索引、schema 页面，最准确）
+// 降级：逐表累加所有列内容长度
+async function getDbUsage(db: ReturnType<typeof createDb>): Promise<number> {
+  // 方案1：dbstat 虚拟表（D1 REST API 不支持 PRAGMA，但 dbstat 是普通表查询）
+  try {
+    const r = await db.queryOne<{ total: number }>(
+      `SELECT COALESCE(SUM(pgsize), 0) as total FROM dbstat WHERE name NOT LIKE 'sqlite_%' AND name NOT LIKE '_cf_%'`
+    );
+    if (r && typeof r.total === 'number' && r.total > 0) return r.total;
+  } catch { /* 降级到逐表方案 */ }
+
+  // 方案2：逐表累加所有列 LENGTH 之和（含 state / replies / kbox_disk_* 等全部表）
+  try {
+    const tables = await db.queryAll<{ name: string }>(
+      `SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' AND name NOT LIKE '_cf_%'`
+    );
+    let total = 0;
+    for (const t of tables) {
+      try {
+        const cols = await db.queryAll<{ name: string }>(
+          `SELECT name FROM pragma_table_info(?)`,
+          [t.name]
+        );
+        if (cols.length === 0) continue;
+        const safeTable = t.name.replace(/`/g, '``');
+        const colExpr = cols
+          .map(c => 'COALESCE(LENGTH(`' + c.name.replace(/`/g, '``') + '`), 0)')
+          .join('+');
+        const r = await db.queryOne<{ sz: number }>(
+          'SELECT COALESCE(SUM(' + colExpr + '), 0) as sz FROM `' + safeTable + '`'
+        );
+        total += r?.sz || 0;
+      } catch { /* 跳过该表 */ }
+    }
+    return total;
+  } catch { /* 全部失败 */ }
+  return 0;
+}
+
 // ─── 容量统计 ───
 app.get('/stats', async (c) => {
   if (!await ensureTable(c.env.D1_API_TOKEN, c.env.D1_API_BASE)) return tableError(c);
   const db = getDb(c);
   try {
-    // 文件数量和总大小
+    // 文件数量和总大小（仅 kbox_disk_files 表，对应前端"文件大小"卡片）
     const stats = await db.queryOne<{ count: number; total_size: number }>(
       `SELECT COUNT(*) as count, COALESCE(SUM(size), 0) as total_size FROM kbox_disk_files`
     );
-    // 实际存储占用：base64 内容长度（D1 REST API 不支持 PRAGMA）
-    let storedSize = 0;
-    try {
-      const stored = await db.queryOne<{ stored: number }>(
-        `SELECT COALESCE(SUM(LENGTH(content)), 0) as stored FROM kbox_disk_chunks`
-      );
-      storedSize = stored?.stored || 0;
-    } catch {
-      // 忽略
-    }
+    // 整个 D1 库的实际占用（含 state/replies 等所有表 + 索引）
+    const dbSize = await getDbUsage(db);
     return c.json({
       file_count: stats?.count || 0,
       total_size: stats?.total_size || 0,
-      db_size: storedSize,
+      db_size: dbSize,
       max_db_size: 500 * 1024 * 1024, // 500MB
       max_file_size: MAX_FILE_SIZE,
     });
