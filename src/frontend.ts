@@ -401,6 +401,10 @@ function renderDispatchTool() {
       <button class="btn btn-outline" id="dispatchSaveBtn">保存配置</button>
     </div>
     <div class="result-box" id="dispatchResult"></div>
+    <div id="dispatchRunSection" style="display:none;margin-top:16px">
+      <div class="section-title">执行状态</div>
+      <div id="dispatchRunCard"></div>
+    </div>
   \`;
 }
 
@@ -422,6 +426,97 @@ function mountDispatchTool() {
   const saveBtn = $('dispatchSaveBtn');
   const resultBox = $('dispatchResult');
   const savedConfigsBox = $('dispatchSavedConfigs');
+  const runSection = $('dispatchRunSection');
+  const runCard = $('dispatchRunCard');
+
+  // 执行状态轮询
+  let runPollTimer = null;
+  let trackingLive = false;    // true=正在跟踪一次新触发的实时执行；false=仅查看上次
+  let lastRunId = null;        // 实时跟踪目标的 run id（首次拉取前为 null，取最新一条）
+  let pollOwner = '';
+  let pollRepo = '';
+  let pollWf = '';
+
+  // 状态文案与颜色映射
+  function runStatusText(status, conclusion) {
+    if (status === 'queued') return '⏳ 排队中';
+    if (status === 'in_progress') return '🔄 运行中';
+    if (status === 'completed') {
+      if (conclusion === 'success') return '✅ 成功';
+      if (conclusion === 'failure') return '❌ 失败';
+      if (conclusion === 'cancelled') return '⚠️ 已取消';
+      if (conclusion === 'skipped') return '⏭️ 已跳过';
+      return '📦 ' + (conclusion || '完成');
+    }
+    return '未知';
+  }
+  function runStatusColor(status, conclusion) {
+    if (status === 'queued') return 'var(--text-muted)';
+    if (status === 'in_progress') return 'var(--primary)';
+    if (status === 'completed') {
+      if (conclusion === 'success') return 'var(--success)';
+      return 'var(--danger)';
+    }
+    return 'var(--text-secondary)';
+  }
+
+  // 渲染单条 run 卡片。isLive=true 显示"实时"标签，否则显示"上次"
+  function renderRunCard(run, isLive) {
+    if (!run) { runCard.innerHTML = '<div class="empty">暂无执行记录</div>'; return; }
+    const tag = isLive ? '<span style="font-size:11px;color:var(--primary);margin-left:6px">实时</span>' : '<span style="font-size:11px;color:var(--text-muted);margin-left:6px">上次</span>';
+    const color = runStatusColor(run.status, run.conclusion);
+    const created = run.created_at ? formatDate(run.created_at.replace('T', ' ').replace('Z', '')) : '';
+    const branch = run.head_branch ? ' · ' + esc(run.head_branch) : '';
+    const url = run.html_url ? '<a href="' + esc(run.html_url) + '" target="_blank" rel="noopener" style="font-size:12px;color:var(--primary);text-decoration:none;margin-left:6px">查看 ↗</a>' : '';
+    runCard.innerHTML =
+      '<div class="file-item" style="display:block;padding:14px 16px">' +
+        '<div style="display:flex;align-items:center;justify-content:space-between;gap:12px">' +
+          '<div style="font-weight:600;font-size:14px">' + esc(run.name || pollWf) + tag + '</div>' +
+          '<div style="font-size:13px;font-weight:600;color:' + color + '">' + runStatusText(run.status, run.conclusion) + '</div>' +
+        '</div>' +
+        '<div style="font-size:12px;color:var(--text-muted);margin-top:6px">#' + run.id + branch + ' · ' + created + url + '</div>' +
+      '</div>';
+  }
+
+  // 拉取一次 run 列表并渲染。
+  // trackingLive=true 时：优先匹配 lastRunId，状态完结后停止轮询
+  // trackingLive=false 时：取最新一条作为"上次执行"，不轮询
+  async function fetchRuns() {
+    if (!pollOwner || !pollRepo || !pollWf) return;
+    try {
+      const data = await api('/api/tools/workflow-runs?owner=' + encodeURIComponent(pollOwner) + '&repo=' + encodeURIComponent(pollRepo) + '&workflow_id=' + encodeURIComponent(pollWf) + '&per_page=5');
+      const runs = data.runs || [];
+      runSection.style.display = '';
+      if (!runs.length) { renderRunCard(null, false); stopPoll(); return; }
+
+      // 实时跟踪：优先找 lastRunId，否则用最新一条作为目标并记录
+      let target = null;
+      if (trackingLive && lastRunId) target = runs.find(r => String(r.id) === String(lastRunId));
+      if (!target) target = runs[0];
+      if (trackingLive) lastRunId = target.id;
+
+      renderRunCard(target, trackingLive);
+
+      // 实时跟踪且仍在进行 → 继续轮询；完结 → 停止
+      if (trackingLive && (target.status === 'queued' || target.status === 'in_progress')) {
+        startPoll();
+      } else {
+        stopPoll();
+      }
+    } catch (e) {
+      if (e.message === 'UNAUTHORIZED') return;
+      runSection.style.display = '';
+      runCard.innerHTML = '<div class="empty">获取状态失败：' + esc(e.message) + '</div>';
+    }
+  }
+
+  function startPoll() {
+    stopPoll();
+    runPollTimer = setInterval(fetchRuns, 3000);
+  }
+  function stopPoll() {
+    if (runPollTimer) { clearInterval(runPollTimer); runPollTimer = null; }
+  }
 
   renderSavedConfigs();
 
@@ -486,6 +581,14 @@ function mountDispatchTool() {
     branchGroup.style.display = 'none';
     selectedWf = null;
     triggerBtn.disabled = true;
+    // 重置执行状态面板
+    stopPoll();
+    trackingLive = false;
+    lastRunId = null;
+    pollOwner = '';
+    pollRepo = '';
+    pollWf = '';
+    runSection.style.display = 'none';
 
     try {
       // 并行加载工作流和分支
@@ -536,6 +639,15 @@ function mountDispatchTool() {
               if (e.message === 'UNAUTHORIZED') return;
               inputsBox.innerHTML = '<div class="empty">获取参数失败：' + esc(e.message) + '</div>';
             });
+
+          // 加载"上次执行"状态（非实时跟踪）
+          stopPoll();
+          trackingLive = false;
+          lastRunId = null;
+          pollOwner = owner2;
+          pollRepo = repoName2;
+          pollWf = selectedWf;
+          fetchRuns();
         };
       });
     } catch (e) {
@@ -593,7 +705,18 @@ function mountDispatchTool() {
       });
       resultBox.className = 'result-box show success';
       resultBox.textContent = '✓ ' + data.message + '（' + selectedWf + ' @ ' + ref + '）';
-      toast('已触发', 'success');
+      toast('已触发，开始跟踪执行状态', 'success');
+
+      // 启动实时跟踪：等 2 秒让 GitHub 创建 run，然后取最新一条作为跟踪目标
+      stopPoll();
+      trackingLive = true;
+      lastRunId = null;
+      pollOwner = owner;
+      pollRepo = repoName;
+      pollWf = selectedWf;
+      runSection.style.display = '';
+      runCard.innerHTML = '<div class="empty">⏳ 等待 GitHub 创建运行记录…</div>';
+      setTimeout(() => { fetchRuns(); }, 2000);
     } catch (e) {
       if (e.message === 'UNAUTHORIZED') return;
       resultBox.className = 'result-box show error';

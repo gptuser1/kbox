@@ -171,6 +171,49 @@ app.post('/api/tools/dispatch', async (c) => {
   }
 });
 
+// ─── 查询 workflow 最近执行状态 ───
+// 返回该 workflow 最近 N 次 runs（默认 1），用于"上次执行"和"实时执行"展示
+app.get('/api/tools/workflow-runs', async (c) => {
+  const owner = c.req.query('owner')?.trim();
+  const repo = c.req.query('repo')?.trim();
+  const workflowId = c.req.query('workflow_id')?.trim();
+  if (!owner || !repo || !workflowId) {
+    return c.json({ error: '需要 owner、repo、workflow_id 参数' }, 400);
+  }
+  const perPage = Math.min(Number(c.req.query('per_page')) || 1, 10);
+
+  try {
+    const res = await fetch(
+      `https://api.github.com/repos/${owner}/${repo}/actions/workflows/${encodeURIComponent(workflowId)}/runs?per_page=${perPage}`,
+      {
+        headers: {
+          'Authorization': `Bearer ${c.env.GH_TOKEN}`,
+          'Accept': 'application/vnd.github+json',
+          'User-Agent': 'kbox',
+        },
+      }
+    );
+    const data: any = await res.json();
+    if (!res.ok) {
+      return c.json({ error: data?.message || `GitHub API ${res.status}` }, res.status as any);
+    }
+    const runs = (data.workflow_runs || []).map((r: any) => ({
+      id: r.id,
+      name: r.name,
+      head_branch: r.head_branch,
+      status: r.status,           // queued | in_progress | completed
+      conclusion: r.conclusion,   // success | failure | cancelled | null（运行中）
+      html_url: r.html_url,
+      created_at: r.created_at,
+      updated_at: r.updated_at,
+      run_attempt: r.run_attempt,
+    }));
+    return c.json({ runs });
+  } catch (e) {
+    return c.json({ error: e instanceof Error ? e.message : '请求失败' }, 500);
+  }
+});
+
 // ─── 辅助：解析 workflow_dispatch inputs ───
 
 interface WorkflowInput {
