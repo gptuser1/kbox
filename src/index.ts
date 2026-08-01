@@ -38,7 +38,13 @@ const FAVICON_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"
 
 // ─── 鉴权中间件 ───
 app.use('/api/*', async (c, next) => {
-  // 优先 Authorization header，其次支持 ?token= query param（用于下载链接）
+  // 下载端点用一次性 dt 令牌鉴权，跳过主鉴权（dt 由 POST /files/:id/download-token 生成）
+  const path = new URL(c.req.url).pathname;
+  if (/^\/api\/tools\/disk\/files\/\d+\/download$/.test(path)) {
+    await next();
+    return;
+  }
+  // 优先 Authorization header，其次支持 ?token= query param（保留兼容）
   const auth = c.req.header('Authorization');
   let token = '';
   if (auth && auth.startsWith('Bearer ')) {

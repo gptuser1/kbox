@@ -12,6 +12,7 @@ type Variables = {
 
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
 const CHUNK_SIZE = 1.4 * 1024 * 1024; // 1.4MB → Base64 ≈ 1.87MB < 2MB 单行限制
+const DOWNLOAD_TOKEN_TTL_SEC = 300; // 下载令牌有效期 5 分钟
 
 const app = new Hono<{ Bindings: Bindings; Variables: Variables }>();
 
@@ -41,6 +42,15 @@ async function ensureTable(token: string, base?: string): Promise<boolean> {
       chunk_size INTEGER NOT NULL DEFAULT 0
     )`);
     await db.query(`CREATE INDEX IF NOT EXISTS idx_disk_chunks_file_id ON kbox_disk_chunks(file_id)`);
+    // 一次性下载令牌表：dt 主键、关联文件、过期时间、是否已用
+    await db.query(`CREATE TABLE IF NOT EXISTS kbox_disk_tokens (
+      dt TEXT PRIMARY KEY,
+      file_id INTEGER NOT NULL,
+      expires_at INTEGER NOT NULL,
+      used INTEGER NOT NULL DEFAULT 0,
+      created_at TEXT DEFAULT (datetime('now','localtime'))
+    )`);
+    await db.query(`CREATE INDEX IF NOT EXISTS idx_disk_tokens_file_id ON kbox_disk_tokens(file_id)`);
     tableReady = true;
     return true;
   } catch (e) {
@@ -216,13 +226,79 @@ app.post('/files/:id/chunks', async (c) => {
   }
 });
 
-// ─── 下载文件 ───
-app.get('/files/:id/download', async (c) => {
+// ─── 生成一次性下载令牌 ───
+// 主鉴权后调用，返回的 dt 仅能用于下载指定文件，5 分钟内一次性有效
+app.post('/files/:id/download-token', async (c) => {
   if (!await ensureTable(c.env.D1_API_TOKEN, c.env.D1_API_BASE)) return tableError(c);
   const db = getDb(c);
   const fileId = Number(c.req.param('id'));
 
   try {
+    // 文件必须存在
+    const file = await db.queryOne<{ id: number }>(
+      `SELECT id FROM kbox_disk_files WHERE id = ?`,
+      [fileId]
+    );
+    if (!file) return c.json({ error: '文件不存在' }, 404);
+
+    // 生成随机令牌（Workers 支持 crypto.randomUUID）
+    const dt = crypto.randomUUID();
+    const expiresAt = Math.floor(Date.now() / 1000) + DOWNLOAD_TOKEN_TTL_SEC;
+
+    await db.execute(
+      `INSERT INTO kbox_disk_tokens (dt, file_id, expires_at, used) VALUES (?, ?, ?, 0)`,
+      [dt, fileId, expiresAt]
+    );
+
+    // 顺带清理过期或已用令牌（不影响主流程）
+    const now = Math.floor(Date.now() / 1000);
+    try {
+      await db.execute(
+        `DELETE FROM kbox_disk_tokens WHERE expires_at < ? OR used = 1`,
+        [now]
+      );
+    } catch { /* 忽略清理失败 */ }
+
+    return c.json({
+      dt,
+      file_id: fileId,
+      expires_in: DOWNLOAD_TOKEN_TTL_SEC,
+      url: `/api/tools/disk/files/${fileId}/download?dt=${dt}`,
+    });
+  } catch (e) {
+    return c.json({ error: e instanceof Error ? e.message : '生成下载令牌失败' }, 500);
+  }
+});
+
+// ─── 下载文件（用一次性 dt 令牌鉴权，不走主鉴权） ───
+app.get('/files/:id/download', async (c) => {
+  if (!await ensureTable(c.env.D1_API_TOKEN, c.env.D1_API_BASE)) return tableError(c);
+  const db = getDb(c);
+  const fileId = Number(c.req.param('id'));
+  const dt = c.req.query('dt')?.trim() || '';
+
+  if (!dt) {
+    return c.json({ error: '缺少下载令牌 dt，请先调用 POST /files/:id/download-token 获取' }, 401);
+  }
+
+  try {
+    // 验证令牌：存在 + 未使用 + 未过期 + file_id 匹配
+    const tk = await db.queryOne<{ file_id: number; expires_at: number; used: number }>(
+      `SELECT file_id, expires_at, used FROM kbox_disk_tokens WHERE dt = ?`,
+      [dt]
+    );
+    if (!tk) return c.json({ error: '下载令牌无效' }, 401);
+    if (tk.used === 1) return c.json({ error: '下载令牌已使用' }, 401);
+    if (tk.expires_at < Math.floor(Date.now() / 1000)) {
+      return c.json({ error: '下载令牌已过期' }, 401);
+    }
+    if (tk.file_id !== fileId) {
+      return c.json({ error: '下载令牌与文件不匹配' }, 403);
+    }
+
+    // 立即标记为已用（一次性）
+    await db.execute(`UPDATE kbox_disk_tokens SET used = 1 WHERE dt = ?`, [dt]);
+
     const file = await db.queryOne<{ name: string; mime_type: string; size: number; chunks: number }>(
       `SELECT name, mime_type, size, chunks FROM kbox_disk_files WHERE id = ?`,
       [fileId]
