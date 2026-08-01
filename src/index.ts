@@ -156,4 +156,158 @@ app.post('/api/tools/dispatch', async (c) => {
   }
 });
 
+// ─── 辅助：解析 workflow_dispatch inputs ───
+
+interface WorkflowInput {
+  name: string;
+  description: string;
+  required: boolean;
+  default: string;
+  type: string;
+  options?: string[];
+}
+
+function parseWorkflowInputs(yamlContent: string): WorkflowInput[] {
+  const lines = yamlContent.split('\n');
+  let i = 0;
+
+  // 找到 workflow_dispatch: 行
+  while (i < lines.length) {
+    if (/^\s*workflow_dispatch\s*:/.test(lines[i])) break;
+    i++;
+  }
+  if (i >= lines.length) return [];
+
+  const wdIndent = (lines[i].match(/^(\s*)/) || ['', ''])[1].length;
+  i++;
+
+  // 在 workflow_dispatch 之下找 inputs:
+  let inputsLine = -1;
+  while (i < lines.length) {
+    const line = lines[i];
+    if (!line.trim()) { i++; continue; }
+    const indent = (line.match(/^(\s*)/) || ['', ''])[1].length;
+    if (indent <= wdIndent) return []; // 离开 workflow_dispatch 块
+    if (/^\s*inputs\s*:/.test(line)) { inputsLine = i; break; }
+    i++;
+  }
+  if (inputsLine === -1) return [];
+
+  const inputsIndent = (lines[inputsLine].match(/^(\s*)/) || ['', ''])[1].length + 2;
+  i = inputsLine + 1;
+
+  const inputs: WorkflowInput[] = [];
+  let current: WorkflowInput | null = null;
+  let inOptions = false;
+
+  while (i < lines.length) {
+    const line = lines[i];
+    if (!line.trim()) { i++; continue; }
+    const indent = (line.match(/^(\s*)/) || ['', ''])[1].length;
+    if (indent < inputsIndent) break;
+
+    // 新 input key（缩进等于 inputsIndent）
+    if (indent === inputsIndent) {
+      const keyMatch = line.match(/^\s+(\S[\w-]*)\s*:/);
+      if (keyMatch) {
+        if (current) inputs.push(current);
+        current = { name: keyMatch[1], description: '', required: false, default: '', type: 'string' };
+        inOptions = false;
+        i++;
+        continue;
+      }
+    }
+
+    // 解析属性
+    if (current) {
+      const propMatch = line.match(/^\s*(description|required|default|type|options)\s*:\s*(.*)$/);
+      if (propMatch) {
+        const [, key, val] = propMatch;
+        const cleanVal = val.replace(/^['"]|['"]$/g, '').trim();
+        if (key === 'required') current.required = cleanVal === 'true';
+        else if (key === 'type') { current.type = cleanVal; inOptions = cleanVal === 'choice'; }
+        else if (key === 'default') current.default = cleanVal;
+        else if (key === 'description') current.description = cleanVal;
+        else if (key === 'options') inOptions = true;
+      } else if (inOptions) {
+        const optMatch = line.match(/^\s*-\s+(.*)$/);
+        if (optMatch) {
+          if (!current.options) current.options = [];
+          current.options.push(optMatch[1].replace(/^['"]|['"]$/g, '').trim());
+        }
+      }
+    }
+    i++;
+  }
+  if (current) inputs.push(current);
+  return inputs;
+}
+
+// 列出仓库分支
+app.get('/api/tools/branches', async (c) => {
+  const owner = c.req.query('owner')?.trim();
+  const repo = c.req.query('repo')?.trim();
+  if (!owner || !repo) {
+    return c.json({ error: '需要 owner 和 repo 参数' }, 400);
+  }
+
+  try {
+    const res = await fetch(
+      `https://api.github.com/repos/${owner}/${repo}/branches?per_page=100`,
+      {
+        headers: {
+          'Authorization': `Bearer ${c.env.GH_TOKEN}`,
+          'Accept': 'application/vnd.github+json',
+          'User-Agent': 'kbox',
+        },
+      }
+    );
+    const data: any = await res.json();
+    if (!res.ok) {
+      return c.json({ error: data?.message || `GitHub API ${res.status}` }, res.status as any);
+    }
+    const branches = (Array.isArray(data) ? data : []).map((b: any) => ({
+      name: b.name,
+      protected: b.protected,
+    }));
+    return c.json({ branches });
+  } catch (e) {
+    return c.json({ error: e instanceof Error ? e.message : '请求失败' }, 500);
+  }
+});
+
+// 获取 workflow inputs 定义
+app.get('/api/tools/workflow-inputs', async (c) => {
+  const owner = c.req.query('owner')?.trim();
+  const repo = c.req.query('repo')?.trim();
+  const path = c.req.query('path')?.trim();
+  if (!owner || !repo || !path) {
+    return c.json({ error: '需要 owner、repo、path 参数' }, 400);
+  }
+
+  try {
+    const res = await fetch(
+      `https://api.github.com/repos/${owner}/${repo}/contents/${encodeURIComponent(path)}`,
+      {
+        headers: {
+          'Authorization': `Bearer ${c.env.GH_TOKEN}`,
+          'Accept': 'application/vnd.github+json',
+          'User-Agent': 'kbox',
+        },
+      }
+    );
+    const data: any = await res.json();
+    if (!res.ok) {
+      return c.json({ error: data?.message || `GitHub API ${res.status}` }, res.status as any);
+    }
+
+    // data.content 是 base64 编码的文件内容
+    const content = data.content ? atob(data.content.replace(/\n/g, '')) : '';
+    const inputs = parseWorkflowInputs(content);
+    return c.json({ inputs });
+  } catch (e) {
+    return c.json({ error: e instanceof Error ? e.message : '请求失败' }, 500);
+  }
+});
+
 export default app;

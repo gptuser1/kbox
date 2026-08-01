@@ -63,7 +63,7 @@ input, select, button, textarea { font-family: inherit; }
 }
 .token-bar .logo { font-size: 20px; font-weight: 700; color: var(--primary); display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
 .token-bar .logo span { font-size: 22px; }
-.token-bar .token-group { display: flex; align-items: center; gap: 8px; flex: 1; }
+.token-bar .token-group { display: flex; align-items: center; gap: 8px; flex: 1; min-width: 0; }
 .token-bar .token-group input {
   flex: 1; padding: 9px 14px; border: 1px solid var(--border); border-radius: 8px;
   font-size: 14px; outline: none; transition: border-color 0.2s, background 0.3s; background: var(--input-bg); color: var(--text); min-width: 0;
@@ -160,14 +160,6 @@ input, select, button, textarea { font-family: inherit; }
 .wf-item .wf-state { font-size: 11px; padding: 2px 8px; border-radius: 10px; flex-shrink: 0; }
 .wf-item .wf-state.active { background: rgba(34,197,94,0.15); color: var(--success); }
 
-/* ─── inputs 动态表单 ─── */
-.input-row { display: flex; gap: 8px; align-items: center; margin-bottom: 8px; }
-.input-row input { flex: 1; padding: 8px 12px; border: 1px solid var(--border); border-radius: 8px; font-size: 13px; background: var(--input-bg); color: var(--text); outline: none; transition: border-color 0.2s; }
-.input-row input:focus { border-color: var(--primary); }
-.input-row .input-key { flex: 0 0 120px; }
-.input-row .btn-remove { background: none; border: none; color: var(--text-muted); cursor: pointer; font-size: 18px; padding: 6px; border-radius: 4px; flex-shrink: 0; transition: all 0.15s; }
-.input-row .btn-remove:hover { color: var(--danger); background: rgba(239,68,68,0.1); }
-
 /* ─── 结果 ─── */
 .result-box { padding: 14px 16px; border-radius: 10px; font-size: 14px; margin-top: 16px; display: none; }
 .result-box.show { display: block; animation: fadeIn 0.3s ease; }
@@ -188,12 +180,22 @@ input, select, button, textarea { font-family: inherit; }
 .saved-config .del { margin-left: 6px; opacity: 0.5; }
 .saved-config .del:hover { opacity: 1; color: var(--danger); }
 
+/* ─── input 描述 ─── */
+.input-desc { font-size: 12px; color: var(--text-muted); margin-top: 3px; }
+.input-required { color: var(--danger); }
+
 @media (max-width: 640px) {
-  .token-bar { flex-wrap: wrap; padding: 12px 16px; }
-  .token-bar .token-group { width: 100%; }
+  .token-bar { padding: 12px 16px; gap: 8px; }
+  .token-bar .logo { font-size: 17px; }
+  .token-bar .token-group input { font-size: 13px; padding: 8px 10px; }
+  .token-bar .btn-verify { padding: 8px 14px; font-size: 13px; min-width: 70px; }
   .container { padding: 24px 16px 60px; }
   .tool-grid { grid-template-columns: 1fr; }
   .form-row { flex-direction: column; align-items: stretch; }
+}
+@media (max-width: 400px) {
+  .token-bar { flex-wrap: wrap; }
+  .token-bar .token-group { width: 100%; }
 }
 </style>
 </head>
@@ -285,19 +287,37 @@ async function api(url, options) {
   return res.json();
 }
 
+// ─── 工具函数 ───
+function esc(s) {
+  if (s == null) return '';
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+// 解析仓库输入：支持 GitHub URL / SSH / owner/repo
+function parseRepo(input) {
+  input = (input || '').trim();
+  if (!input) return null;
+  // https://github.com/user/repo 或 https://github.com/user/repo.git
+  // git@github.com:user/repo.git
+  // github.com/user/repo
+  var m = input.match(/github\\.com[:/]([^/\\s]+)\\/([^/\\s.#]+)(?:\\.git)?/i);
+  if (m) return m[1] + '/' + m[2];
+  // 纯 owner/repo
+  if (/^[\\w.-]+\\/[\\w.-]+$/.test(input)) return input;
+  return null;
+}
+
 // ─── 工具注册表（模块化：新增工具只需在此注册 + 实现 render/mount） ───
 const TOOLS = [
   { id: 'dispatch', name: 'GitHub Actions 触发', icon: '⚡', desc: '通过 API 触发 GitHub workflow dispatch', render: renderDispatchTool, mount: mountDispatchTool },
 ];
 
 function initTools() {
-  // 渲染工具网格
   let grid = '';
   for (const t of TOOLS) {
     grid += '<div class="tool-card" onclick="showTool(\\'' + t.id + '\\')"><div class="tool-icon">' + t.icon + '</div><div class="tool-name">' + t.name + '</div><div class="tool-desc">' + t.desc + '</div></div>';
   }
   toolGrid.innerHTML = grid;
-  // 渲染工具视图容器
   let views = '';
   for (const t of TOOLS) {
     views += '<div class="tool-view" id="view-' + t.id + '">' + t.render() + '</div>';
@@ -329,21 +349,20 @@ function renderDispatchTool() {
     <div class="saved-configs" id="dispatchSavedConfigs"></div>
     <div class="form-row">
       <div class="form-group">
-        <label>仓库 (owner/repo)</label>
-        <input type="text" id="dispatchRepo" placeholder="例如 gptuser1/stock">
+        <label>仓库（支持 GitHub 链接 / SSH / owner/repo）</label>
+        <input type="text" id="dispatchRepo" placeholder="例如 user/repo 或粘贴 GitHub 链接">
       </div>
-      <button class="btn btn-outline" id="dispatchLoadBtn" style="margin-bottom:0">加载工作流</button>
+      <button class="btn btn-outline" id="dispatchLoadBtn" style="margin-bottom:0">加载</button>
     </div>
-    <div class="form-group">
-      <label>分支 / Ref</label>
-      <input type="text" id="dispatchRef" value="main" placeholder="默认 main">
+    <div class="form-group" id="dispatchBranchGroup" style="display:none">
+      <label>分支</label>
+      <select id="dispatchBranch"></select>
     </div>
     <div class="section-title" id="dispatchWfTitle" style="display:none">选择工作流</div>
     <div class="wf-list" id="dispatchWfList"></div>
     <div id="dispatchInputsSection" style="display:none">
-      <div class="section-title">Workflow Inputs <span style="font-weight:400;color:var(--text-muted)">（可选，留空则不传）</span></div>
+      <div class="section-title" id="dispatchInputsTitle">Workflow Inputs</div>
       <div id="dispatchInputs"></div>
-      <button class="btn btn-outline btn-sm" id="dispatchAddInputBtn">＋ 添加参数</button>
     </div>
     <div style="margin-top:24px">
       <button class="btn btn-primary" id="dispatchTriggerBtn" disabled>触发</button>
@@ -354,15 +373,19 @@ function renderDispatchTool() {
 }
 
 let selectedWf = null;
+let selectedWfPath = null;
+let wfInputs = [];
 
 function mountDispatchTool() {
   const repoInput = $('dispatchRepo');
   const loadBtn = $('dispatchLoadBtn');
   const wfList = $('dispatchWfList');
   const wfTitle = $('dispatchWfTitle');
+  const branchGroup = $('dispatchBranchGroup');
+  const branchSelect = $('dispatchBranch');
   const inputsSection = $('dispatchInputsSection');
+  const inputsTitle = $('dispatchInputsTitle');
   const inputsBox = $('dispatchInputs');
-  const addInputBtn = $('dispatchAddInputBtn');
   const triggerBtn = $('dispatchTriggerBtn');
   const saveBtn = $('dispatchSaveBtn');
   const resultBox = $('dispatchResult');
@@ -380,30 +403,34 @@ function mountDispatchTool() {
     }
     savedConfigsBox.innerHTML = html;
   }
+
   window.loadDispatchConfig = function(i) {
     const configs = JSON.parse(localStorage.getItem('kbox_dispatch_configs') || '[]');
     const c = configs[i];
     if (!c) return;
     repoInput.value = c.repo || '';
-    $('dispatchRef').value = c.ref || 'main';
-    // 自动加载工作流并选中
     loadBtn.click();
+    // 等加载完成后自动选中
     setTimeout(() => {
       selectedWf = c.workflow_id;
-      // 标记选中
       const items = wfList.querySelectorAll('.wf-item');
       items.forEach(item => {
         if (item.dataset.wf === c.workflow_id) { item.classList.add('selected'); }
         else { item.classList.remove('selected'); }
       });
       triggerBtn.disabled = !selectedWf;
-      if (c.inputs && c.inputs.length) {
-        inputsSection.style.display = '';
-        inputsBox.innerHTML = '';
-        c.inputs.forEach(([k, v]) => addInputRow(k, v));
+      // 选中后触发 inputs 获取
+      if (selectedWf) {
+        const selectedItem = wfList.querySelector('.wf-item.selected');
+        if (selectedItem) selectedItem.click();
+      }
+      // 等分支加载完
+      if (c.branch) {
+        setTimeout(() => { branchSelect.value = c.branch; }, 800);
       }
     }, 1500);
   };
+
   window.delDispatchConfig = function(e, i) {
     e.stopPropagation();
     const configs = JSON.parse(localStorage.getItem('kbox_dispatch_configs') || '[]');
@@ -412,34 +439,46 @@ function mountDispatchTool() {
     renderSavedConfigs();
   };
 
-  function addInputRow(key, val) {
-    key = key || ''; val = val || '';
-    const row = document.createElement('div');
-    row.className = 'input-row';
-    row.innerHTML = '<input class="input-key" placeholder="参数名" value="' + esc(key) + '"><input class="input-val" placeholder="值" value="' + esc(val) + '"><button class="btn-remove">✕</button>';
-    row.querySelector('.btn-remove').onclick = () => row.remove();
-    inputsBox.appendChild(row);
-  }
-
-  addInputBtn.onclick = () => addInputRow();
-
   loadBtn.onclick = async () => {
-    const repo = repoInput.value.trim();
-    if (!repo) { toast('请输入 owner/repo', 'error'); repoInput.focus(); return; }
-    if (!repo.includes('/')) { toast('格式应为 owner/repo', 'error'); return; }
+    const raw = repoInput.value.trim();
+    const repo = parseRepo(raw);
+    if (!repo) { toast('无法识别仓库，请输入 owner/repo 或 GitHub 链接', 'error'); repoInput.focus(); return; }
+    // 如果输入的是 URL/SSH，替换为标准 owner/repo
+    if (raw !== repo) repoInput.value = repo;
+
     const [owner, repoName] = repo.split('/');
     loadBtn.disabled = true; loadBtn.textContent = '加载中…';
     wfList.innerHTML = '<div class="empty">加载中…</div>';
     wfTitle.style.display = '';
+    inputsSection.style.display = 'none';
+    branchGroup.style.display = 'none';
+    selectedWf = null;
+    triggerBtn.disabled = true;
+
     try {
-      const data = await api('/api/tools/workflows?owner=' + encodeURIComponent(owner) + '&repo=' + encodeURIComponent(repoName));
-      if (!data.workflows || !data.workflows.length) {
+      // 并行加载工作流和分支
+      const [wfData, branchData] = await Promise.all([
+        api('/api/tools/workflows?owner=' + encodeURIComponent(owner) + '&repo=' + encodeURIComponent(repoName)),
+        api('/api/tools/branches?owner=' + encodeURIComponent(owner) + '&repo=' + encodeURIComponent(repoName)),
+      ]);
+
+      // 渲染分支
+      const branches = branchData.branches || [];
+      if (branches.length) {
+        branchGroup.style.display = '';
+        branchSelect.innerHTML = branches.map(b =>
+          '<option value="' + esc(b.name) + '"' + (b.name === 'main' ? ' selected' : '') + '>' + esc(b.name) + '</option>'
+        ).join('');
+      }
+
+      // 渲染工作流
+      if (!wfData.workflows || !wfData.workflows.length) {
         wfList.innerHTML = '<div class="empty">该仓库没有 workflows</div>';
         return;
       }
       let html = '';
-      for (const w of data.workflows) {
-        html += '<div class="wf-item" data-wf="' + esc(w.filename) + '" data-wfid="' + w.id + '"><div class="wf-info"><div class="wf-name">' + esc(w.name) + '</div><div class="wf-path">' + esc(w.path) + '</div></div><span class="wf-state ' + (w.state === 'active' ? 'active' : '') + '">' + esc(w.state) + '</span></div>';
+      for (const w of wfData.workflows) {
+        html += '<div class="wf-item" data-wf="' + esc(w.filename) + '" data-path="' + esc(w.path) + '"><div class="wf-info"><div class="wf-name">' + esc(w.name) + '</div><div class="wf-path">' + esc(w.path) + '</div></div><span class="wf-state ' + (w.state === 'active' ? 'active' : '') + '">' + esc(w.state) + '</span></div>';
       }
       wfList.innerHTML = html;
       wfList.querySelectorAll('.wf-item').forEach(item => {
@@ -447,41 +486,81 @@ function mountDispatchTool() {
           wfList.querySelectorAll('.wf-item').forEach(i => i.classList.remove('selected'));
           item.classList.add('selected');
           selectedWf = item.dataset.wf;
+          selectedWfPath = item.dataset.path;
           triggerBtn.disabled = false;
+
+          // 获取 workflow inputs 定义
           inputsSection.style.display = '';
-          if (!inputsBox.children.length) addInputRow();
+          inputsBox.innerHTML = '<div class="empty">加载参数定义中…</div>';
+          inputsTitle.textContent = 'Workflow Inputs';
+
+          const [owner2, repoName2] = repoInput.value.split('/');
+          api('/api/tools/workflow-inputs?owner=' + encodeURIComponent(owner2) + '&repo=' + encodeURIComponent(repoName2) + '&path=' + encodeURIComponent(selectedWfPath))
+            .then(inputData => {
+              wfInputs = inputData.inputs || [];
+              renderInputs();
+            })
+            .catch(e => {
+              if (e.message === 'UNAUTHORIZED') return;
+              inputsBox.innerHTML = '<div class="empty">获取参数失败：' + esc(e.message) + '</div>';
+            });
         };
       });
     } catch (e) {
       if (e.message === 'UNAUTHORIZED') return;
       wfList.innerHTML = '<div class="empty">加载失败：' + esc(e.message) + '</div>';
-      toast('加载工作流失败', 'error');
+      toast('加载失败', 'error');
     } finally {
-      loadBtn.disabled = false; loadBtn.textContent = '加载工作流';
+      loadBtn.disabled = false; loadBtn.textContent = '加载';
     }
   };
+
+  function renderInputs() {
+    if (!wfInputs.length) {
+      inputsBox.innerHTML = '<div class="empty">该 workflow 无需参数</div>';
+      return;
+    }
+    let html = '';
+    for (const inp of wfInputs) {
+      const reqMark = inp.required ? ' <span class="input-required">*</span>' : '';
+      const desc = inp.description ? '<div class="input-desc">' + esc(inp.description) + '</div>' : '';
+      const label = esc(inp.name) + reqMark;
+      if (inp.type === 'boolean') {
+        html += '<div class="form-group"><label>' + label + '</label><select data-input="' + esc(inp.name) + '"><option value="false"' + (inp.default !== 'true' ? ' selected' : '') + '>false</option><option value="true"' + (inp.default === 'true' ? ' selected' : '') + '>true</option></select>' + desc + '</div>';
+      } else if (inp.type === 'choice' && inp.options && inp.options.length) {
+        html += '<div class="form-group"><label>' + label + '</label><select data-input="' + esc(inp.name) + '">' + inp.options.map(o => '<option value="' + esc(o) + '"' + (o === inp.default ? ' selected' : '') + '>' + esc(o) + '</option>').join('') + '</select>' + desc + '</div>';
+      } else {
+        html += '<div class="form-group"><label>' + label + '</label><input type="text" data-input="' + esc(inp.name) + '" value="' + esc(inp.default) + '" placeholder="' + (inp.required ? '必填' : '可选') + '">' + desc + '</div>';
+      }
+    }
+    inputsBox.innerHTML = html;
+  }
 
   triggerBtn.onclick = async () => {
     const repo = repoInput.value.trim();
     if (!repo || !selectedWf) return;
     const [owner, repoName] = repo.split('/');
+
     // 收集 inputs
     const inputs = {};
-    inputsBox.querySelectorAll('.input-row').forEach(row => {
-      const k = row.querySelector('.input-key').value.trim();
-      const v = row.querySelector('.input-val').value;
-      if (k) inputs[k] = v;
-    });
+    if (wfInputs.length) {
+      inputsBox.querySelectorAll('[data-input]').forEach(el => {
+        const k = el.dataset.input;
+        if (k) inputs[k] = el.value;
+      });
+    }
+
     triggerBtn.disabled = true; triggerBtn.textContent = '触发中…';
     resultBox.className = 'result-box';
     try {
+      const ref = branchSelect.value || 'main';
       const data = await api('/api/tools/dispatch', {
         method: 'POST',
-        body: JSON.stringify({ owner, repo: repoName, workflow_id: selectedWf, ref: $('dispatchRef').value.trim() || 'main', inputs }),
+        body: JSON.stringify({ owner, repo: repoName, workflow_id: selectedWf, ref, inputs }),
         headers: { 'Content-Type': 'application/json' },
       });
       resultBox.className = 'result-box show success';
-      resultBox.textContent = '✓ ' + data.message + '（' + selectedWf + ' @ ' + (data.ref || 'main') + '）';
+      resultBox.textContent = '✓ ' + data.message + '（' + selectedWf + ' @ ' + ref + '）';
       toast('已触发', 'success');
     } catch (e) {
       if (e.message === 'UNAUTHORIZED') return;
@@ -497,23 +576,19 @@ function mountDispatchTool() {
     const repo = repoInput.value.trim();
     if (!repo || !selectedWf) { toast('请先选择仓库和工作流', 'error'); return; }
     const inputs = [];
-    inputsBox.querySelectorAll('.input-row').forEach(row => {
-      const k = row.querySelector('.input-key').value.trim();
-      const v = row.querySelector('.input-val').value;
-      if (k) inputs.push([k, v]);
-    });
+    if (wfInputs.length) {
+      inputsBox.querySelectorAll('[data-input]').forEach(el => {
+        const k = el.dataset.input;
+        const v = el.value;
+        if (k) inputs.push([k, v]);
+      });
+    }
     const configs = JSON.parse(localStorage.getItem('kbox_dispatch_configs') || '[]');
-    configs.push({ repo, workflow_id: selectedWf, ref: $('dispatchRef').value.trim() || 'main', inputs });
+    configs.push({ repo, workflow_id: selectedWf, branch: branchSelect.value || 'main', inputs });
     localStorage.setItem('kbox_dispatch_configs', JSON.stringify(configs));
     renderSavedConfigs();
     toast('配置已保存', 'success');
   };
-}
-
-// ─── 工具函数 ───
-function esc(s) {
-  if (s == null) return '';
-  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
 
 // ─── 初始化 ───
