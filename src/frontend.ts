@@ -194,22 +194,29 @@ input, select, button, textarea { font-family: inherit; }
 .disk-usage-fill { height: 100%; background: var(--primary); transition: width 0.3s; }
 .disk-usage-fill.warn { background: var(--danger); }
 
-.disk-upload { background: var(--card); border-radius: 12px; padding: 20px; margin-bottom: 16px; box-shadow: var(--shadow); }
+.disk-upload { background: var(--card); border-radius: 12px; padding: 14px 16px; box-shadow: var(--shadow); }
 .disk-upload.dragover { border: 2px dashed var(--primary); }
-.disk-drop-zone { border: 2px dashed var(--border); border-radius: 10px; padding: 28px; text-align: center; cursor: pointer; transition: border-color 0.2s, background 0.3s; }
+.disk-drop-zone { border: 1.5px dashed var(--border); border-radius: 8px; padding: 14px 16px; text-align: center; cursor: pointer; transition: border-color 0.2s, background 0.3s; display: flex; align-items: center; justify-content: center; gap: 8px; }
 .disk-drop-zone:hover { border-color: var(--primary); background: var(--primary-light); }
-.disk-drop-zone .drop-icon { font-size: 36px; margin-bottom: 8px; opacity: 0.5; }
-.disk-drop-zone .drop-text { font-size: 14px; color: var(--text-secondary); }
-.disk-drop-zone .drop-hint { font-size: 12px; color: var(--text-muted); margin-top: 4px; }
-.disk-upload-progress { margin-top: 12px; }
-.disk-upload-progress .progress-row { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; font-size: 13px; }
+.disk-drop-zone .drop-icon { font-size: 18px; opacity: 0.6; }
+.disk-drop-zone .drop-text { font-size: 13px; color: var(--text-secondary); }
+.disk-drop-zone .drop-hint { font-size: 11px; color: var(--text-muted); margin-left: 4px; }
+.disk-pending { margin-top: 10px; display: flex; flex-direction: column; gap: 6px; }
+.disk-pending-item { display: flex; align-items: center; gap: 8px; font-size: 13px; padding: 6px 10px; background: var(--input-bg); border-radius: 6px; }
+.disk-pending-item .pn { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.disk-pending-item .ps { font-size: 11px; color: var(--text-muted); flex-shrink: 0; }
+.disk-pending-item .px { cursor: pointer; color: var(--text-muted); flex-shrink: 0; padding: 0 4px; }
+.disk-pending-item .px:hover { color: var(--danger); }
+.disk-upload-actions { margin-top: 10px; display: flex; gap: 8px; justify-content: flex-end; }
+.disk-upload-progress { margin-top: 10px; }
+.disk-upload-progress .progress-row { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; font-size: 12px; }
 .disk-upload-progress .progress-bar { flex: 1; height: 4px; background: var(--input-bg); border-radius: 2px; overflow: hidden; }
 .disk-upload-progress .progress-fill { height: 100%; background: var(--primary); transition: width 0.3s; }
 
 .file-list { display: flex; flex-direction: column; gap: 8px; }
-.file-item { background: var(--card); border-radius: 10px; padding: 14px 16px; box-shadow: var(--shadow); display: flex; align-items: center; gap: 12px; transition: box-shadow 0.2s; }
+.file-item { background: var(--card); border-radius: 10px; padding: 12px 14px; box-shadow: var(--shadow); display: flex; align-items: center; gap: 12px; transition: box-shadow 0.2s; }
 .file-item:hover { box-shadow: var(--shadow-lg); }
-.file-icon { font-size: 24px; flex-shrink: 0; }
+.file-icon { font-size: 22px; flex-shrink: 0; }
 .file-info { flex: 1; min-width: 0; }
 .file-name { font-size: 14px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .file-meta { font-size: 12px; color: var(--text-muted); margin-top: 2px; }
@@ -759,11 +766,16 @@ function renderDiskTool() {
     <div class="disk-stats" id="diskStats"></div>
     <div class="disk-upload">
       <div class="disk-drop-zone" id="diskDropZone">
-        <div class="drop-icon">📁</div>
-        <div class="drop-text">点击选择文件或拖拽到此处</div>
-        <div class="drop-hint">支持任意类型，单文件最大 10MB</div>
+        <span class="drop-icon">📁</span>
+        <span class="drop-text">点击选择或拖拽文件到此处</span>
+        <span class="drop-hint">· 单文件最大 10MB</span>
       </div>
       <input type="file" id="diskFileInput" style="display:none" multiple>
+      <div class="disk-pending" id="diskPending"></div>
+      <div class="disk-upload-actions" id="diskUploadActions" style="display:none">
+        <button class="btn btn-outline btn-sm" id="diskClearBtn">清空</button>
+        <button class="btn btn-primary btn-sm" id="diskUploadBtn">确认上传</button>
+      </div>
       <div class="disk-upload-progress" id="diskProgress"></div>
     </div>
     <div class="section-title">文件列表</div>
@@ -821,6 +833,12 @@ function mountDiskTool() {
   const dropZone = $('diskDropZone');
   const fileInput = $('diskFileInput');
   const progressBox = $('diskProgress');
+  const pendingBox = $('diskPending');
+  const uploadActions = $('diskUploadActions');
+  const uploadBtn = $('diskUploadBtn');
+  const clearBtn = $('diskClearBtn');
+
+  let pendingFiles = []; // 待上传文件队列
 
   async function loadStats() {
     try {
@@ -892,17 +910,61 @@ function mountDiskTool() {
     }
   };
 
-  // 上传逻辑
-  function handleFiles(files) {
+  // 待上传队列：选文件 → 渲染 pending → 点确认批量上传
+  function addFiles(files) {
     const arr = Array.from(files);
+    let added = 0;
     for (const file of arr) {
       if (file.size > DISK_MAX_SIZE) {
         toast('「' + file.name + '」超过 10MB 限制', 'error');
         continue;
       }
-      uploadFile(file);
+      // 去重：同名同大小
+      const dup = pendingFiles.find(p => p.name === file.name && p.size === file.size);
+      if (dup) { toast('「' + file.name + '」已在队列中', 'info'); continue; }
+      pendingFiles.push(file);
+      added++;
     }
+    if (added) renderPending();
   }
+
+  function renderPending() {
+    if (!pendingFiles.length) {
+      pendingBox.innerHTML = '';
+      uploadActions.style.display = 'none';
+      return;
+    }
+    pendingBox.innerHTML = pendingFiles.map((f, i) =>
+      '<div class="disk-pending-item">' +
+        '<span class="pn">' + esc(f.name) + '</span>' +
+        '<span class="ps">' + formatSize(f.size) + '</span>' +
+        '<span class="px" onclick="removePendingFile(' + i + ')">✕</span>' +
+      '</div>'
+    ).join('');
+    uploadActions.style.display = '';
+  }
+
+  window.removePendingFile = function(i) {
+    pendingFiles.splice(i, 1);
+    renderPending();
+  };
+
+  clearBtn.onclick = () => {
+    pendingFiles = [];
+    renderPending();
+  };
+
+  uploadBtn.onclick = async () => {
+    if (!pendingFiles.length) return;
+    const batch = pendingFiles.slice();
+    pendingFiles = [];
+    renderPending();
+    uploadBtn.disabled = true; uploadBtn.textContent = '上传中…';
+    for (const f of batch) {
+      await uploadFile(f);
+    }
+    uploadBtn.disabled = false; uploadBtn.textContent = '确认上传';
+  };
 
   async function uploadFile(file) {
     const chunkCount = Math.ceil(file.size / DISK_CHUNK_SIZE);
@@ -962,12 +1024,12 @@ function mountDiskTool() {
     }
   }
 
-  // 拖拽 + 点击上传
+  // 拖拽 + 点击选择（进入待上传队列）
   dropZone.onclick = () => fileInput.click();
-  fileInput.onchange = () => { if (fileInput.files.length) handleFiles(fileInput.files); fileInput.value = ''; };
+  fileInput.onchange = () => { if (fileInput.files.length) addFiles(fileInput.files); fileInput.value = ''; };
   dropZone.ondragover = (e) => { e.preventDefault(); dropZone.style.borderColor = 'var(--primary)'; dropZone.style.background = 'var(--primary-light)'; };
   dropZone.ondragleave = () => { dropZone.style.borderColor = ''; dropZone.style.background = ''; };
-  dropZone.ondrop = (e) => { e.preventDefault(); dropZone.style.borderColor = ''; dropZone.style.background = ''; if (e.dataTransfer.files.length) handleFiles(e.dataTransfer.files); };
+  dropZone.ondrop = (e) => { e.preventDefault(); dropZone.style.borderColor = ''; dropZone.style.background = ''; if (e.dataTransfer.files.length) addFiles(e.dataTransfer.files); };
 
   loadStats();
   loadFiles();
