@@ -1,9 +1,12 @@
 import { Hono } from 'hono';
 import { renderFrontend } from './frontend';
+import disk from './tools/cloud-disk';
 
 type Bindings = {
   ACCESS_TOKEN: string;
   GH_TOKEN: string;
+  D1_API_TOKEN: string;
+  D1_API_BASE?: string;
 };
 
 type Variables = {
@@ -67,6 +70,9 @@ app.get('/favicon.svg', (c) => {
 
 // 验证令牌
 app.get('/api/verify', (c) => c.json({ ok: true, message: '令牌有效' }));
+
+// ─── 微型云盘工具 ───
+app.route('/api/tools/disk', disk);
 
 // 健康检查
 app.get('/api/health', (c) => {

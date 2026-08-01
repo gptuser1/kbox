@@ -184,6 +184,37 @@ input, select, button, textarea { font-family: inherit; }
 .input-desc { font-size: 12px; color: var(--text-muted); margin-top: 3px; }
 .input-required { color: var(--danger); }
 
+/* ─── 云盘 ─── */
+.disk-stats { display: flex; gap: 16px; flex-wrap: wrap; margin-bottom: 20px; }
+.disk-stat-card { background: var(--card); border-radius: 10px; padding: 14px 18px; box-shadow: var(--shadow); flex: 1; min-width: 140px; }
+.disk-stat-card .stat-label { font-size: 12px; color: var(--text-muted); margin-bottom: 4px; }
+.disk-stat-card .stat-value { font-size: 20px; font-weight: 700; }
+.disk-stat-card .stat-sub { font-size: 11px; color: var(--text-muted); margin-top: 2px; }
+.disk-usage-bar { height: 6px; background: var(--input-bg); border-radius: 3px; overflow: hidden; margin-top: 8px; }
+.disk-usage-fill { height: 100%; background: var(--primary); transition: width 0.3s; }
+.disk-usage-fill.warn { background: var(--danger); }
+
+.disk-upload { background: var(--card); border-radius: 12px; padding: 20px; margin-bottom: 16px; box-shadow: var(--shadow); }
+.disk-upload.dragover { border: 2px dashed var(--primary); }
+.disk-drop-zone { border: 2px dashed var(--border); border-radius: 10px; padding: 28px; text-align: center; cursor: pointer; transition: border-color 0.2s, background 0.3s; }
+.disk-drop-zone:hover { border-color: var(--primary); background: var(--primary-light); }
+.disk-drop-zone .drop-icon { font-size: 36px; margin-bottom: 8px; opacity: 0.5; }
+.disk-drop-zone .drop-text { font-size: 14px; color: var(--text-secondary); }
+.disk-drop-zone .drop-hint { font-size: 12px; color: var(--text-muted); margin-top: 4px; }
+.disk-upload-progress { margin-top: 12px; }
+.disk-upload-progress .progress-row { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; font-size: 13px; }
+.disk-upload-progress .progress-bar { flex: 1; height: 4px; background: var(--input-bg); border-radius: 2px; overflow: hidden; }
+.disk-upload-progress .progress-fill { height: 100%; background: var(--primary); transition: width 0.3s; }
+
+.file-list { display: flex; flex-direction: column; gap: 8px; }
+.file-item { background: var(--card); border-radius: 10px; padding: 14px 16px; box-shadow: var(--shadow); display: flex; align-items: center; gap: 12px; transition: box-shadow 0.2s; }
+.file-item:hover { box-shadow: var(--shadow-lg); }
+.file-icon { font-size: 24px; flex-shrink: 0; }
+.file-info { flex: 1; min-width: 0; }
+.file-name { font-size: 14px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.file-meta { font-size: 12px; color: var(--text-muted); margin-top: 2px; }
+.file-actions { display: flex; gap: 6px; flex-shrink: 0; }
+
 @media (max-width: 640px) {
   .token-bar { padding: 12px 16px; gap: 8px; }
   .token-bar .logo { font-size: 17px; }
@@ -310,6 +341,7 @@ function parseRepo(input) {
 // ─── 工具注册表（模块化：新增工具只需在此注册 + 实现 render/mount） ───
 const TOOLS = [
   { id: 'dispatch', name: 'GitHub Actions 触发', icon: '⚡', desc: '通过 API 触发 GitHub workflow dispatch', render: renderDispatchTool, mount: mountDispatchTool },
+  { id: 'disk', name: '微型云盘', icon: '📦', desc: '基于 D1 的轻量文件存储，支持分片上传', render: renderDiskTool, mount: mountDiskTool },
 ];
 
 function initTools() {
@@ -589,6 +621,214 @@ function mountDispatchTool() {
     renderSavedConfigs();
     toast('配置已保存', 'success');
   };
+}
+
+// ═══ 工具 2：微型云盘 ═══
+const DISK_CHUNK_SIZE = 1.4 * 1024 * 1024; // 1.4MB，与后端一致
+const DISK_MAX_SIZE = 10 * 1024 * 1024; // 10MB
+
+function renderDiskTool() {
+  return \`
+    <button class="tool-back" onclick="backToGrid()">← 返回</button>
+    <h2>📦 微型云盘</h2>
+    <p class="subtitle">基于 D1 的轻量文件存储 · 单文件上限 10MB</p>
+    <div class="disk-stats" id="diskStats"></div>
+    <div class="disk-upload">
+      <div class="disk-drop-zone" id="diskDropZone">
+        <div class="drop-icon">📁</div>
+        <div class="drop-text">点击选择文件或拖拽到此处</div>
+        <div class="drop-hint">支持任意类型，单文件最大 10MB</div>
+      </div>
+      <input type="file" id="diskFileInput" style="display:none" multiple>
+      <div class="disk-upload-progress" id="diskProgress"></div>
+    </div>
+    <div class="section-title">文件列表</div>
+    <div class="file-list" id="diskFileList"></div>
+  \`;
+}
+
+function fileIcon(mime) {
+  if (!mime) return '📄';
+  if (mime.startsWith('image/')) return '🖼️';
+  if (mime.startsWith('video/')) return '🎬';
+  if (mime.startsWith('audio/')) return '🎵';
+  if (mime.includes('pdf')) return '📕';
+  if (mime.includes('zip') || mime.includes('compressed') || mime.includes('tar')) return '🗜️';
+  if (mime.includes('json') || mime.includes('text') || mime.includes('javascript') || mime.includes('xml')) return '📝';
+  if (mime.includes('spreadsheet') || mime.includes('excel')) return '📊';
+  if (mime.includes('presentation') || mime.includes('powerpoint')) return '📽️';
+  if (mime.includes('word') || mime.includes('document')) return '📃';
+  return '📄';
+}
+
+function formatSize(bytes) {
+  if (bytes < 1024) return bytes + ' B';
+  if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+  return (bytes / 1024 / 1024).toFixed(2) + ' MB';
+}
+
+function formatDate(s) {
+  if (!s) return '';
+  return s.replace('T', ' ').substring(0, 16);
+}
+
+function mountDiskTool() {
+  const statsBox = $('diskStats');
+  const fileList = $('diskFileList');
+  const dropZone = $('diskDropZone');
+  const fileInput = $('diskFileInput');
+  const progressBox = $('diskProgress');
+
+  async function loadStats() {
+    try {
+      const s = await api('/api/tools/disk/stats');
+      const usagePct = s.max_db_size > 0 ? Math.min(100, (s.db_size / s.max_db_size) * 100) : 0;
+      const filePct = s.max_file_size > 0 ? Math.min(100, (s.total_size / (s.max_db_size * 0.8)) * 100) : 0;
+      statsBox.innerHTML =
+        '<div class="disk-stat-card"><div class="stat-label">文件数</div><div class="stat-value">' + s.file_count + '</div></div>' +
+        '<div class="disk-stat-card"><div class="stat-label">已用大小</div><div class="stat-value">' + formatSize(s.total_size) + '</div></div>' +
+        '<div class="disk-stat-card"><div class="stat-label">D1 数据库</div><div class="stat-value">' + formatSize(s.db_size) + '</div><div class="stat-sub">上限 ' + formatSize(s.max_db_size) + '</div><div class="disk-usage-bar"><div class="disk-usage-fill ' + (usagePct > 80 ? 'warn' : '') + '" style="width:' + usagePct + '%"></div></div></div>';
+    } catch (e) {
+      if (e.message === 'UNAUTHORIZED') return;
+      statsBox.innerHTML = '<div class="empty">统计加载失败</div>';
+    }
+  }
+
+  async function loadFiles() {
+    fileList.innerHTML = '<div class="empty">加载中…</div>';
+    try {
+      const data = await api('/api/tools/disk/files');
+      const files = data.files || [];
+      if (!files.length) {
+        fileList.innerHTML = '<div class="empty">暂无文件</div>';
+        return;
+      }
+      fileList.innerHTML = files.map(f =>
+        '<div class="file-item"><div class="file-icon">' + fileIcon(f.mime_type) + '</div>' +
+        '<div class="file-info"><div class="file-name">' + esc(f.name) + '</div>' +
+        '<div class="file-meta">' + formatSize(f.size) + ' · ' + formatDate(f.created_at) + ' · ' + f.chunks + ' 片</div></div>' +
+        '<div class="file-actions">' +
+        '<button class="btn btn-outline btn-sm" onclick="downloadFile(' + f.id + ',\\'' + esc(f.name) + '\\')">下载</button>' +
+        '<button class="btn btn-outline btn-sm" onclick="deleteFile(' + f.id + ',\\'' + esc(f.name) + '\\')" style="color:var(--danger)">删除</button>' +
+        '</div></div>'
+      ).join('');
+    } catch (e) {
+      if (e.message === 'UNAUTHORIZED') return;
+      fileList.innerHTML = '<div class="empty">加载失败：' + esc(e.message) + '</div>';
+    }
+  }
+
+  window.downloadFile = function(id, name) {
+    const a = document.createElement('a');
+    a.href = '/api/tools/disk/files/' + id + '/download?_t=' + Date.now();
+    a.download = name;
+    // 带上 token：用 fetch 下载
+    fetch(a.href, { headers: { 'Authorization': 'Bearer ' + token } })
+      .then(res => {
+        if (!res.ok) throw new Error('下载失败');
+        return res.blob();
+      })
+      .then(blob => {
+        const url = URL.createObjectURL(blob);
+        a.href = url;
+        a.click();
+        setTimeout(() => URL.revokeObjectURL(url), 1000);
+      })
+      .catch(e => toast('下载失败：' + e.message, 'error'));
+  };
+
+  window.deleteFile = async function(id, name) {
+    if (!confirm('确认删除「' + name + '」？')) return;
+    try {
+      await api('/api/tools/disk/files/' + id, { method: 'DELETE' });
+      toast('已删除', 'success');
+      loadStats();
+      loadFiles();
+    } catch (e) {
+      if (e.message === 'UNAUTHORIZED') return;
+      toast('删除失败：' + e.message, 'error');
+    }
+  };
+
+  // 上传逻辑
+  function handleFiles(files) {
+    const arr = Array.from(files);
+    for (const file of arr) {
+      if (file.size > DISK_MAX_SIZE) {
+        toast('「' + file.name + '」超过 10MB 限制', 'error');
+        continue;
+      }
+      uploadFile(file);
+    }
+  }
+
+  async function uploadFile(file) {
+    const chunkCount = Math.ceil(file.size / DISK_CHUNK_SIZE);
+    const fileIdKey = 'file_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8);
+
+    // 创建进度条
+    const row = document.createElement('div');
+    row.className = 'progress-row';
+    row.innerHTML = '<span style="flex-shrink:0;width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + esc(file.name) + '</span><div class="progress-bar"><div class="progress-fill" style="width:0%"></div></div><span style="flex-shrink:0;font-size:12px;color:var(--text-muted)">0/' + chunkCount + '</span>';
+    progressBox.appendChild(row);
+    const fill = row.querySelector('.progress-fill');
+    const status = row.querySelectorAll('span')[1];
+
+    try {
+      // 1. 创建文件记录
+      const createRes = await api('/api/tools/disk/files', {
+        method: 'POST',
+        body: JSON.stringify({ name: file.name, size: file.size, mime_type: file.type || '' }),
+        headers: { 'Content-Type': 'application/json' },
+      });
+      const fileId = createRes.id;
+
+      // 2. 分片上传
+      for (let i = 0; i < chunkCount; i++) {
+        const start = i * DISK_CHUNK_SIZE;
+        const end = Math.min(start + DISK_CHUNK_SIZE, file.size);
+        const chunk = file.slice(start, end);
+        const buf = await chunk.arrayBuffer();
+        // Base64 编码
+        const bytes = new Uint8Array(buf);
+        let binary = '';
+        for (let j = 0; j < bytes.length; j++) binary += String.fromCharCode(bytes[j]);
+        const base64 = btoa(binary);
+
+        await api('/api/tools/disk/files/' + fileId + '/chunks', {
+          method: 'POST',
+          body: JSON.stringify({ chunk_index: i, content: base64, chunk_size: end - start }),
+          headers: { 'Content-Type': 'application/json' },
+        });
+
+        const pct = Math.round(((i + 1) / chunkCount) * 100);
+        fill.style.width = pct + '%';
+        status.textContent = (i + 1) + '/' + chunkCount;
+      }
+
+      row.querySelector('span').textContent = '✓ ' + file.name;
+      status.textContent = '完成';
+      toast('「' + file.name + '」上传完成', 'success');
+      loadStats();
+      loadFiles();
+    } catch (e) {
+      if (e.message === 'UNAUTHORIZED') return;
+      row.querySelector('span').textContent = '✗ ' + file.name;
+      status.textContent = '失败';
+      fill.style.background = 'var(--danger)';
+      toast('「' + file.name + '」上传失败：' + e.message, 'error');
+    }
+  }
+
+  // 拖拽 + 点击上传
+  dropZone.onclick = () => fileInput.click();
+  fileInput.onchange = () => { if (fileInput.files.length) handleFiles(fileInput.files); fileInput.value = ''; };
+  dropZone.ondragover = (e) => { e.preventDefault(); dropZone.style.borderColor = 'var(--primary)'; dropZone.style.background = 'var(--primary-light)'; };
+  dropZone.ondragleave = () => { dropZone.style.borderColor = ''; dropZone.style.background = ''; };
+  dropZone.ondrop = (e) => { e.preventDefault(); dropZone.style.borderColor = ''; dropZone.style.background = ''; if (e.dataTransfer.files.length) handleFiles(e.dataTransfer.files); };
+
+  loadStats();
+  loadFiles();
 }
 
 // ─── 初始化 ───
