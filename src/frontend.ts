@@ -233,7 +233,7 @@ input, select, button, textarea { font-family: inherit; }
 <body>
 
 <div class="token-bar">
-  <div class="logo"><span>📦</span> kbox</div>
+  <div class="logo"><span>🧭</span> kbox</div>
   <div class="token-group">
     <input type="password" id="tokenInput" placeholder="输入访问令牌">
     <button class="btn-verify" id="verifyBtn">验证</button>
@@ -341,7 +341,7 @@ function parseRepo(input) {
 // ─── 工具注册表（模块化：新增工具只需在此注册 + 实现 render/mount） ───
 const TOOLS = [
   { id: 'dispatch', name: 'GitHub Actions 触发', icon: '⚡', desc: '通过 API 触发 GitHub workflow dispatch', render: renderDispatchTool, mount: mountDispatchTool },
-  { id: 'disk', name: '微型云盘', icon: '📦', desc: '基于 D1 的轻量文件存储，支持分片上传', render: renderDiskTool, mount: mountDiskTool },
+  { id: 'disk', name: '微型云盘', icon: '☁️', desc: '基于 D1 的轻量文件存储，支持分片上传', render: renderDiskTool, mount: mountDiskTool },
 ];
 
 function initTools() {
@@ -630,7 +630,7 @@ const DISK_MAX_SIZE = 10 * 1024 * 1024; // 10MB
 function renderDiskTool() {
   return \`
     <button class="tool-back" onclick="backToGrid()">← 返回</button>
-    <h2>📦 微型云盘</h2>
+    <h2>☁️ 微型云盘</h2>
     <p class="subtitle">基于 D1 的轻量文件存储 · 单文件上限 10MB</p>
     <div class="disk-stats" id="diskStats"></div>
     <div class="disk-upload">
