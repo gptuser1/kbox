@@ -624,8 +624,7 @@ function mountDispatchTool() {
           selectedWfPath = item.dataset.path;
           triggerBtn.disabled = false;
 
-          // 获取 workflow inputs 定义
-          inputsSection.style.display = '';
+          // 获取 workflow inputs 定义（无参数时由 renderInputs 隐藏区块）
           inputsBox.innerHTML = '<div class="empty">加载参数定义中…</div>';
           inputsTitle.textContent = 'Workflow Inputs';
 
@@ -661,9 +660,11 @@ function mountDispatchTool() {
 
   function renderInputs() {
     if (!wfInputs.length) {
-      inputsBox.innerHTML = '<div class="empty">该 workflow 无需参数</div>';
+      // 无参数时隐藏整个 Inputs 区块
+      inputsSection.style.display = 'none';
       return;
     }
+    inputsSection.style.display = '';
     let html = '';
     for (const inp of wfInputs) {
       const reqMark = inp.required ? ' <span class="input-required">*</span>' : '';
