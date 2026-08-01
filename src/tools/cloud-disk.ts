@@ -61,9 +61,14 @@ function getDb(c: any) {
   return createDb(c.env.D1_API_TOKEN, c.env.D1_API_BASE);
 }
 
+// ensureTable 失败时返回明确错误
+function tableError(c: any) {
+  return c.json({ error: tableInitError || '数据库初始化失败，请检查 D1_API_TOKEN' }, 503);
+}
+
 // ─── 容量统计 ───
 app.get('/stats', async (c) => {
-  await ensureTable(c.env.D1_API_TOKEN, c.env.D1_API_BASE);
+  if (!await ensureTable(c.env.D1_API_TOKEN, c.env.D1_API_BASE)) return tableError(c);
   const db = getDb(c);
   try {
     // 文件数量和总大小
@@ -95,7 +100,7 @@ app.get('/stats', async (c) => {
 
 // ─── 文件列表 ───
 app.get('/files', async (c) => {
-  await ensureTable(c.env.D1_API_TOKEN, c.env.D1_API_BASE);
+  if (!await ensureTable(c.env.D1_API_TOKEN, c.env.D1_API_BASE)) return tableError(c);
   const db = getDb(c);
   try {
     const files = await db.queryAll(
@@ -109,7 +114,7 @@ app.get('/files', async (c) => {
 
 // ─── 创建文件记录 ───
 app.post('/files', async (c) => {
-  await ensureTable(c.env.D1_API_TOKEN, c.env.D1_API_BASE);
+  if (!await ensureTable(c.env.D1_API_TOKEN, c.env.D1_API_BASE)) return tableError(c);
   const db = getDb(c);
 
   let body: any;
@@ -133,7 +138,7 @@ app.post('/files', async (c) => {
   const chunks = Math.ceil(size / CHUNK_SIZE);
 
   try {
-    const result = await db.query(
+    await db.query(
       `INSERT INTO kbox_disk_files (name, mime_type, size, chunks, created_at) VALUES (?, ?, ?, ?, ?)`,
       [name, mimeType, size, chunks, localtimeNow()]
     );
@@ -149,7 +154,7 @@ app.post('/files', async (c) => {
 
 // ─── 上传分片 ───
 app.post('/files/:id/chunks', async (c) => {
-  await ensureTable(c.env.D1_API_TOKEN, c.env.D1_API_BASE);
+  if (!await ensureTable(c.env.D1_API_TOKEN, c.env.D1_API_BASE)) return tableError(c);
   const db = getDb(c);
   const fileId = Number(c.req.param('id'));
 
@@ -181,7 +186,7 @@ app.post('/files/:id/chunks', async (c) => {
 
 // ─── 下载文件 ───
 app.get('/files/:id/download', async (c) => {
-  await ensureTable(c.env.D1_API_TOKEN, c.env.D1_API_BASE);
+  if (!await ensureTable(c.env.D1_API_TOKEN, c.env.D1_API_BASE)) return tableError(c);
   const db = getDb(c);
   const fileId = Number(c.req.param('id'));
 
@@ -221,7 +226,7 @@ app.get('/files/:id/download', async (c) => {
 
 // ─── 删除文件 ───
 app.delete('/files/:id', async (c) => {
-  await ensureTable(c.env.D1_API_TOKEN, c.env.D1_API_BASE);
+  if (!await ensureTable(c.env.D1_API_TOKEN, c.env.D1_API_BASE)) return tableError(c);
   const db = getDb(c);
   const fileId = Number(c.req.param('id'));
 
