@@ -644,6 +644,23 @@ function renderDiskTool() {
     </div>
     <div class="section-title">文件列表</div>
     <div class="file-list" id="diskFileList"></div>
+    <details class="disk-api-docs" style="margin-top:24px">
+      <summary style="cursor:pointer;font-size:14px;font-weight:600;color:var(--text-secondary);padding:12px;background:var(--card);border-radius:8px;box-shadow:var(--shadow)">📋 API 接口文档</summary>
+      <div style="padding:16px;background:var(--card);border-radius:8px;margin-top:8px;box-shadow:var(--shadow);font-size:13px;line-height:1.8;color:var(--text-secondary);overflow-x:auto">
+        <p style="color:var(--text);font-weight:600">所有接口需鉴权，支持两种方式：</p>
+        <p>① Header: <code>Authorization: Bearer &lt;token&gt;</code></p>
+        <p>② Query: <code>?token=&lt;token&gt;</code>（仅下载链接推荐）</p>
+        <hr style="border:none;border-top:1px solid var(--border);margin:12px 0">
+        <p><b>GET</b> <code>/api/tools/disk/stats</code> — 容量统计</p>
+        <p><b>GET</b> <code>/api/tools/disk/files</code> — 文件列表</p>
+        <p><b>POST</b> <code>/api/tools/disk/files</code> — 创建文件记录<br>
+        <span style="color:var(--text-muted)">body: { name, size, mime_type }</span></p>
+        <p><b>POST</b> <code>/api/tools/disk/files/:id/chunks</code> — 上传分片<br>
+        <span style="color:var(--text-muted)">body: { chunk_index, content(base64), chunk_size }</span></p>
+        <p><b>GET</b> <code>/api/tools/disk/files/:id/download?token=xxx</code> — 下载文件</p>
+        <p><b>DELETE</b> <code>/api/tools/disk/files/:id</code> — 删除文件</p>
+      </div>
+    </details>
   \`;
 }
 
@@ -686,8 +703,8 @@ function mountDiskTool() {
       const filePct = s.max_file_size > 0 ? Math.min(100, (s.total_size / (s.max_db_size * 0.8)) * 100) : 0;
       statsBox.innerHTML =
         '<div class="disk-stat-card"><div class="stat-label">文件数</div><div class="stat-value">' + s.file_count + '</div></div>' +
-        '<div class="disk-stat-card"><div class="stat-label">已用大小</div><div class="stat-value">' + formatSize(s.total_size) + '</div></div>' +
-        '<div class="disk-stat-card"><div class="stat-label">D1 数据库</div><div class="stat-value">' + formatSize(s.db_size) + '</div><div class="stat-sub">上限 ' + formatSize(s.max_db_size) + '</div><div class="disk-usage-bar"><div class="disk-usage-fill ' + (usagePct > 80 ? 'warn' : '') + '" style="width:' + usagePct + '%"></div></div></div>';
+        '<div class="disk-stat-card"><div class="stat-label">文件大小</div><div class="stat-value">' + formatSize(s.total_size) + '</div></div>' +
+        '<div class="disk-stat-card"><div class="stat-label">D1 存储占用</div><div class="stat-value">' + formatSize(s.db_size) + '</div><div class="stat-sub">上限 ' + formatSize(s.max_db_size) + '</div><div class="disk-usage-bar"><div class="disk-usage-fill ' + (usagePct > 80 ? 'warn' : '') + '" style="width:' + usagePct + '%"></div></div></div>';
     } catch (e) {
       if (e.message === 'UNAUTHORIZED') return;
       statsBox.innerHTML = '<div class="empty">统计加载失败</div>';
@@ -708,7 +725,7 @@ function mountDiskTool() {
         '<div class="file-info"><div class="file-name">' + esc(f.name) + '</div>' +
         '<div class="file-meta">' + formatSize(f.size) + ' · ' + formatDate(f.created_at) + ' · ' + f.chunks + ' 片</div></div>' +
         '<div class="file-actions">' +
-        '<button class="btn btn-outline btn-sm" onclick="downloadFile(' + f.id + ',\\'' + esc(f.name) + '\\')">下载</button>' +
+        '<a class="btn btn-outline btn-sm" href="/api/tools/disk/files/' + f.id + '/download?token=' + encodeURIComponent(token) + '" download="' + esc(f.name) + '">下载</a>' +
         '<button class="btn btn-outline btn-sm" onclick="deleteFile(' + f.id + ',\\'' + esc(f.name) + '\\')" style="color:var(--danger)">删除</button>' +
         '</div></div>'
       ).join('');
@@ -717,25 +734,6 @@ function mountDiskTool() {
       fileList.innerHTML = '<div class="empty">加载失败：' + esc(e.message) + '</div>';
     }
   }
-
-  window.downloadFile = function(id, name) {
-    const a = document.createElement('a');
-    a.href = '/api/tools/disk/files/' + id + '/download?_t=' + Date.now();
-    a.download = name;
-    // 带上 token：用 fetch 下载
-    fetch(a.href, { headers: { 'Authorization': 'Bearer ' + token } })
-      .then(res => {
-        if (!res.ok) throw new Error('下载失败');
-        return res.blob();
-      })
-      .then(blob => {
-        const url = URL.createObjectURL(blob);
-        a.href = url;
-        a.click();
-        setTimeout(() => URL.revokeObjectURL(url), 1000);
-      })
-      .catch(e => toast('下载失败：' + e.message, 'error'));
-  };
 
   window.deleteFile = async function(id, name) {
     if (!confirm('确认删除「' + name + '」？')) return;

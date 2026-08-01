@@ -52,9 +52,10 @@ async function ensureTable(token: string, base?: string): Promise<boolean> {
 }
 
 function localtimeNow(): string {
-  const now = new Date();
+  // Cloudflare Workers 运行在 UTC，+8 得到北京时间
+  const now = new Date(Date.now() + 8 * 60 * 60 * 1000);
   const pad = (n: number) => String(n).padStart(2, '0');
-  return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())} ${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`;
+  return `${now.getUTCFullYear()}-${pad(now.getUTCMonth() + 1)}-${pad(now.getUTCDate())} ${pad(now.getUTCHours())}:${pad(now.getUTCMinutes())}:${pad(now.getUTCSeconds())}`;
 }
 
 function getDb(c: any) {
@@ -75,21 +76,20 @@ app.get('/stats', async (c) => {
     const stats = await db.queryOne<{ count: number; total_size: number }>(
       `SELECT COUNT(*) as count, COALESCE(SUM(size), 0) as total_size FROM kbox_disk_files`
     );
-    // D1 数据库大小（通过 PRAGMA）
-    let dbSize = 0;
+    // 实际存储占用：base64 内容长度（D1 REST API 不支持 PRAGMA）
+    let storedSize = 0;
     try {
-      const pagecount = await db.queryAll<{ page_count: number }>('PRAGMA page_count');
-      const pagesize = await db.queryAll<{ page_size: number }>('PRAGMA page_size');
-      const pc = pagecount[0]?.page_count || 0;
-      const ps = pagesize[0]?.page_size || 4096;
-      dbSize = pc * ps;
+      const stored = await db.queryOne<{ stored: number }>(
+        `SELECT COALESCE(SUM(LENGTH(content)), 0) as stored FROM kbox_disk_chunks`
+      );
+      storedSize = stored?.stored || 0;
     } catch {
-      // PRAGMA 不支持时忽略
+      // 忽略
     }
     return c.json({
       file_count: stats?.count || 0,
       total_size: stats?.total_size || 0,
-      db_size: dbSize,
+      db_size: storedSize,
       max_db_size: 500 * 1024 * 1024, // 500MB
       max_file_size: MAX_FILE_SIZE,
     });

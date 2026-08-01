@@ -38,13 +38,16 @@ const FAVICON_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"
 
 // ─── 鉴权中间件 ───
 app.use('/api/*', async (c, next) => {
+  // 优先 Authorization header，其次支持 ?token= query param（用于下载链接）
   const auth = c.req.header('Authorization');
-  if (!auth || !auth.startsWith('Bearer ')) {
-    return c.json({ error: '缺少Authorization头，格式: Bearer <token>' }, 401);
+  let token = '';
+  if (auth && auth.startsWith('Bearer ')) {
+    token = auth.slice(7).trim();
+  } else {
+    token = c.req.query('token')?.trim() || '';
   }
-  const token = auth.slice(7).trim();
   if (!token) {
-    return c.json({ error: '令牌不能为空' }, 401);
+    return c.json({ error: '缺少鉴权信息，格式: Bearer <token> 或 ?token=<token>' }, 401);
   }
   if (token !== c.env.ACCESS_TOKEN) {
     return c.json({ error: '令牌无效' }, 401);
