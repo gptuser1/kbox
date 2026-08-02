@@ -2,6 +2,7 @@ import { Hono } from 'hono';
 import { createDb, DbError } from '../db';
 import { crawlAll } from './news-crawler';
 import { summarizeArticles } from './news-llm';
+import { extractTopKeywords, type KeywordStat } from './news-keywords';
 
 type Bindings = {
   D1_API_TOKEN: string;
@@ -37,6 +38,12 @@ async function ensureTable(token: string, base?: string): Promise<boolean> {
       url TEXT NOT NULL DEFAULT '',
       summary TEXT NOT NULL DEFAULT '',
       category TEXT NOT NULL DEFAULT 'general'
+    )`);
+    // Top 关键词统计表：每次抓取后生成一份快照
+    await db.query(`CREATE TABLE IF NOT EXISTS news_top_keywords (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      generated_at TEXT NOT NULL,
+      keywords_json TEXT NOT NULL
     )`);
     tableReady = true;
     return true;
@@ -127,6 +134,28 @@ async function runCron(c: any): Promise<{ success: boolean; articles_count: numb
       [KEEP_LIMIT],
     );
 
+    // 生成 Top 10 关键词快照（基于当前库内全部新闻）
+    try {
+      const allRows = await db.queryAll<{ title: string; source: string; url: string; summary: string; category: string; crawled_at: string }>(
+        `SELECT title, source, url, summary, category, crawled_at FROM newsfeed ORDER BY id DESC LIMIT ?`,
+        [KEEP_LIMIT],
+      );
+      const topKeywords = extractTopKeywords(allRows, 10);
+      await db.execute(
+        `INSERT INTO news_top_keywords (generated_at, keywords_json) VALUES (?, ?)`,
+        [now, JSON.stringify(topKeywords)],
+      );
+      // 只保留最近 5 份快照
+      await db.execute(
+        `DELETE FROM news_top_keywords WHERE id NOT IN (
+          SELECT id FROM news_top_keywords ORDER BY id DESC LIMIT 5
+        )`,
+      );
+    } catch (e) {
+      // 关键词统计失败不影响主流程
+      console.error('Top keywords generation failed:', e instanceof Error ? e.message : String(e));
+    }
+
     return { success: true, articles_count: unique.length };
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
@@ -157,6 +186,24 @@ app.get('/list', async (c) => {
 app.post('/trigger', async (c) => {
   const result = await runCron(c);
   return c.json(result, result.success ? 200 : 500);
+});
+
+// 获取 Top 10 关键词（最近一次抓取生成的快照）
+app.get('/top', async (c) => {
+  if (!await ensureTable(c.env.D1_API_TOKEN, c.env.D1_API_BASE)) return tableError(c);
+  const db = getDb(c);
+  try {
+    const row = await db.queryOne<{ generated_at: string; keywords_json: string }>(
+      `SELECT generated_at, keywords_json FROM news_top_keywords ORDER BY id DESC LIMIT 1`,
+    );
+    if (!row) {
+      return c.json({ generated_at: null, keywords: [] });
+    }
+    const keywords: KeywordStat[] = JSON.parse(row.keywords_json);
+    return c.json({ generated_at: row.generated_at, keywords });
+  } catch (e) {
+    return c.json({ error: e instanceof Error ? e.message : '获取 Top 关键词失败' }, 500);
+  }
 });
 
 // 删除单条
