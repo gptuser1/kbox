@@ -1625,6 +1625,17 @@ function renderConfigTool() {
     </div>
   </div>
 </div>
+
+<!-- 选择覆盖配置项弹层 -->
+<div class="disk-modal-overlay" id="configPickOverlay">
+  <div class="disk-modal" style="max-width:480px">
+    <div class="disk-modal-header">
+      <h3>选择要覆盖的配置项</h3>
+      <button class="disk-modal-close" onclick="closeConfigPick()">✕</button>
+    </div>
+    <div class="disk-modal-body" id="configPickBody"></div>
+  </div>
+</div>
 \`;
 }
 
@@ -1638,6 +1649,8 @@ function mountConfigTool() {
   const modalLabel = $('configModalLabel');
   const modalHint = $('configModalHint');
   const modalTitle = $('configModalTitle');
+  const pickOverlay = $('configPickOverlay');
+  const pickBody = $('configPickBody');
 
   let schema = [];
   let tools = [];
@@ -1773,12 +1786,29 @@ function mountConfigTool() {
   };
 
   window.addToolOverride = function(tool) {
-    // 找该工具未覆盖的第一个配置项
+    // 列出该工具未覆盖的所有配置项，让用户选择
     const overrides = toolOverrides[tool] || [];
     const existing = new Set(overrides.map(o => o.key));
     const available = schema.filter(f => !existing.has(f.key));
     if (!available.length) { toast('该工具已覆盖所有配置项', 'info'); return; }
-    openModal('tool', tool, available[0].key);
+    pickBody.innerHTML = available.map(f => {
+      const sensitiveTag = f.sensitive ? ' <span style="color:var(--text-muted);font-size:11px">（敏感）</span>' : '';
+      const defaultTag = f.default ? ' <span style="color:var(--text-muted);font-size:11px">默认: ' + esc(f.default) + '</span>' : '';
+      return '<div class="file-item" style="padding:10px 14px;cursor:pointer" onclick="pickOverride(\\'' + esc(tool) + '\\',\\'' + esc(f.key) + '\\')">' +
+        '<div class="file-info"><div class="file-name">' + esc(f.key) + sensitiveTag + '</div>' +
+        '<div class="file-meta">' + esc(f.desc) + defaultTag + '</div></div></div>';
+    }).join('');
+    pickOverlay.classList.add('show');
+  };
+
+  window.closeConfigPick = function() {
+    pickOverlay.classList.remove('show');
+  };
+  pickOverlay.onclick = (e) => { if (e.target === pickOverlay) closeConfigPick(); };
+
+  window.pickOverride = function(tool, key) {
+    closeConfigPick();
+    openModal('tool', tool, key);
   };
 
   window.clearConfig = async function(scope, tool, key) {
