@@ -285,7 +285,7 @@ export interface HoldingDetail {
 }
 
 export interface FundUpdate {
-  id: number;
+  id: string;
   fund_name: string;
   fund_code: string;
   holdings: string;
@@ -306,7 +306,7 @@ export interface RefreshStats {
 
 export async function refreshValuations(
   getFunds: () => Promise<any[]>,
-  updateFund: (id: number, data: any) => Promise<any>,
+  updateFund: (id: string, data: any) => Promise<any>,
   env?: { TENCENT_API_BASE?: string; YAHOO_API_BASE?: string }
 ): Promise<{ funds: FundUpdate[]; stats: RefreshStats }> {
   const startTime = Date.now();
@@ -319,8 +319,8 @@ export async function refreshValuations(
   }
 
   // 收集所有持仓，按数据源分组
-  const tencentLookup: { symbol: string; code: string; fundId: number; holding: Holding }[] = [];
-  const yahooLookup: { symbol: string; fundId: number; holding: Holding }[] = [];
+  const tencentLookup: { symbol: string; code: string; fundId: string; holding: Holding }[] = [];
+  const yahooLookup: { symbol: string; fundId: string; holding: Holding }[] = [];
   const markets = new Set<string>();
 
   for (const fund of funds) {

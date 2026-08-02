@@ -221,7 +221,8 @@ app.post('/files/:id/chunks', async (c) => {
 
 // ─── 生成一次性下载令牌 ───
 // 主鉴权后调用，返回的 dt 仅能用于下载指定文件，5 分钟内一次性有效
-// 令牌存于通用 KV 表：namespace='disk_tokens', key=dt, value={file_id, expires_at, used}
+// 令牌存于通用 KV 表：namespace='disk_tokens', key=dt, value={file_id, expires_at}
+// 用后即删，不残留；生成新令牌时顺手清理过期令牌
 app.post('/files/:id/download-token', async (c) => {
   if (!await ensureTable(c.env.D1_API_TOKEN, c.env.D1_API_BASE)) return tableError(c);
   const db = getDb(c);
@@ -240,8 +241,21 @@ app.post('/files/:id/download-token', async (c) => {
     const dt = crypto.randomUUID();
     const expiresAt = Math.floor(Date.now() / 1000) + DOWNLOAD_TOKEN_TTL_SEC;
 
-    // 存入 KV 表（value 是 JSON 对象）
-    await kv.set('disk_tokens', dt, { file_id: fileId, expires_at: expiresAt, used: false });
+    // 顺手清理过期/已用的令牌（避免 kbox_kv 残留）
+    try {
+      const all = await kv.list<{ expires_at: number }>('disk_tokens');
+      const now = Math.floor(Date.now() / 1000);
+      for (const item of all) {
+        if (item.value.expires_at < now) {
+          await kv.delete('disk_tokens', item.key);
+        }
+      }
+    } catch {
+      // 清理失败不影响主流程
+    }
+
+    // 存入 KV 表
+    await kv.set('disk_tokens', dt, { file_id: fileId, expires_at: expiresAt });
 
     return c.json({
       dt,
@@ -268,19 +282,19 @@ app.get('/files/:id/download', async (c) => {
   }
 
   try {
-    // 从 KV 表读取令牌
-    const tk = await kv.get<{ file_id: number; expires_at: number; used: boolean }>('disk_tokens', dt);
-    if (!tk) return c.json({ error: '下载令牌无效' }, 401);
-    if (tk.used) return c.json({ error: '下载令牌已使用' }, 401);
+    // 从 KV 表读取令牌（用后即删，所以读到即有效）
+    const tk = await kv.get<{ file_id: number; expires_at: number }>('disk_tokens', dt);
+    if (!tk) return c.json({ error: '下载令牌无效或已使用' }, 401);
     if (tk.expires_at < Math.floor(Date.now() / 1000)) {
+      await kv.delete('disk_tokens', dt); // 过期的也清掉
       return c.json({ error: '下载令牌已过期' }, 401);
     }
     if (tk.file_id !== fileId) {
       return c.json({ error: '下载令牌与文件不匹配' }, 403);
     }
 
-    // 立即标记为已用（一次性）：整体覆盖写入
-    await kv.set('disk_tokens', dt, { ...tk, used: true });
+    // 一次性令牌：用后立即删除，不残留
+    await kv.delete('disk_tokens', dt);
 
     const file = await db.queryOne<{ name: string; mime_type: string; size: number; chunks: number }>(
       `SELECT name, mime_type, size, chunks FROM kbox_disk_files WHERE id = ?`,

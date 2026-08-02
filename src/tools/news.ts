@@ -1,5 +1,6 @@
 import { Hono } from 'hono';
 import { createDb, DbError } from '../db';
+import { createKv, getKvTableError } from '../kv';
 import { crawlAll } from './news-crawler';
 import { summarizeArticles } from './news-llm';
 import { extractTopKeywords, type KeywordStat } from './news-keywords';
@@ -19,6 +20,10 @@ type Variables = {
 const app = new Hono<{ Bindings: Bindings; Variables: Variables }>();
 
 const KEEP_LIMIT = 60;
+// Top 关键词快照存于通用 KV 表：namespace='news_top_keywords', key=时间戳字符串
+// 仅保留最近 5 份快照（list 后按 key DESC 取前 5，多余删除）
+const NS_KEYWORDS = 'news_top_keywords';
+const KEYWORDS_KEEP = 5;
 
 // ─── 自动建表 ───
 let tableReady = false;
@@ -39,12 +44,7 @@ async function ensureTable(token: string, base?: string): Promise<boolean> {
       summary TEXT NOT NULL DEFAULT '',
       category TEXT NOT NULL DEFAULT 'general'
     )`);
-    // Top 关键词统计表：每次抓取后生成一份快照
-    await db.query(`CREATE TABLE IF NOT EXISTS news_top_keywords (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      generated_at TEXT NOT NULL,
-      keywords_json TEXT NOT NULL
-    )`);
+    // Top 关键词快照已迁移到通用 KV 表（namespace='news_top_keywords'），此处不再单独建表
     tableReady = true;
     return true;
   } catch (e) {
@@ -57,6 +57,10 @@ async function ensureTable(token: string, base?: string): Promise<boolean> {
 
 function getDb(c: any) {
   return createDb(c.env.D1_API_TOKEN, c.env.D1_API_BASE);
+}
+
+function getKv(c: any) {
+  return createKv(c.env.D1_API_TOKEN, c.env.D1_API_BASE);
 }
 
 function tableError(c: any) {
@@ -134,23 +138,23 @@ async function runCron(c: any): Promise<{ success: boolean; articles_count: numb
       [KEEP_LIMIT],
     );
 
-    // 生成 Top 10 关键词快照（基于当前库内全部新闻）
+    // 生成 Top 10 关键词快照（基于当前库内全部新闻），存入通用 KV 表
     try {
       const allRows = await db.queryAll<{ title: string; source: string; url: string; summary: string; category: string; crawled_at: string }>(
         `SELECT title, source, url, summary, category, crawled_at FROM newsfeed ORDER BY id DESC LIMIT ?`,
         [KEEP_LIMIT],
       );
       const topKeywords = extractTopKeywords(allRows, 10);
-      await db.execute(
-        `INSERT INTO news_top_keywords (generated_at, keywords_json) VALUES (?, ?)`,
-        [now, JSON.stringify(topKeywords)],
-      );
-      // 只保留最近 5 份快照
-      await db.execute(
-        `DELETE FROM news_top_keywords WHERE id NOT IN (
-          SELECT id FROM news_top_keywords ORDER BY id DESC LIMIT 5
-        )`,
-      );
+      const kv = getKv(c);
+      // key 用毫秒时间戳，list 按 key DESC 即可拿到最新
+      const key = String(Date.now());
+      await kv.set(NS_KEYWORDS, key, { generated_at: now, keywords: topKeywords });
+      // 只保留最近 5 份快照：按 key 降序，超出部分删除
+      const all = await kv.list<{ generated_at: string; keywords: KeywordStat[] }>(NS_KEYWORDS);
+      all.sort((a, b) => (a.key > b.key ? -1 : 1));
+      for (const item of all.slice(KEYWORDS_KEEP)) {
+        await kv.delete(NS_KEYWORDS, item.key);
+      }
     } catch (e) {
       // 关键词统计失败不影响主流程
       console.error('Top keywords generation failed:', e instanceof Error ? e.message : String(e));
@@ -188,20 +192,21 @@ app.post('/trigger', async (c) => {
   return c.json(result, result.success ? 200 : 500);
 });
 
-// 获取 Top 10 关键词（最近一次抓取生成的快照）
+// 获取 Top 10 关键词（最近一次抓取生成的快照，存于通用 KV 表）
 app.get('/top', async (c) => {
   if (!await ensureTable(c.env.D1_API_TOKEN, c.env.D1_API_BASE)) return tableError(c);
-  const db = getDb(c);
+  const kv = getKv(c);
   try {
-    const row = await db.queryOne<{ generated_at: string; keywords_json: string }>(
-      `SELECT generated_at, keywords_json FROM news_top_keywords ORDER BY id DESC LIMIT 1`,
-    );
-    if (!row) {
+    const all = await kv.list<{ generated_at: string; keywords: KeywordStat[] }>(NS_KEYWORDS);
+    if (all.length === 0) {
       return c.json({ generated_at: null, keywords: [] });
     }
-    const keywords: KeywordStat[] = JSON.parse(row.keywords_json);
-    return c.json({ generated_at: row.generated_at, keywords });
+    // 按 key 降序取最新一份
+    all.sort((a, b) => (a.key > b.key ? -1 : 1));
+    const latest = all[0].value;
+    return c.json({ generated_at: latest.generated_at, keywords: latest.keywords });
   } catch (e) {
+    if (getKvTableError()) return c.json({ error: getKvTableError() }, 503);
     return c.json({ error: e instanceof Error ? e.message : '获取 Top 关键词失败' }, 500);
   }
 });
