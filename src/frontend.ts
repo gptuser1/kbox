@@ -1229,12 +1229,12 @@ function mountStockTool() {
         const chgText = chg == null || chg === 0 ? '—' : ((chg > 0 ? '+' : '') + Number(chg).toFixed(2) + '%');
         let holdCount = 0;
         try { holdCount = JSON.parse(f.holdings || '[]').length; } catch {}
-        return '<div class="file-item" onclick="openStockDetail(' + f.id + ')">' +
+        return '<div class="file-item" onclick="openStockDetail(\\'' + f.id + '\\')">' +
           '<div class="file-icon">📊</div>' +
           '<div class="file-info"><div class="file-name">' + esc(f.fund_name) + (f.fund_code ? ' <span style="color:var(--text-muted);font-weight:400;font-size:12px">' + esc(f.fund_code) + '</span>' : '') + '</div>' +
           '<div class="file-meta">' + holdCount + ' 只持仓</div></div>' +
           '<div class="file-actions"><span class="num ' + chgClass + '" style="font-weight:600;font-size:14px">' + chgText + '</span>' +
-          '<button class="btn btn-outline btn-sm" onclick="event.stopPropagation();editStockFund(' + f.id + ')">编辑</button></div>' +
+          '<button class="btn btn-outline btn-sm" onclick="event.stopPropagation();editStockFund(\\'' + f.id + '\\')">编辑</button></div>' +
           '</div>';
       }).join('');
     } catch (e) {
