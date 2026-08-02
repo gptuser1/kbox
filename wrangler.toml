@@ -4,14 +4,12 @@ compatibility_date = "2024-12-01"
 
 # 每天 4 次（北京时间 08:00 / 12:00 / 18:00 / 22:00）触发 news 抓取
 # UTC: 00:00 / 04:00 / 10:00 / 14:00
+# 用逗号合并成单个 cron 表达式，仅占用 1 个 Cron Trigger 配额（Free 计划限 5/账户）
 [triggers]
-crons = [
-  "0 0 * * *",
-  "0 4 * * *",
-  "0 10 * * *",
-  "0 14 * * *"
-]
+crons = ["0 0,4,10,14 * * *"]
 
-[vars]
-OPENAI_BASE_URL = ""
-OPENAI_MODEL = ""
+# 业务配置（API Key / Token / 模型名等）统一存 D1 kbox_kv 表，
+# 通过 /api/config 端点管理，敏感字段 AES-GCM 加密。
+# 此处不再放任何业务 vars，仅需 wrangler secret 配置：
+#   ACCESS_TOKEN  = KBOX_TOKEN（鉴权）
+#   D1_API_TOKEN  = KBOX_TOKEN（D1 访问 + 配置加密主密钥）

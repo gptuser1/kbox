@@ -98,11 +98,7 @@ async function runCron(c: any): Promise<{ success: boolean; articles_count: numb
     }
 
     const summaries = await summarizeArticles(
-      {
-        OPENAI_API_KEY: c.env.OPENAI_API_KEY,
-        OPENAI_BASE_URL: c.env.OPENAI_BASE_URL,
-        OPENAI_MODEL: c.env.OPENAI_MODEL,
-      },
+      c.env,
       unique.map((a) => ({ title: a.title, source: a.source })),
     );
 

@@ -390,6 +390,7 @@ const TOOLS = [
   { id: 'disk', name: '微型云盘', icon: '☁️', desc: '基于 D1 的轻量文件存储，支持分片上传', render: renderDiskTool, mount: mountDiskTool },
   { id: 'stock', name: '基金估值', icon: '💰', desc: '多市场基金持仓估值刷新，A股/港股/美股/韩台日', render: renderStockTool, mount: mountStockTool },
   { id: 'news', name: 'AI 新闻锐评', icon: '📰', desc: '抓取科技新闻并由 AI 写贴吧风格锐评', render: renderNewsTool, mount: mountNewsTool },
+  { id: 'config', name: '配置管理', icon: '⚙️', desc: '集中管理 API 密钥与工具配置，敏感字段加密存储', render: renderConfigTool, mount: mountConfigTool },
 ];
 
 function initTools() {
@@ -1450,6 +1451,246 @@ function mountNewsTool() {
   reloadBtn.onclick = loadNews;
 
   loadNews();
+}
+
+// ═══ 工具 6：配置管理 ═══
+function renderConfigTool() {
+  return \`
+<button class="tool-back" onclick="backToGrid()">← 返回</button>
+<h2>⚙️ 配置管理</h2>
+<p class="subtitle">集中管理 API 密钥与工具配置 · 敏感字段 AES-GCM 加密存储</p>
+
+<div style="background:var(--card);border-radius:10px;padding:12px 16px;margin-bottom:16px;font-size:13px;color:var(--text-secondary);box-shadow:var(--shadow)">
+  <b>三级降级读取</b>：工具级覆盖 → 全局默认 → env 兼容期 → 代码默认值。
+  敏感字段（密钥/Token）写入时加密存储，读取时只返回"已设置/未设置"标记。
+</div>
+
+<div class="result-box" id="configResult"></div>
+
+<div class="section-title">全局默认配置（namespace=app）</div>
+<div class="file-list" id="configGlobalList">
+  <div class="empty">加载中…</div>
+</div>
+
+<div class="section-title">工具级覆盖（namespace=tool:&lt;工具名&gt;）</div>
+<div class="file-list" id="configToolList">
+  <div class="empty">加载中…</div>
+</div>
+
+<!-- 编辑弹层 -->
+<div class="disk-modal-overlay" id="configModalOverlay">
+  <div class="disk-modal">
+    <div class="disk-modal-header">
+      <h3 id="configModalTitle">编辑配置</h3>
+      <button class="disk-modal-close" onclick="closeConfigModal()">✕</button>
+    </div>
+    <div class="disk-modal-body">
+      <div class="form-group">
+        <label id="configModalLabel"></label>
+        <input type="text" id="configModalInput" autocomplete="off" spellcheck="false">
+        <div class="input-desc" id="configModalHint"></div>
+      </div>
+    </div>
+    <div class="disk-modal-footer">
+      <button class="btn btn-outline" onclick="closeConfigModal()">取消</button>
+      <button class="btn btn-primary" id="configModalSave">保存</button>
+    </div>
+  </div>
+</div>
+\`;
+}
+
+function mountConfigTool() {
+  const globalList = $('configGlobalList');
+  const toolList = $('configToolList');
+  const resultBox = $('configResult');
+  const modalOverlay = $('configModalOverlay');
+  const modalSave = $('configModalSave');
+  const modalInput = $('configModalInput');
+  const modalLabel = $('configModalLabel');
+  const modalHint = $('configModalHint');
+  const modalTitle = $('configModalTitle');
+
+  let schema = [];
+  let tools = [];
+  let globalConfigs = [];   // [{ key, desc, sensitive, placeholder, default, hasValue, value }]
+  let toolOverrides = {};   // { toolId: [{ key, desc, sensitive, hasValue, value }] }
+  let editing = null;       // { scope: 'app'|'tool', tool?, key, field }
+
+  function valueDisplay(cfg) {
+    // 敏感字段：用 ****** 脱敏显示
+    if (cfg.sensitive) {
+      return cfg.hasValue
+        ? '<span class="num" style="color:var(--success)">******</span>'
+        : '<span style="color:var(--text-muted)">○ 未设置</span>';
+    }
+    // 非敏感：显示值或默认
+    if (cfg.hasValue && cfg.value) {
+      return '<span class="num">' + esc(cfg.value) + '</span>';
+    }
+    if (cfg.default) {
+      return '<span style="color:var(--text-muted)">默认: ' + esc(cfg.default) + '</span>';
+    }
+    return '<span style="color:var(--text-muted)">未设置</span>';
+  }
+
+  function renderGlobal() {
+    if (!globalConfigs.length) {
+      globalList.innerHTML = '<div class="empty">无配置项</div>';
+      return;
+    }
+    globalList.innerHTML = globalConfigs.map(cfg => {
+      const icon = cfg.sensitive ? '🔐' : '⚙️';
+      const tag = cfg.sensitive ? ' <span style="font-size:10px;background:rgba(239,68,68,0.15);color:var(--danger);padding:1px 6px;border-radius:3px">敏感</span>' : '';
+      return '<div class="file-item">' +
+        '<div class="file-icon">' + icon + '</div>' +
+        '<div class="file-info"><div class="file-name">' + esc(cfg.key) + tag + '</div>' +
+        '<div class="file-meta">' + esc(cfg.desc) + ' · ' + valueDisplay(cfg) + '</div></div>' +
+        '<div class="file-actions">' +
+        '<button class="btn btn-outline btn-sm" onclick="editConfig(\\'app\\',null,\\'' + esc(cfg.key) + '\\')">编辑</button>' +
+        (cfg.hasValue ? '<button class="btn btn-outline btn-sm" style="color:var(--danger)" onclick="clearConfig(\\'app\\',null,\\'' + esc(cfg.key) + '\\')">清除</button>' : '') +
+        '</div></div>';
+    }).join('');
+  }
+
+  function renderTools() {
+    if (!tools.length) {
+      toolList.innerHTML = '<div class="empty">无工具</div>';
+      return;
+    }
+    toolList.innerHTML = tools.map(t => {
+      const overrides = toolOverrides[t.id] || [];
+      let body = '';
+      if (!overrides.length) {
+        body = '<span style="font-size:12px;color:var(--text-muted)">无覆盖（使用全局默认）</span>';
+      } else {
+        body = '<div style="display:flex;flex-wrap:wrap;gap:6px">' + overrides.map(o => {
+          const valText = o.sensitive ? '******' : (o.value ? esc(o.value) : '已设置');
+          return '<span class="saved-config" onclick="editConfig(\\'tool\\',\\'' + t.id + '\\',\\'' + esc(o.key) + '\\')">' + esc(o.key) + ': ' + valText +
+            '<span class="del" onclick="event.stopPropagation();clearConfig(\\'tool\\',\\'' + t.id + '\\',\\'' + esc(o.key) + '\\')">✕</span></span>';
+        }).join('') + '</div>';
+      }
+      // 工具可覆盖的配置项（schema 中所有 key 减去已覆盖的）
+      const existing = new Set(overrides.map(o => o.key));
+      const available = schema.filter(f => !existing.has(f.key));
+      const addBtn = available.length
+        ? '<button class="btn btn-outline btn-sm" style="margin-left:8px" onclick="addToolOverride(\\'' + t.id + '\\')">+ 添加覆盖</button>'
+        : '';
+      return '<div class="file-item" style="display:block;padding:14px 16px">' +
+        '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">' +
+        '<div style="font-weight:600;font-size:14px">' + esc(t.name) + ' <span style="color:var(--text-muted);font-weight:400;font-size:12px">tool:' + esc(t.id) + '</span></div>' +
+        '</div>' +
+        '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">' + body + addBtn + '</div>' +
+        '</div>';
+    }).join('');
+  }
+
+  async function loadAll() {
+    try {
+      const [schemaData, globalData] = await Promise.all([
+        api('/api/config/schema'),
+        api('/api/config'),
+      ]);
+      schema = schemaData.schema || [];
+      tools = schemaData.tools || [];
+      globalConfigs = globalData.configs || [];
+
+      // 并行加载所有工具的覆盖
+      const results = await Promise.all(
+        tools.map(t => api('/api/config/tools/' + t.id).catch(() => ({ overrides: [] })))
+      );
+      toolOverrides = {};
+      tools.forEach((t, i) => {
+        toolOverrides[t.id] = results[i].overrides || [];
+      });
+
+      renderGlobal();
+      renderTools();
+    } catch (e) {
+      if (e.message === 'UNAUTHORIZED') return;
+      globalList.innerHTML = '<div class="empty">加载失败：' + esc(e.message) + '</div>';
+      toolList.innerHTML = '';
+    }
+  }
+
+  function openModal(scope, tool, key) {
+    const field = schema.find(f => f.key === key);
+    if (!field) return;
+    editing = { scope, tool, key, field };
+
+    modalTitle.textContent = scope === 'app' ? '编辑全局配置' : '编辑工具级覆盖';
+    modalLabel.textContent = field.key + ' — ' + field.desc + (field.sensitive ? ' （敏感）' : '');
+    modalInput.placeholder = field.placeholder || (field.default ? '默认: ' + field.default : '');
+    modalInput.value = '';
+    modalInput.type = field.sensitive ? 'password' : 'text';
+    let hint = '';
+    if (field.sensitive) hint = '敏感字段，已加密存储。留空保存将清除该配置。';
+    else if (field.default) hint = '留空保存将回退到默认值：' + field.default;
+    else hint = '留空保存将清除该配置。';
+    if (scope === 'tool') hint += ' （工具级覆盖优先于全局默认）';
+    modalHint.textContent = hint;
+
+    modalOverlay.classList.add('show');
+    setTimeout(() => modalInput.focus(), 50);
+  }
+
+  window.closeConfigModal = function() {
+    modalOverlay.classList.remove('show');
+    editing = null;
+  };
+  modalOverlay.onclick = (e) => { if (e.target === modalOverlay) closeConfigModal(); };
+
+  window.editConfig = function(scope, tool, key) {
+    openModal(scope, tool, key);
+  };
+
+  window.addToolOverride = function(tool) {
+    // 找该工具未覆盖的第一个配置项
+    const overrides = toolOverrides[tool] || [];
+    const existing = new Set(overrides.map(o => o.key));
+    const available = schema.filter(f => !existing.has(f.key));
+    if (!available.length) { toast('该工具已覆盖所有配置项', 'info'); return; }
+    openModal('tool', tool, available[0].key);
+  };
+
+  window.clearConfig = async function(scope, tool, key) {
+    const scopeText = scope === 'app' ? '全局配置' : '工具 ' + tool + ' 覆盖';
+    if (!confirm('确认清除 ' + scopeText + ' 的 ' + key + '？')) return;
+    try {
+      const url = scope === 'app'
+        ? '/api/config/' + encodeURIComponent(key)
+        : '/api/config/tools/' + encodeURIComponent(tool) + '/' + encodeURIComponent(key);
+      await api(url, { method: 'PUT', body: JSON.stringify({ value: '' }), headers: { 'Content-Type': 'application/json' } });
+      toast('已清除', 'success');
+      loadAll();
+    } catch (e) {
+      if (e.message === 'UNAUTHORIZED') return;
+      toast('清除失败：' + e.message, 'error');
+    }
+  };
+
+  modalSave.onclick = async () => {
+    if (!editing) return;
+    const { scope, tool, key } = editing;
+    const value = modalInput.value;
+    modalSave.disabled = true; modalSave.textContent = '保存中…';
+    try {
+      const url = scope === 'app'
+        ? '/api/config/' + encodeURIComponent(key)
+        : '/api/config/tools/' + encodeURIComponent(tool) + '/' + encodeURIComponent(key);
+      await api(url, { method: 'PUT', body: JSON.stringify({ value }), headers: { 'Content-Type': 'application/json' } });
+      toast('已保存', 'success');
+      closeConfigModal();
+      loadAll();
+    } catch (e) {
+      if (e.message === 'UNAUTHORIZED') return;
+      toast('保存失败：' + e.message, 'error');
+    } finally {
+      modalSave.disabled = false; modalSave.textContent = '保存';
+    }
+  };
+
+  loadAll();
 }
 
 // ─── 初始化 ───

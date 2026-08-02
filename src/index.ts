@@ -4,17 +4,19 @@ import disk from './tools/cloud-disk';
 import stock from './tools/stock';
 import news from './tools/news';
 import { createKv, getKvTableError } from './kv';
+import { getConfig, getAppConfig, getToolConfig, setAppConfig, deleteAppConfig, getConfigSchema, listToolOverrides, setToolConfig, deleteToolConfig, ConfigField } from './config';
 
 type Bindings = {
-  ACCESS_TOKEN: string;
-  GH_TOKEN: string;
-  D1_API_TOKEN: string;
+  ACCESS_TOKEN: string;       // = KBOX_TOKEN（鉴权）
+  D1_API_TOKEN: string;       // = KBOX_TOKEN（D1 访问 + 配置加密主密钥）
   D1_API_BASE?: string;
+  // 以下为 env 兼容期字段（首次部署未填配置时降级用）
+  GH_TOKEN?: string;
+  OPENAI_API_KEY?: string;
+  OPENAI_BASE_URL?: string;
+  OPENAI_MODEL?: string;
   TENCENT_API_BASE?: string;
   YAHOO_API_BASE?: string;
-  OPENAI_API_KEY: string;
-  OPENAI_BASE_URL: string;
-  OPENAI_MODEL: string;
 };
 
 type Variables = {
@@ -99,7 +101,160 @@ app.route('/api/tools/news', news);
 
 // 健康检查
 app.get('/api/health', (c) => {
-  return c.json({ status: 'ok', gh_token: !!c.env.GH_TOKEN });
+  return c.json({ status: 'ok', d1_token: !!c.env.D1_API_TOKEN });
+});
+
+// ─── 配置管理 ───
+// 所有业务配置集中存 D1 kbox_kv 表，敏感字段 AES-GCM 加密
+// 三级降级：tool:<name> → app → env 兼容期 → 代码默认值
+
+// 工具清单（用于前端渲染工具级覆盖 UI）
+const TOOL_LIST = [
+  { id: 'dispatch', name: 'GitHub Actions 触发' },
+  { id: 'disk',     name: '微型云盘' },
+  { id: 'stock',    name: '基金估值' },
+  { id: 'news',     name: 'AI 新闻锐评' },
+];
+
+// 敏感值脱敏：用多个 * 号代替明文（不返回真实值）
+function maskField(field: ConfigField, value: string | null) {
+  if (value == null || value === '') {
+    return { hasValue: false, value: null };
+  }
+  if (field.sensitive) {
+    return { hasValue: true, value: '******' }; // 用 * 号脱敏，不返回明文
+  }
+  return { hasValue: true, value };
+}
+
+// GET /api/config/schema — 所有配置项定义
+app.get('/api/config/schema', (c) => {
+  return c.json({ schema: getConfigSchema(), tools: TOOL_LIST });
+});
+
+// GET /api/config — 列出所有全局配置（敏感脱敏）
+app.get('/api/config', async (c) => {
+  const schema = getConfigSchema();
+  const configs = [];
+  for (const field of schema) {
+    const raw = await getAppConfig(c, field.key);
+    const masked = maskField(field, raw);
+    configs.push({
+      key: field.key,
+      desc: field.desc,
+      sensitive: field.sensitive,
+      placeholder: field.placeholder,
+      default: field.default || null,
+      hasValue: masked.hasValue,
+      value: masked.value,
+    });
+  }
+  return c.json({ configs });
+});
+
+// GET /api/config/:key — 读取单条全局配置（敏感脱敏）
+app.get('/api/config/:key', async (c) => {
+  const key = c.req.param('key');
+  const field = getConfigSchema().find(f => f.key === key);
+  if (!field) return c.json({ error: '未知配置项: ' + key }, 404);
+  const raw = await getAppConfig(c, key);
+  const masked = maskField(field, raw);
+  return c.json({
+    key, desc: field.desc, sensitive: field.sensitive,
+    default: field.default || null,
+    hasValue: masked.hasValue,
+    value: masked.value,
+  });
+});
+
+// PUT /api/config/:key — 写入全局配置（敏感自动加密）
+// body: { value: string }，空字符串表示清除
+app.put('/api/config/:key', async (c) => {
+  const key = c.req.param('key');
+  const field = getConfigSchema().find(f => f.key === key);
+  if (!field) return c.json({ error: '未知配置项: ' + key }, 404);
+
+  let body: any;
+  try { body = await c.req.json(); } catch {
+    return c.json({ error: '请求体必须是有效的JSON' }, 400);
+  }
+  const value = typeof body.value === 'string' ? body.value : '';
+  try {
+    if (value === '') {
+      // 空值 → 删除配置（回退到 env/默认）
+      await deleteAppConfig(c, key);
+    } else {
+      await setAppConfig(c, key, value);
+    }
+    return c.json({ ok: true });
+  } catch (e) {
+    return c.json({ error: e instanceof Error ? e.message : '保存失败' }, 500);
+  }
+});
+
+// GET /api/config/tools/:tool — 列出某工具的所有覆盖配置（敏感脱敏）
+app.get('/api/config/tools/:tool', async (c) => {
+  const tool = c.req.param('tool');
+  if (!TOOL_LIST.find(t => t.id === tool)) {
+    return c.json({ error: '未知工具: ' + tool }, 404);
+  }
+  const overrideKeys = await listToolOverrides(c, tool);
+  const schema = getConfigSchema();
+  const overrides = [];
+  for (const key of overrideKeys) {
+    const field = schema.find(f => f.key === key);
+    if (!field) continue;
+    // 直接读工具级值（不经降级）
+    const raw = await getToolConfig(c, tool, key);
+    const masked = maskField(field, raw);
+    overrides.push({
+      key, desc: field.desc, sensitive: field.sensitive,
+      hasValue: masked.hasValue, value: masked.value,
+    });
+  }
+  return c.json({ tool, overrides });
+});
+
+// PUT /api/config/tools/:tool/:key — 写入工具级覆盖
+app.put('/api/config/tools/:tool/:key', async (c) => {
+  const tool = c.req.param('tool');
+  const key = c.req.param('key');
+  if (!TOOL_LIST.find(t => t.id === tool)) {
+    return c.json({ error: '未知工具: ' + tool }, 404);
+  }
+  const field = getConfigSchema().find(f => f.key === key);
+  if (!field) return c.json({ error: '未知配置项: ' + key }, 404);
+
+  let body: any;
+  try { body = await c.req.json(); } catch {
+    return c.json({ error: '请求体必须是有效的JSON' }, 400);
+  }
+  const value = typeof body.value === 'string' ? body.value : '';
+  try {
+    if (value === '') {
+      await deleteToolConfig(c, tool, key);
+    } else {
+      await setToolConfig(c, tool, key, value);
+    }
+    return c.json({ ok: true });
+  } catch (e) {
+    return c.json({ error: e instanceof Error ? e.message : '保存失败' }, 500);
+  }
+});
+
+// DELETE /api/config/tools/:tool/:key — 删除工具级覆盖（回退到全局）
+app.delete('/api/config/tools/:tool/:key', async (c) => {
+  const tool = c.req.param('tool');
+  const key = c.req.param('key');
+  if (!TOOL_LIST.find(t => t.id === tool)) {
+    return c.json({ error: '未知工具: ' + tool }, 404);
+  }
+  try {
+    await deleteToolConfig(c, tool, key);
+    return c.json({ ok: true });
+  } catch (e) {
+    return c.json({ error: e instanceof Error ? e.message : '删除失败' }, 500);
+  }
 });
 
 // ─── GitHub Workflow Dispatch 工具 ───
@@ -112,12 +267,17 @@ app.get('/api/tools/workflows', async (c) => {
     return c.json({ error: '需要 owner 和 repo 参数' }, 400);
   }
 
+  const ghToken = await getConfig(c, 'dispatch', 'gh_token');
+  if (!ghToken) {
+    return c.json({ error: '未配置 GitHub Token，请到配置管理设置 gh_token' }, 500);
+  }
+
   try {
     const res = await fetch(
       `https://api.github.com/repos/${owner}/${repo}/actions/workflows?per_page=100`,
       {
         headers: {
-          'Authorization': `Bearer ${c.env.GH_TOKEN}`,
+          'Authorization': `Bearer ${ghToken}`,
           'Accept': 'application/vnd.github+json',
           'User-Agent': 'kbox',
         },
@@ -160,13 +320,18 @@ app.post('/api/tools/dispatch', async (c) => {
     payload.inputs = inputs;
   }
 
+  const ghToken = await getConfig(c, 'dispatch', 'gh_token');
+  if (!ghToken) {
+    return c.json({ error: '未配置 GitHub Token，请到配置管理设置 gh_token' }, 500);
+  }
+
   try {
     const res = await fetch(
       `https://api.github.com/repos/${owner}/${repo}/actions/workflows/${encodeURIComponent(workflow_id)}/dispatches`,
       {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${c.env.GH_TOKEN}`,
+          'Authorization': `Bearer ${ghToken}`,
           'Accept': 'application/vnd.github+json',
           'User-Agent': 'kbox',
           'Content-Type': 'application/json',
@@ -196,12 +361,17 @@ app.get('/api/tools/workflow-runs', async (c) => {
   }
   const perPage = Math.min(Number(c.req.query('per_page')) || 1, 10);
 
+  const ghToken = await getConfig(c, 'dispatch', 'gh_token');
+  if (!ghToken) {
+    return c.json({ error: '未配置 GitHub Token，请到配置管理设置 gh_token' }, 500);
+  }
+
   try {
     const res = await fetch(
       `https://api.github.com/repos/${owner}/${repo}/actions/workflows/${encodeURIComponent(workflowId)}/runs?per_page=${perPage}`,
       {
         headers: {
-          'Authorization': `Bearer ${c.env.GH_TOKEN}`,
+          'Authorization': `Bearer ${ghToken}`,
           'Accept': 'application/vnd.github+json',
           'User-Agent': 'kbox',
         },
@@ -232,7 +402,7 @@ app.get('/api/tools/workflow-runs', async (c) => {
 // namespace = 'dispatch_configs'，key = '{token}:{id}'，value = { repo, workflow_id, branch, inputs }
 
 interface DispatchConfig {
-  id: string;
+  id?: string;  // 存储时不带 id（id 作为 KV key），读取时由 list 拼回
   repo: string;
   workflow_id: string;
   branch: string;
@@ -407,12 +577,17 @@ app.get('/api/tools/branches', async (c) => {
     return c.json({ error: '需要 owner 和 repo 参数' }, 400);
   }
 
+  const ghToken = await getConfig(c, 'dispatch', 'gh_token');
+  if (!ghToken) {
+    return c.json({ error: '未配置 GitHub Token，请到配置管理设置 gh_token' }, 500);
+  }
+
   try {
     const res = await fetch(
       `https://api.github.com/repos/${owner}/${repo}/branches?per_page=100`,
       {
         headers: {
-          'Authorization': `Bearer ${c.env.GH_TOKEN}`,
+          'Authorization': `Bearer ${ghToken}`,
           'Accept': 'application/vnd.github+json',
           'User-Agent': 'kbox',
         },
@@ -441,12 +616,17 @@ app.get('/api/tools/workflow-inputs', async (c) => {
     return c.json({ error: '需要 owner、repo、path 参数' }, 400);
   }
 
+  const ghToken = await getConfig(c, 'dispatch', 'gh_token');
+  if (!ghToken) {
+    return c.json({ error: '未配置 GitHub Token，请到配置管理设置 gh_token' }, 500);
+  }
+
   try {
     const res = await fetch(
       `https://api.github.com/repos/${owner}/${repo}/contents/${encodeURIComponent(path)}`,
       {
         headers: {
-          'Authorization': `Bearer ${c.env.GH_TOKEN}`,
+          'Authorization': `Bearer ${ghToken}`,
           'Accept': 'application/vnd.github+json',
           'User-Agent': 'kbox',
         },
@@ -523,11 +703,7 @@ async function handleNewsCron(env: Bindings) {
     }
 
     const summaries = await summarizeArticles(
-      {
-        OPENAI_API_KEY: env.OPENAI_API_KEY,
-        OPENAI_BASE_URL: env.OPENAI_BASE_URL,
-        OPENAI_MODEL: env.OPENAI_MODEL,
-      },
+      env,
       unique.map((a: any) => ({ title: a.title, source: a.source })),
     );
 

@@ -1,10 +1,12 @@
 import { Hono } from 'hono';
 import { createDb, DbError } from '../db';
 import { refreshValuations } from './stock-fetcher';
+import { getConfig } from '../config';
 
 type Bindings = {
   D1_API_TOKEN: string;
   D1_API_BASE?: string;
+  // env 兼容期字段（首次部署未填配置时降级用）
   TENCENT_API_BASE?: string;
   YAHOO_API_BASE?: string;
 };
@@ -308,6 +310,9 @@ app.post('/refresh', async (c) => {
   const db = getDb(c);
 
   try {
+    // 行情 API 地址走配置（tool:stock 覆盖 → app 全局 → env 兼容 → 代码默认）
+    const tencentBase = await getConfig(c, 'stock', 'tencent_api_base');
+    const yahooBase = await getConfig(c, 'stock', 'yahoo_api_base');
     const { funds: updated, stats } = await refreshValuations(
       async () => db.queryAll(`SELECT * FROM stock_fund_holdings ORDER BY created_at DESC`),
       async (id: number, data: any) => {
@@ -320,7 +325,10 @@ app.post('/refresh', async (c) => {
         params.push(id);
         await db.execute(`UPDATE stock_fund_holdings SET ${sets.join(', ')} WHERE id = ?`, params);
       },
-      c.env,
+      {
+        TENCENT_API_BASE: tencentBase || undefined,
+        YAHOO_API_BASE: yahooBase || undefined,
+      },
     );
 
     return c.json({

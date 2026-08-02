@@ -1,8 +1,14 @@
-// 环境/配置类型（最小集合，与 kbox 主应用的 Bindings 对齐）
+// 配置通过 getConfig 动态读取（三级降级：tool:news → app → env 兼容）
+import { getConfigByEnv } from '../config'
+
+// env 最小集合：只需 D1 连接信息（其余配置从 D1 读）
 interface Env {
-  OPENAI_API_KEY: string
-  OPENAI_BASE_URL: string
-  OPENAI_MODEL: string
+  D1_API_TOKEN: string
+  D1_API_BASE?: string
+  // 兼容期字段（首次部署未填配置时降级用）
+  OPENAI_API_KEY?: string
+  OPENAI_BASE_URL?: string
+  OPENAI_MODEL?: string
 }
 
 interface ChatMessage {
@@ -100,18 +106,27 @@ export async function summarizeArticles(
   let lastError: string | null = null
   let lastSummaries: string[] | null = null
 
+  // 动态读取配置（tool:news 覆盖 → app 全局 → env 兼容）
+  const apiKey = await getConfigByEnv(env, 'news', 'openai_api_key')
+  const baseUrl = await getConfigByEnv(env, 'news', 'openai_base_url')
+  const model = await getConfigByEnv(env, 'news', 'openai_model')
+  if (!apiKey || !baseUrl || !model) {
+    console.error('LLM config missing:', { hasKey: !!apiKey, hasUrl: !!baseUrl, hasModel: !!model })
+    return articles.map(() => '')
+  }
+
   for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
     try {
       const messages = buildPrompt(articles, attempt)
 
-      const res = await fetch(`${env.OPENAI_BASE_URL}/chat/completions`, {
+      const res = await fetch(`${baseUrl}/chat/completions`, {
         method: 'POST',
         headers: {
-          Authorization: `Bearer ${env.OPENAI_API_KEY}`,
+          Authorization: `Bearer ${apiKey}`,
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          model: env.OPENAI_MODEL,
+          model,
           messages,
           max_tokens: 4096,
           temperature: 0.8,
