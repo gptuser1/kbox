@@ -1114,7 +1114,6 @@ function renderStockTool() {
 <div style="display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap">
   <button class="btn btn-primary" id="stockRefreshBtn">🔄 刷新全部估值</button>
   <button class="btn btn-outline" id="stockAddBtn">➕ 添加基金</button>
-  <button class="btn btn-outline" id="stockImportBtn">📥 自动导入</button>
 </div>
 
 <div class="result-box" id="stockResult"></div>
@@ -1129,6 +1128,7 @@ function renderStockTool() {
   <div class="disk-modal" style="max-width:560px">
     <div class="disk-modal-header">
       <h3 id="stockModalTitle">添加基金</h3>
+      <button class="btn btn-outline btn-sm" id="stockGotoImportBtn" style="margin-right:auto;display:none">📥 自动导入</button>
       <button class="disk-modal-close" onclick="closeStockModal()">✕</button>
     </div>
     <div class="disk-modal-body">
@@ -1184,7 +1184,7 @@ function mountStockTool() {
   const list = $('stockList');
   const refreshBtn = $('stockRefreshBtn');
   const addBtn = $('stockAddBtn');
-  const importBtn = $('stockImportBtn');
+  const gotoImportBtn = $('stockGotoImportBtn');
   const resultBox = $('stockResult');
   const modalOverlay = $('stockModalOverlay');
   const modalSave = $('stockModalSave');
@@ -1267,9 +1267,10 @@ function mountStockTool() {
 
   window.openStockModal = function(isEdit) {
     $('stockModalTitle').textContent = isEdit ? '编辑基金' : '添加基金';
-    // 删除、导出按钮仅在编辑时显示
+    // 删除、导出按钮仅在编辑时显示；自动导入入口仅在新增时显示
     modalDeleteBtn.style.display = isEdit ? '' : 'none';
     modalExportBtn.style.display = isEdit ? '' : 'none';
+    gotoImportBtn.style.display = isEdit ? 'none' : '';
     modalOverlay.classList.add('show');
   };
   window.closeStockModal = function() {
@@ -1441,7 +1442,8 @@ function mountStockTool() {
   };
   importOverlay.onclick = (e) => { if (e.target === importOverlay) closeStockImport(); };
 
-  importBtn.onclick = () => {
+  gotoImportBtn.onclick = () => {
+    closeStockModal();
     importText.value = '';
     importOverlay.classList.add('show');
   };
