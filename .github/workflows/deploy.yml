@@ -26,6 +26,7 @@ jobs:
           [ -n "${{ secrets.ACCESS_TOKEN }}" ] && echo "${{ secrets.ACCESS_TOKEN }}" | npx wrangler secret put ACCESS_TOKEN || echo "ACCESS_TOKEN not set"
           [ -n "${{ secrets.GH_TOKEN }}" ] && echo "${{ secrets.GH_TOKEN }}" | npx wrangler secret put GH_TOKEN || echo "GH_TOKEN not set"
           [ -n "${{ secrets.D1_API_TOKEN }}" ] && echo "${{ secrets.D1_API_TOKEN }}" | npx wrangler secret put D1_API_TOKEN || echo "D1_API_TOKEN not set"
+          [ -n "${{ secrets.OPENAI_API_KEY }}" ] && echo "${{ secrets.OPENAI_API_KEY }}" | npx wrangler secret put OPENAI_API_KEY || echo "OPENAI_API_KEY not set"
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CF_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CF_ACCOUNT_ID }}

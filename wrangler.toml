@@ -2,5 +2,16 @@ name = "kbox"
 main = "src/index.ts"
 compatibility_date = "2024-12-01"
 
+# 每天 4 次（北京时间 08:00 / 12:00 / 18:00 / 22:00）触发 news 抓取
+# UTC: 00:00 / 04:00 / 10:00 / 14:00
 [triggers]
-crons = []
+crons = [
+  "0 0 * * *",
+  "0 4 * * *",
+  "0 10 * * *",
+  "0 14 * * *"
+]
+
+[vars]
+OPENAI_BASE_URL = ""
+OPENAI_MODEL = ""

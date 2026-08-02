@@ -235,6 +235,45 @@ input, select, button, textarea { font-family: inherit; }
   .token-bar { flex-wrap: wrap; }
   .token-bar .token-group { width: 100%; }
 }
+
+/* ─── 弹层 modal ─── */
+.disk-modal-overlay {
+  display: none; position: fixed; inset: 0; background: var(--overlay); z-index: 200;
+  align-items: center; justify-content: center; padding: 20px;
+}
+.disk-modal-overlay.show { display: flex; }
+.disk-modal {
+  background: var(--card); border-radius: 12px; width: 100%; max-width: 480px;
+  max-height: 90vh; overflow: hidden; display: flex; flex-direction: column;
+  box-shadow: var(--shadow-lg); animation: modalIn 0.2s ease;
+}
+@keyframes modalIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+.disk-modal-header {
+  padding: 14px 18px; border-bottom: 1px solid var(--border);
+  display: flex; align-items: center; justify-content: space-between;
+}
+.disk-modal-header h3 { font-size: 16px; font-weight: 600; }
+.disk-modal-close {
+  background: none; border: none; font-size: 18px; cursor: pointer; color: var(--text-muted);
+  padding: 4px 8px; border-radius: 6px; transition: background 0.2s;
+}
+.disk-modal-close:hover { background: var(--bg); }
+.disk-modal-body { padding: 18px; overflow-y: auto; flex: 1; }
+.disk-modal-footer {
+  padding: 12px 18px; border-top: 1px solid var(--border);
+  display: flex; gap: 8px; justify-content: flex-end;
+}
+
+/* ─── 涨跌色（基金估值） ─── */
+.change-up { color: #ef4444; }
+.change-down { color: #22c55e; }
+.change-flat { color: var(--text-muted); }
+.num { font-variant-numeric: tabular-nums; }
+
+/* ─── 表单内联行 ─── */
+.form-inline { display: flex; gap: 6px; margin-bottom: 6px; align-items: center; }
+.form-inline input, .form-inline select { padding: 7px 10px; border: 1px solid var(--border); border-radius: 6px; font-size: 13px; background: var(--input-bg); color: var(--text); outline: none; }
+.form-inline input:focus, .form-inline select:focus { border-color: var(--primary); }
 </style>
 </head>
 <body>
@@ -349,6 +388,8 @@ function parseRepo(input) {
 const TOOLS = [
   { id: 'dispatch', name: 'GitHub Actions 触发', icon: '⚡', desc: '通过 API 触发 GitHub workflow dispatch', render: renderDispatchTool, mount: mountDispatchTool },
   { id: 'disk', name: '微型云盘', icon: '☁️', desc: '基于 D1 的轻量文件存储，支持分片上传', render: renderDiskTool, mount: mountDiskTool },
+  { id: 'stock', name: '基金估值', icon: '💰', desc: '多市场基金持仓估值刷新，A股/港股/美股/韩台日', render: renderStockTool, mount: mountStockTool },
+  { id: 'news', name: 'AI 新闻锐评', icon: '📰', desc: '抓取科技新闻并由 AI 写贴吧风格锐评', render: renderNewsTool, mount: mountNewsTool },
 ];
 
 function initTools() {
@@ -1055,6 +1096,360 @@ function mountDiskTool() {
 
   loadStats();
   loadFiles();
+}
+
+// ═══ 工具 4：基金估值 ═══
+function renderStockTool() {
+  return \`
+<button class="tool-back" onclick="backToGrid()">← 返回</button>
+<h2>💰 基金估值</h2>
+<p class="subtitle">多市场基金持仓估值刷新 · A股/港股/美股/韩台日</p>
+
+<div class="disk-stats" id="stockStats">
+  <div class="disk-stat-card"><div class="stat-label">基金数</div><div class="stat-value" id="stockCount">-</div></div>
+  <div class="disk-stat-card"><div class="stat-label">上次刷新</div><div class="stat-value" id="stockLastTime" style="font-size:14px">-</div></div>
+</div>
+
+<div style="display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap">
+  <button class="btn btn-primary" id="stockRefreshBtn">🔄 刷新全部估值</button>
+  <button class="btn btn-outline" id="stockAddBtn">➕ 添加基金</button>
+</div>
+
+<div class="result-box" id="stockResult"></div>
+
+<div class="section-title">基金列表</div>
+<div class="file-list" id="stockList">
+  <div class="empty">加载中…</div>
+</div>
+
+<!-- 添加/编辑基金弹层 -->
+<div class="disk-modal-overlay" id="stockModalOverlay">
+  <div class="disk-modal" style="max-width:560px">
+    <div class="disk-modal-header">
+      <h3 id="stockModalTitle">添加基金</h3>
+      <button class="disk-modal-close" onclick="closeStockModal()">✕</button>
+    </div>
+    <div class="disk-modal-body">
+      <div class="form-group">
+        <label>基金名称</label>
+        <input id="stockFundName" placeholder="如：华夏沪深300ETF">
+      </div>
+      <div class="form-group">
+        <label>基金代码（可选）</label>
+        <input id="stockFundCode" placeholder="如：510300">
+      </div>
+      <div class="form-group">
+        <label>持仓明细 <button type="button" class="btn btn-outline btn-sm" onclick="addStockHolding()" style="margin-left:8px">+ 添加持仓</button></label>
+        <div id="stockHoldingsList"></div>
+      </div>
+    </div>
+    <div class="disk-modal-footer">
+      <button class="btn btn-outline" onclick="closeStockModal()">取消</button>
+      <button class="btn btn-primary" id="stockModalSave">保存</button>
+    </div>
+  </div>
+</div>
+\`;
+}
+
+function mountStockTool() {
+  const list = $('stockList');
+  const refreshBtn = $('stockRefreshBtn');
+  const addBtn = $('stockAddBtn');
+  const resultBox = $('stockResult');
+  const modalOverlay = $('stockModalOverlay');
+  const modalSave = $('stockModalSave');
+  const holdingsList = $('stockHoldingsList');
+  let editingId = null;
+  let fundsCache = [];
+
+  const MARKET_LABELS = { A: '内地', HK: '香港', US: '美国', KR: '韩国', TW: '台湾', JP: '日本' };
+
+  async function loadFunds() {
+    list.innerHTML = '<div class="empty">加载中…</div>';
+    try {
+      const data = await api('/api/tools/stock/funds');
+      fundsCache = data.results || [];
+      $('stockCount').textContent = fundsCache.length;
+      $('stockLastTime').textContent = fundsCache[0]?.estimated_time || '-';
+      if (!fundsCache.length) {
+        list.innerHTML = '<div class="empty">暂无基金，点击「添加基金」开始</div>';
+        return;
+      }
+      list.innerHTML = fundsCache.map(f => {
+        const chg = f.estimated_change;
+        const chgClass = chg > 0.01 ? 'change-up' : chg < -0.01 ? 'change-down' : 'change-flat';
+        const chgText = chg == null || chg === 0 ? '—' : ((chg > 0 ? '+' : '') + Number(chg).toFixed(2) + '%');
+        let holdCount = 0;
+        try { holdCount = JSON.parse(f.holdings || '[]').length; } catch {}
+        return '<div class="file-item" onclick="openStockDetail(' + f.id + ')">' +
+          '<div class="file-icon">📊</div>' +
+          '<div class="file-info"><div class="file-name">' + esc(f.fund_name) + (f.fund_code ? ' <span style="color:var(--text-muted);font-weight:400;font-size:12px">' + esc(f.fund_code) + '</span>' : '') + '</div>' +
+          '<div class="file-meta">' + holdCount + ' 只持仓 · ' + (f.estimated_time ? esc(f.estimated_time) : '未刷新') + '</div></div>' +
+          '<div class="file-actions"><span class="num ' + chgClass + '" style="font-weight:600;font-size:14px">' + chgText + '</span>' +
+          '<button class="btn btn-outline btn-sm" onclick="event.stopPropagation();editStockFund(' + f.id + ')">编辑</button>' +
+          '<button class="btn btn-outline btn-sm" style="color:var(--danger)" onclick="event.stopPropagation();delStockFund(' + f.id + ')">删除</button></div>' +
+          '</div>';
+      }).join('');
+    } catch (e) {
+      if (e.message === 'UNAUTHORIZED') return;
+      list.innerHTML = '<div class="empty">加载失败：' + esc(e.message) + '</div>';
+    }
+  }
+
+  function addStockHolding(name, code, market, weight) {
+    const div = document.createElement('div');
+    div.className = 'form-inline';
+    div.style.cssText = 'display:flex;gap:6px;margin-bottom:6px;align-items:center';
+    div.innerHTML =
+      '<input class="h-name" placeholder="名称" value="' + esc(name||'') + '" style="flex:1">' +
+      '<input class="h-code" placeholder="代码" value="' + esc(code||'') + '" style="width:90px" spellcheck="false">' +
+      '<select class="h-market" style="width:80px">' +
+        '<option value="A"' + (market==='A'?' selected':'') + '>内地</option>' +
+        '<option value="HK"' + (market==='HK'?' selected':'') + '>香港</option>' +
+        '<option value="US"' + (market==='US'?' selected':'') + '>美国</option>' +
+        '<option value="KR"' + (market==='KR'?' selected':'') + '>韩国</option>' +
+        '<option value="TW"' + (market==='TW'?' selected':'') + '>台湾</option>' +
+        '<option value="JP"' + (market==='JP'?' selected':'') + '>日本</option>' +
+      '</select>' +
+      '<input class="h-weight" type="number" placeholder="%" value="' + (weight||'') + '" step="0.01" style="width:70px">' +
+      '<button class="btn btn-outline btn-sm" onclick="this.parentElement.remove()">✕</button>';
+    holdingsList.appendChild(div);
+  }
+
+  window.addStockHolding = addStockHolding;
+
+  window.openStockModal = function(isEdit) {
+    $('stockModalTitle').textContent = isEdit ? '编辑基金' : '添加基金';
+    modalOverlay.classList.add('show');
+  };
+  window.closeStockModal = function() {
+    modalOverlay.classList.remove('show');
+    editingId = null;
+  };
+  modalOverlay.onclick = (e) => { if (e.target === modalOverlay) closeStockModal(); };
+
+  window.editStockFund = function(id) {
+    const f = fundsCache.find(x => x.id === id);
+    if (!f) return;
+    editingId = id;
+    $('stockFundName').value = f.fund_name || '';
+    $('stockFundCode').value = f.fund_code || '';
+    holdingsList.innerHTML = '';
+    let holdings = [];
+    try { holdings = JSON.parse(f.holdings || '[]'); } catch {}
+    if (!holdings.length) addStockHolding();
+    else holdings.forEach(h => addStockHolding(h.name, h.code, h.market, h.weight));
+    openStockModal(true);
+  };
+
+  window.openStockDetail = function(id) {
+    const f = fundsCache.find(x => x.id === id);
+    if (!f) return;
+    let details = [];
+    try { details = JSON.parse(f.holdings_detail || '[]'); } catch {}
+    if (!details.length) {
+      toast('暂无估值详情，请先点击「刷新全部估值」', 'info');
+      return;
+    }
+    let html = '<div style="margin-bottom:8px;font-size:13px;color:var(--text-muted)">' + esc(f.fund_name) + ' · ' + (f.estimated_time ? esc(f.estimated_time) : '') + '</div>';
+    html += '<table style="width:100%;font-size:12px;border-collapse:collapse"><thead><tr style="color:var(--text-muted)"><th style="text-align:left;padding:4px">持仓</th><th>市场</th><th class="num">权重</th><th class="num">涨跌</th><th class="num">贡献</th><th>状态</th></tr></thead><tbody>';
+    for (const d of details) {
+      const cp = d.changePct;
+      const chgClass = cp == null ? 'change-flat' : cp > 0.01 ? 'change-up' : cp < -0.01 ? 'change-down' : 'change-flat';
+      const chgText = cp == null ? '—' : ((cp > 0 ? '+' : '') + Number(cp).toFixed(2) + '%');
+      const contribText = d.contribution == null ? '—' : ((d.contribution > 0 ? '+' : '') + Number(d.contribution).toFixed(2) + '%');
+      html += '<tr style="border-top:1px solid var(--border)"><td style="padding:4px">' + esc(d.name) + '<div style="color:var(--text-muted);font-size:11px">' + esc(d.code) + '</div></td>' +
+        '<td style="text-align:center">' + esc(MARKET_LABELS[d.market] || d.market) + '</td>' +
+        '<td class="num" style="text-align:right">' + (d.weight||0) + '%</td>' +
+        '<td class="num ' + chgClass + '" style="text-align:right">' + chgText + '</td>' +
+        '<td class="num ' + chgClass + '" style="text-align:right">' + contribText + '</td>' +
+        '<td style="text-align:center;font-size:11px">' + esc(d.statusLabel || '—') + '</td></tr>';
+    }
+    html += '</tbody></table>';
+    // 复用 disk-modal 结构弹层显示
+    const detailOverlay = document.createElement('div');
+    detailOverlay.className = 'disk-modal-overlay show';
+    detailOverlay.innerHTML = '<div class="disk-modal" style="max-width:560px"><div class="disk-modal-header"><h3>估值详情</h3><button class="disk-modal-close">✕</button></div><div class="disk-modal-body">' + html + '</div></div>';
+    detailOverlay.onclick = (e) => { if (e.target === detailOverlay || e.target.className === 'disk-modal-close') detailOverlay.remove(); };
+    document.body.appendChild(detailOverlay);
+  };
+
+  window.delStockFund = async function(id) {
+    if (!confirm('确定删除此基金？')) return;
+    try {
+      await api('/api/tools/stock/funds/' + id, { method: 'DELETE' });
+      toast('已删除', 'success');
+      loadFunds();
+    } catch (e) {
+      if (e.message === 'UNAUTHORIZED') return;
+      toast('删除失败：' + e.message, 'error');
+    }
+  };
+
+  addBtn.onclick = () => {
+    editingId = null;
+    $('stockFundName').value = '';
+    $('stockFundCode').value = '';
+    holdingsList.innerHTML = '';
+    addStockHolding();
+    openStockModal(false);
+  };
+
+  modalSave.onclick = async () => {
+    const name = $('stockFundName').value.trim();
+    if (!name) { toast('请输入基金名称', 'error'); return; }
+    const code = $('stockFundCode').value.trim();
+    const rows = holdingsList.querySelectorAll('.form-inline');
+    const holdings = [];
+    for (const row of rows) {
+      const n = row.querySelector('.h-name').value.trim();
+      const c = row.querySelector('.h-code').value.trim();
+      const m = row.querySelector('.h-market').value;
+      const w = parseFloat(row.querySelector('.h-weight').value) || 0;
+      if (!n && !c) continue;
+      if (!n) { toast('请填写持仓名称', 'error'); return; }
+      if (!c) { toast('请填写持仓代码', 'error'); return; }
+      holdings.push({ name: n, code: c, market: m, weight: w });
+    }
+    if (!holdings.length) { toast('请至少添加一条持仓明细', 'error'); return; }
+    const body = { fund_name: name, fund_code: code, holdings: JSON.stringify(holdings) };
+    modalSave.disabled = true; modalSave.textContent = '保存中…';
+    try {
+      if (editingId) {
+        await api('/api/tools/stock/funds/' + editingId, { method: 'PUT', body: JSON.stringify(body), headers: { 'Content-Type': 'application/json' } });
+        toast('已更新', 'success');
+      } else {
+        await api('/api/tools/stock/funds', { method: 'POST', body: JSON.stringify(body), headers: { 'Content-Type': 'application/json' } });
+        toast('已添加', 'success');
+      }
+      closeStockModal();
+      loadFunds();
+    } catch (e) {
+      if (e.message === 'UNAUTHORIZED') return;
+      toast('保存失败：' + e.message, 'error');
+    } finally {
+      modalSave.disabled = false; modalSave.textContent = '保存';
+    }
+  };
+
+  refreshBtn.onclick = async () => {
+    refreshBtn.disabled = true; refreshBtn.textContent = '🔄 刷新中…';
+    resultBox.className = 'result-box';
+    resultBox.textContent = '⏳ 正在抓取行情并计算估值…';
+    try {
+      const data = await api('/api/tools/stock/refresh', { method: 'POST' });
+      const s = data.stats || {};
+      resultBox.className = 'result-box show success';
+      resultBox.textContent = '✓ 刷新完成：' + s.updated_funds + '/' + s.total_funds + ' 只基金 · ' +
+        s.matched_holdings + '/' + s.total_holdings + ' 持仓匹配 (' + s.match_rate + ') · ' +
+        (s.time_ms ? (s.time_ms + 'ms') : '');
+      toast('估值已刷新', 'success');
+      loadFunds();
+    } catch (e) {
+      if (e.message === 'UNAUTHORIZED') return;
+      resultBox.className = 'result-box show error';
+      resultBox.textContent = '✗ ' + e.message;
+      toast('刷新失败', 'error');
+    } finally {
+      refreshBtn.disabled = false; refreshBtn.textContent = '🔄 刷新全部估值';
+    }
+  };
+
+  loadFunds();
+}
+
+// ═══ 工具 5：AI 新闻锐评 ═══
+function renderNewsTool() {
+  return \`
+<button class="tool-back" onclick="backToGrid()">← 返回</button>
+<h2>📰 AI 新闻锐评</h2>
+<p class="subtitle">抓取科技新闻并由 AI 写贴吧风格锐评 · 保留最近 60 条</p>
+
+<div style="display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap">
+  <button class="btn btn-primary" id="newsTriggerBtn">📡 立即抓取</button>
+  <button class="btn btn-outline" id="newsReloadBtn">🔄 刷新列表</button>
+</div>
+
+<div class="result-box" id="newsResult"></div>
+
+<div class="section-title">最近新闻</div>
+<div class="file-list" id="newsList">
+  <div class="empty">加载中…</div>
+</div>
+\`;
+}
+
+function mountNewsTool() {
+  const list = $('newsList');
+  const triggerBtn = $('newsTriggerBtn');
+  const reloadBtn = $('newsReloadBtn');
+  const resultBox = $('newsResult');
+
+  async function loadNews() {
+    list.innerHTML = '<div class="empty">加载中…</div>';
+    try {
+      const data = await api('/api/tools/news/list?limit=30');
+      const items = data.results || [];
+      if (!items.length) {
+        list.innerHTML = '<div class="empty">暂无新闻，点击「立即抓取」开始</div>';
+        return;
+      }
+      list.innerHTML = items.map(item => {
+        const time = formatNewsTime(item.crawled_at);
+        return '<div class="file-item" style="align-items:flex-start;flex-direction:column;gap:4px">' +
+          '<div style="display:flex;gap:6px;font-size:11px;color:var(--text-muted);align-items:center;width:100%">' +
+            '<span style="color:var(--primary);font-weight:600">' + esc(item.source) + '</span>' +
+            '<span style="background:var(--tag-bg);padding:1px 6px;border-radius:3px">' + esc(item.category) + '</span>' +
+            '<span style="margin-left:auto">' + esc(time) + '</span>' +
+          '</div>' +
+          '<a href="' + esc(item.url) + '" target="_blank" rel="noopener" style="color:var(--text);font-weight:500;font-size:14px;text-decoration:none;line-height:1.4">' + esc(item.title) + '</a>' +
+          (item.summary ? '<div style="color:var(--text-secondary);font-size:13px;line-height:1.5;margin-top:2px">' + esc(item.summary) + '</div>' : '') +
+        '</div>';
+      }).join('');
+    } catch (e) {
+      if (e.message === 'UNAUTHORIZED') return;
+      list.innerHTML = '<div class="empty">加载失败：' + esc(e.message) + '</div>';
+    }
+  }
+
+  function formatNewsTime(iso) {
+    try {
+      const d = new Date(iso);
+      const pad = (n) => String(n).padStart(2, '0');
+      const cst = new Date(d.getTime() + 8 * 60 * 60 * 1000);
+      return (cst.getUTCMonth() + 1) + '/' + pad(cst.getUTCDate()) + ' ' + pad(cst.getUTCHours()) + ':' + pad(cst.getUTCMinutes());
+    } catch { return iso || ''; }
+  }
+
+  triggerBtn.onclick = async () => {
+    triggerBtn.disabled = true; triggerBtn.textContent = '📡 抓取中…';
+    resultBox.className = 'result-box';
+    resultBox.textContent = '⏳ 正在抓取新闻并由 AI 写锐评，可能需要 30-60 秒…';
+    try {
+      const data = await api('/api/tools/news/trigger', { method: 'POST' });
+      if (data.success) {
+        resultBox.className = 'result-box show success';
+        resultBox.textContent = '✓ 抓取完成：新增 ' + data.articles_count + ' 条' + (data.error ? ' · ' + data.error : '');
+        toast('抓取完成', 'success');
+        loadNews();
+      } else {
+        resultBox.className = 'result-box show error';
+        resultBox.textContent = '✗ ' + (data.error || '抓取失败');
+      }
+    } catch (e) {
+      if (e.message === 'UNAUTHORIZED') return;
+      resultBox.className = 'result-box show error';
+      resultBox.textContent = '✗ ' + e.message;
+      toast('抓取失败', 'error');
+    } finally {
+      triggerBtn.disabled = false; triggerBtn.textContent = '📡 立即抓取';
+    }
+  };
+
+  reloadBtn.onclick = loadNews;
+
+  loadNews();
 }
 
 // ─── 初始化 ───
