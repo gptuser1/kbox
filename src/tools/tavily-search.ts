@@ -86,26 +86,25 @@ export async function search(
   }
 }
 
-// 全领域热点查询词（覆盖新闻的主要方向，不局限科技/AI）
-// 每个查询词对应一个领域，并行搜索后合并
-export const TRENDING_QUERIES = [
-  '今日热点新闻 头条',          // 综合/社会
-  '科技新闻 AI 互联网',          // 科技
-  '财经新闻 股市 经济',          // 财经
-  '国际新闻 地缘政治',           // 国际
-  '体育新闻 赛事',              // 体育
-  '娱乐新闻 影视',              // 娱乐
-];
+// 全领域热点查询词：一次综合搜索，带日期，max_results=20 拿全领域热点
+// 比分领域多次搜索更省配额（120 次/月 vs 720 次/月），且 score 基准统一
+// 日期由调用方传入（北京时间），避免"今日"跨时区歧义
+export function buildTrendingQuery(): string {
+  const now = new Date(Date.now() + 8 * 60 * 60 * 1000); // 北京时间
+  const month = now.getUTCMonth() + 1;
+  const day = now.getUTCDate();
+  return `${month}月${day}日 新闻热点 头条`;
+}
 
 /**
- * 搜索全领域今日热点（多查询词并行，合并去重）
- * 用途：作为新闻源入库，与 RSS 平级
+ * 搜索全领域今日热点（一次综合搜索，带日期）
+ * 用途：作为新闻源入库，与 RSS 平级；也为 Top10 提供热度信号
  * 返回带 score 的结果，按 score 降序
  */
 export async function searchTrending(
   env: Env,
-  queries: string[] = TRENDING_QUERIES,
-  maxPerQuery = 8,
+  _queries?: string[], // 保留参数兼容旧调用，实际不使用
+  maxResults = 20,
 ): Promise<TavilyResult[]> {
   const apiKey = await getConfigByEnv(env, 'news', 'tavily_api_key');
   if (!apiKey) {
@@ -113,26 +112,22 @@ export async function searchTrending(
     return [];
   }
 
-  // 并行搜索所有查询词
-  const allResults = await Promise.all(
-    queries.map(q => search(apiKey, q, {
-      searchDepth: 'basic',
-      topic: 'news',
-      maxResults: maxPerQuery,
-      timeRange: 'day', // 入库用 day，保证是最新热点
-      includeAnswer: false,
-    })),
-  );
+  const query = buildTrendingQuery();
+  const results = await search(apiKey, query, {
+    searchDepth: 'basic',
+    topic: 'news',
+    maxResults,
+    timeRange: 'day', // 入库用 day，保证是最新热点
+    includeAnswer: false,
+  });
 
-  // 合并 + 按 url 去重 + 按 score 降序
+  // 按 url 去重（单次搜索一般无重复，防御性处理）
   const seen = new Set<string>();
   const merged: TavilyResult[] = [];
-  for (const results of allResults) {
-    for (const r of results) {
-      if (r.url && !seen.has(r.url)) {
-        seen.add(r.url);
-        merged.push(r);
-      }
+  for (const r of results) {
+    if (r.url && !seen.has(r.url)) {
+      seen.add(r.url);
+      merged.push(r);
     }
   }
   merged.sort((a, b) => b.score - a.score);
