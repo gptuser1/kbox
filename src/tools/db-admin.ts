@@ -236,7 +236,7 @@ app.get('/connections/:id/tables', async (c) => {
     const { ok, status, data } = await callD1Rest(
       c.env,
       conn,
-      "SELECT name, sql FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' ORDER BY name",
+      "SELECT name, sql FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' AND name NOT LIKE '\\_cf\\_%' ESCAPE '\\' ORDER BY name",
     );
     if (!ok) {
       return c.json({ error: data?.error || `HTTP ${status}` }, 500);
