@@ -369,6 +369,21 @@ body:has(.disk-modal-overlay.show) .float-back { display: none !important; }
 .db-form-grid input:focus, .db-form-grid textarea:focus { border-color: var(--primary); }
 .db-form-grid textarea { min-height: 60px; resize: vertical; }
 .db-form-pk-hint { font-size: 11px; color: var(--primary); margin-left: 6px; }
+/* 可视化建表列编辑器 */
+.db-cols-head { display: grid; grid-template-columns: 1.4fr 1fr 0.6fr 1.6fr 1.2fr 32px; gap: 6px; padding: 0 4px 6px; font-size: 11px; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.4px; }
+.db-col-row { display: grid; grid-template-columns: 1.4fr 1fr 0.6fr 1.6fr 1.2fr 32px; gap: 6px; padding: 4px; align-items: center; border-bottom: 1px solid var(--border); }
+.db-col-row input, .db-col-row select { padding: 5px 8px; border: 1px solid var(--border); border-radius: 6px; background: var(--input-bg); color: var(--text); font-size: 12px; outline: none; font-family: var(--font-mono, monospace); width: 100%; min-width: 0; }
+.db-col-row input:focus, .db-col-row select:focus { border-color: var(--primary); }
+.db-col-attrs { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+.db-col-attrs label { display: inline-flex; align-items: center; gap: 3px; font-size: 11px; color: var(--text-secondary); cursor: pointer; white-space: nowrap; }
+.db-col-attrs input[type="checkbox"] { width: auto; }
+.db-col-del { background: none; border: none; color: var(--danger); cursor: pointer; font-size: 16px; padding: 4px; line-height: 1; }
+@media (max-width: 768px) {
+  .db-cols-head { display: none; }
+  .db-col-row { grid-template-columns: 1fr 1fr; gap: 6px; }
+  .db-col-row > *:nth-child(n) { grid-column: span 1; }
+  .db-col-row .db-col-attrs, .db-col-row .db-col-del { grid-column: span 2; }
+}
 </style>
 </head>
 <body>
@@ -2196,7 +2211,7 @@ function renderDbAdminTool() {
 
 <!-- 新建表弹层 -->
 <div class="disk-modal-overlay" id="dbCreateTableOverlay">
-  <div class="disk-modal" style="max-width:680px">
+  <div class="disk-modal" style="max-width:860px">
     <div class="disk-modal-header">
       <h3>新建表</h3>
       <button class="disk-modal-close" onclick="closeDbCreateTableModal()">✕</button>
@@ -2206,9 +2221,19 @@ function renderDbAdminTool() {
         <label>表名</label>
         <input id="dbNewTableName" placeholder="如：my_table">
       </div>
-      <div class="form-group">
-        <label>建表 SQL <span style="font-weight:400;color:var(--text-muted)">（不含表名则自动拼 CREATE TABLE）</span></label>
-        <textarea class="db-editor" id="dbNewTableSql" placeholder="id INTEGER PRIMARY KEY AUTOINCREMENT,&#10;name TEXT NOT NULL,&#10;created_at TEXT DEFAULT (datetime('now','localtime'))" style="min-height:140px"></textarea>
+      <div class="db-cols-head">
+        <span>列名</span>
+        <span>类型</span>
+        <span>长度</span>
+        <span>属性</span>
+        <span>默认值</span>
+        <span></span>
+      </div>
+      <div id="dbColsList"></div>
+      <button class="btn btn-outline btn-sm" id="dbAddColBtn" style="margin-top:8px">+ 添加列</button>
+      <div class="form-group" style="margin-top:14px">
+        <label>生成 SQL 预览</label>
+        <pre class="db-ddl" id="dbCreateSqlPreview" style="min-height:60px;max-height:200px;overflow:auto"></pre>
       </div>
       <div class="result-box" id="dbNewTableResult"></div>
     </div>
@@ -2306,7 +2331,9 @@ function mountDbAdminTool() {
   // 新建表弹层
   const createTableOverlay = $('dbCreateTableOverlay');
   const newTableName = $('dbNewTableName');
-  const newTableSql = $('dbNewTableSql');
+  const colsList = $('dbColsList');
+  const addColBtn = $('dbAddColBtn');
+  const sqlPreview = $('dbCreateSqlPreview');
   const newTableResult = $('dbNewTableResult');
   const newTableSubmitBtn = $('dbNewTableSubmitBtn');
 
@@ -2319,6 +2346,10 @@ function mountDbAdminTool() {
   let schemaCache = null;       // 当前表 schema 缓存
   let dataState = { limit: 50, offset: 0, sort: '', order: 'ASC', filter: null };
   let rowEditingState = null;   // { mode: 'edit'|'insert', where: {} }
+
+  // 新建表列状态：[{ name, type, length, notNull, pk, autoincr, unique, def }]
+  const COL_TYPES = ['INTEGER', 'TEXT', 'REAL', 'NUMERIC', 'BLOB', 'VARCHAR', 'DATETIME', 'DATE', 'BOOLEAN'];
+  let createCols = [];
 
   // ─── 工具函数 ───
   function showResult(el, msg, type) {
@@ -2894,23 +2925,107 @@ function mountDbAdminTool() {
     }
   }
 
-  // ─── 新建表 ───
+  // ─── 新建表（可视化列编辑器，自动生成 SQL） ───
+  function defaultCreateCols() {
+    return [
+      { name: 'id', type: 'INTEGER', length: '', notNull: true, pk: true, autoincr: true, unique: false, def: '' },
+    ];
+  }
+
+  function renderCreateCols() {
+    colsList.innerHTML = createCols.map((c, i) => {
+      const typeOpts = COL_TYPES.map(t => '<option value="' + t + '"' + (t === c.type ? ' selected' : '') + '>' + t + '</option>').join('');
+      return '<div class="db-col-row">' +
+        '<input data-idx="' + i + '" data-field="name" value="' + escapeAttr(c.name) + '" placeholder="列名">' +
+        '<select data-idx="' + i + '" data-field="type">' + typeOpts + '</select>' +
+        '<input data-idx="' + i + '" data-field="length" value="' + escapeAttr(c.length) + '" placeholder="-">' +
+        '<div class="db-col-attrs">' +
+          '<label><input type="checkbox" data-idx="' + i + '" data-field="notNull"' + (c.notNull ? ' checked' : '') + '>非空</label>' +
+          '<label><input type="checkbox" data-idx="' + i + '" data-field="pk"' + (c.pk ? ' checked' : '') + '>主键</label>' +
+          '<label><input type="checkbox" data-idx="' + i + '" data-field="autoincr"' + (c.autoincr ? ' checked' : '') + '>自增</label>' +
+          '<label><input type="checkbox" data-idx="' + i + '" data-field="unique"' + (c.unique ? ' checked' : '') + '>唯一</label>' +
+        '</div>' +
+        '<input data-idx="' + i + '" data-field="def" value="' + escapeAttr(c.def) + '" placeholder="默认值">' +
+        '<button class="db-col-del" data-del="' + i + '" title="删除列">✕</button>' +
+      '</div>';
+    }).join('');
+    // 绑定输入事件：实时更新状态 + 预览
+    colsList.querySelectorAll('input[data-field], select[data-field]').forEach(el => {
+      const idx = parseInt(el.getAttribute('data-idx'));
+      const field = el.getAttribute('data-field');
+      const handler = () => {
+        if (el.type === 'checkbox') createCols[idx][field] = el.checked;
+        else createCols[idx][field] = el.value;
+        updateCreatePreview();
+      };
+      el.oninput = handler;
+      el.onchange = handler;
+    });
+    colsList.querySelectorAll('button[data-del]').forEach(b => {
+      b.onclick = () => {
+        const idx = parseInt(b.getAttribute('data-del'));
+        createCols.splice(idx, 1);
+        renderCreateCols();
+        updateCreatePreview();
+      };
+    });
+  }
+
+  function buildCreateSql() {
+    const name = newTableName.value.trim().replace(/[^a-zA-Z0-9_]/g, '');
+    const valid = createCols.filter(c => c.name.trim().replace(/[^a-zA-Z0-9_]/g, ''));
+    if (!name || valid.length === 0) return '';
+    const parts = valid.map(c => {
+      const cname = c.name.trim().replace(/[^a-zA-Z0-9_]/g, '');
+      let s = '\`' + cname + '\` ';
+      let t = c.type;
+      const len = c.length.trim();
+      if (len && (c.type === 'VARCHAR' || c.type === 'NUMERIC')) t += '(' + len.replace(/[^0-9]/g, '') + ')';
+      s += t;
+      if (c.pk) s += ' PRIMARY KEY';
+      if (c.autoincr) s += ' AUTOINCREMENT';
+      if (c.notNull) s += ' NOT NULL';
+      if (c.unique) s += ' UNIQUE';
+      const d = c.def.trim();
+      if (d) {
+        if (/^-?\\d+(\\.\\d+)?$/.test(d) || /^(CURRENT_TIMESTAMP|CURRENT_TIME|CURRENT_DATE|NULL|TRUE|FALSE)$/i.test(d) || /^(datetime|date|time)\\(/i.test(d)) {
+          s += ' DEFAULT ' + d;
+        } else {
+          s += ' DEFAULT \\'' + d.replace(/'/g, "''") + '\\'';
+        }
+      }
+      return s;
+    });
+    return 'CREATE TABLE \`' + name + '\` (\\n  ' + parts.join(',\\n  ') + '\\n)';
+  }
+
+  function updateCreatePreview() {
+    sqlPreview.textContent = buildCreateSql() || '— 填写表名和至少一列后生成 —';
+  }
+
   function openCreateTableModal() {
     if (!activeConnId) { toast('请先选择连接', 'error'); return; }
     newTableName.value = '';
-    newTableSql.value = '';
+    createCols = defaultCreateCols();
+    renderCreateCols();
+    updateCreatePreview();
     showResult(newTableResult, '', '');
     createTableOverlay.classList.add('show');
   }
   window.closeDbCreateTableModal = function() { createTableOverlay.classList.remove('show'); };
 
   newTableBtn.onclick = openCreateTableModal;
+  addColBtn.onclick = () => {
+    createCols.push({ name: '', type: 'TEXT', length: '', notNull: false, pk: false, autoincr: false, unique: false, def: '' });
+    renderCreateCols();
+    updateCreatePreview();
+  };
+  newTableName.oninput = updateCreatePreview;
   newTableSubmitBtn.onclick = async () => {
     const name = newTableName.value.trim().replace(/[^a-zA-Z0-9_]/g, '');
-    const bodySql = newTableSql.value.trim();
     if (!name) { showResult(newTableResult, '请填写表名', 'error'); return; }
-    if (!bodySql) { showResult(newTableResult, '请填写建表 SQL', 'error'); return; }
-    const fullSql = 'CREATE TABLE \`' + name + '\` (' + bodySql + ')';
+    const fullSql = buildCreateSql();
+    if (!fullSql) { showResult(newTableResult, '请至少填写一列的列名', 'error'); return; }
     newTableSubmitBtn.disabled = true; newTableSubmitBtn.textContent = '创建中…';
     try {
       await api('/api/tools/db-admin/connections/' + activeConnId + '/query', {
