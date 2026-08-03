@@ -127,6 +127,8 @@ input, select, button, textarea { font-family: inherit; }
 .float-back:hover { background: var(--primary-hover); transform: translateY(-2px); box-shadow: 0 8px 24px rgba(99, 102, 241, 0.5); }
 .float-back:active { transform: translateY(0); }
 .float-back.show { display: inline-flex; }
+/* 任何弹窗打开时隐藏浮动按钮（弹窗自身有关闭/取消，避免重叠） */
+body:has(.disk-modal-overlay.show) .float-back { display: none !important; }
 .tool-view h2 { font-size: 22px; font-weight: 700; margin-bottom: 8px; }
 .tool-view .subtitle { font-size: 14px; color: var(--text-muted); margin-bottom: 24px; }
 
