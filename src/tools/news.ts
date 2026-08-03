@@ -2,8 +2,7 @@ import { Hono } from 'hono';
 import { createDb, DbError } from '../db';
 import { createKv, getKvTableError } from '../kv';
 import { crawlAll } from './news-crawler';
-import { summarizeArticles } from './news-llm';
-import { extractTopKeywords, type KeywordStat } from './news-keywords';
+import { summarizeArticles, extractKeywordsViaLLM, type KeywordStat } from './news-llm';
 
 type Bindings = {
   D1_API_TOKEN: string;
@@ -146,8 +145,8 @@ async function runCron(c: any): Promise<{ success: boolean; articles_count: numb
   }
 }
 
-// ─── 生成 Top 10 关键词快照（独立入口，基于当前库内新闻） ───
-// 读 newsfeed 最近 KEEP_LIMIT 条 → 抽词 → 存入 kbox_kv（仅保留最近 KEYWORDS_KEEP 份）
+// ─── 生成 Top 10 关键词快照（独立入口，基于当前库内新闻，LLM 提取） ───
+// 读 newsfeed 最近 KEEP_LIMIT 条 → LLM 识别事件主题 → 存入 kbox_kv（仅保留最近 KEYWORDS_KEEP 份）
 async function generateTopKeywords(c: any): Promise<{ success: boolean; generated_at: string | null; count: number; error?: string }> {
   if (!await ensureTable(c.env.D1_API_TOKEN, c.env.D1_API_BASE)) {
     return { success: false, generated_at: null, count: 0, error: tableInitError || '建表失败' };
@@ -164,7 +163,12 @@ async function generateTopKeywords(c: any): Promise<{ success: boolean; generate
       return { success: false, generated_at: null, count: 0, error: '暂无新闻数据，请先抓取' };
     }
 
-    const topKeywords = extractTopKeywords(allRows, 10);
+    // LLM 提取事件主题关键词（失败返回空数组，前端会提示重试）
+    const topKeywords = await extractKeywordsViaLLM(c.env, allRows, 10);
+    if (topKeywords.length === 0) {
+      return { success: false, generated_at: null, count: 0, error: 'LLM 提取失败，请检查 OPENAI 配置后重试' };
+    }
+
     const now = nowISO();
     // key 用毫秒时间戳，list 按 key DESC 即可拿到最新
     const key = String(Date.now());

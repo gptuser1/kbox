@@ -20,6 +20,22 @@ interface ChatResponse {
   choices: { message: { content: string } }[]
 }
 
+// ─── 关键词提取相关接口 ───
+export interface NewsItem {
+  title: string;
+  source: string;
+  url: string;
+  summary?: string;
+  category?: string;
+  crawled_at?: string;
+}
+
+export interface KeywordStat {
+  keyword: string;
+  count: number;
+  articles: NewsItem[];
+}
+
 function buildPrompt(articles: { title: string; source: string }[], attempt: number): ChatMessage[] {
   const articlesText = articles
     .map((a, i) => `${i + 1}. [${a.source}] ${a.title}`)
@@ -169,4 +185,150 @@ export async function summarizeArticles(
   // All retries exhausted — return last partial result if any, else empty
   console.error(`All ${MAX_RETRIES} attempts failed. Last error: ${lastError}`)
   return lastSummaries || articles.map(() => '')
+}
+
+// ═══ 关键词提取（LLM 版）═══
+// 让 LLM 直接识别"事件主题"并关联新闻，绕开分词的语义瓶颈
+// 输出 KeywordStat[]，与原 extractTopKeywords 接口兼容
+
+function buildKeywordPrompt(articles: NewsItem[], topN: number): ChatMessage[] {
+  // 喂给 LLM 的是精简后的新闻列表（带 index 便于回填关联文章）
+  const articlesText = articles
+    .map((a, i) => {
+      const summary = a.summary ? ` | ${a.summary}` : '';
+      return `${i + 1}. [${a.source}] ${a.title}${summary}`;
+    })
+    .join('\n');
+
+  const systemContent =
+    '你是一个新闻编辑，擅长从一批新闻中识别"事件主题"并归类。\n'
+    + '要求：\n'
+    + `1. 输出 Top ${topN} 个事件主题关键词，按重要性降序\n`
+    + '2. 关键词应是"事件/主题"而非泛词（如"AI内存短缺"而非"shortage"），中文为主，专有名词保留英文\n'
+    + '3. 同一事件只输出一个关键词（如多条干旱新闻合并为"全球干旱粮食危机"）\n'
+    + '4. 每个关键词关联 1-3 条相关新闻的 index（1-based）\n'
+    + '5. 严格按 JSON 格式输出，不要任何其他内容：\n'
+    + '{\n'
+    + '  "keywords": [\n'
+    + '    {"keyword": "事件主题1", "indices": [1, 3]},\n'
+    + '    {"keyword": "事件主题2", "indices": [2]}\n'
+    + '  ]\n'
+    + '}';
+
+  return [
+    { role: 'system', content: systemContent },
+    { role: 'user', content: `从下面这批新闻中提取 Top ${topN} 事件主题：\n\n${articlesText}` },
+  ];
+}
+
+interface LlmKeywordItem {
+  keyword: string;
+  indices: number[];
+}
+
+function parseKeywords(raw: string, articleCount: number): LlmKeywordItem[] {
+  // 去掉 ```json fence
+  let jsonStr = raw.trim();
+  const fenceMatch = jsonStr.match(/```(?:json)?\n?([\s\S]*?)```/);
+  if (fenceMatch) jsonStr = fenceMatch[1].trim();
+
+  try {
+    const parsed = JSON.parse(jsonStr);
+    if (parsed && Array.isArray(parsed.keywords)) {
+      const items: LlmKeywordItem[] = [];
+      for (const item of parsed.keywords) {
+        if (item && typeof item.keyword === 'string' && item.keyword.trim()
+          && Array.isArray(item.indices)) {
+          // 过滤越界 index
+          const validIndices = item.indices
+            .map((n: any) => Number(n))
+            .filter((n: number) => Number.isInteger(n) && n >= 1 && n <= articleCount);
+          if (validIndices.length > 0) {
+            items.push({ keyword: item.keyword.trim(), indices: validIndices });
+          }
+        }
+      }
+      return items;
+    }
+  } catch {
+    // 解析失败
+  }
+  return [];
+}
+
+/**
+ * 用 LLM 从新闻列表中提取 Top N 事件主题关键词
+ * 返回 KeywordStat[]，articles 字段已回填关联的 NewsItem
+ */
+export async function extractKeywordsViaLLM(
+  env: Env,
+  articles: NewsItem[],
+  topN = 10,
+): Promise<KeywordStat[]> {
+  if (articles.length === 0) return [];
+
+  const apiKey = await getConfigByEnv(env, 'news', 'openai_api_key');
+  const baseUrl = await getConfigByEnv(env, 'news', 'openai_base_url');
+  const model = await getConfigByEnv(env, 'news', 'openai_model');
+  if (!apiKey || !baseUrl || !model) {
+    console.error('LLM config missing for keywords:', { hasKey: !!apiKey, hasUrl: !!baseUrl, hasModel: !!model });
+    return [];
+  }
+
+  const MAX_RETRIES = 3;
+  for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
+    try {
+      const messages = buildKeywordPrompt(articles, topN);
+      const res = await fetch(`${baseUrl}/chat/completions`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${apiKey}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          model,
+          messages,
+          max_tokens: 2048,
+          temperature: 0.3,
+        }),
+      });
+
+      if (!res.ok) {
+        const body = await res.text();
+        console.error(`Keywords attempt ${attempt + 1}/${MAX_RETRIES} HTTP ${res.status}: ${body}`);
+        continue;
+      }
+
+      const data: ChatResponse = await res.json();
+      const content = data.choices?.[0]?.message?.content || '';
+      if (!content.trim()) {
+        console.error(`Keywords attempt ${attempt + 1}/${MAX_RETRIES}: empty response`);
+        continue;
+      }
+
+      const items = parseKeywords(content, articles.length);
+      if (items.length === 0) {
+        console.error(`Keywords attempt ${attempt + 1}/${MAX_RETRIES}: parse returned 0 items`);
+        continue;
+      }
+
+      // 回填关联文章
+      return items.slice(0, topN).map(item => {
+        const relatedArticles = item.indices
+          .map(idx => articles[idx - 1])
+          .filter(Boolean)
+          .slice(0, 3);
+        return {
+          keyword: item.keyword,
+          count: relatedArticles.length,
+          articles: relatedArticles,
+        };
+      });
+    } catch (e) {
+      console.error(`Keywords attempt ${attempt + 1}/${MAX_RETRIES} threw:`, e instanceof Error ? e.message : String(e));
+    }
+  }
+
+  console.error(`All ${MAX_RETRIES} keyword attempts failed`);
+  return [];
 }
