@@ -187,12 +187,20 @@ export async function summarizeArticles(
   return lastSummaries || articles.map(() => '')
 }
 
-// ═══ 关键词提取（LLM 版）═══
-// 让 LLM 直接识别"事件主题"并关联新闻，绕开分词的语义瓶颈
-// 输出 KeywordStat[]，与原 extractTopKeywords 接口兼容
+// ═══ 关键词提取（LLM 版 + Tavily 热度）═══
+// 数据源：
+//   1. 库内新闻（newsfeed 表，已抓取的详细内容）
+//   2. Tavily 全网热点搜索（带 score，提供热度维度）
+// LLM 综合两部分，输出热搜风格 Top N，按热度分降序
 
-function buildKeywordPrompt(articles: NewsItem[], topN: number): ChatMessage[] {
-  // 喂给 LLM 的是精简后的新闻列表（带 index 便于回填关联文章）
+import { searchTrending, type TavilyResult } from './tavily-search';
+
+function buildKeywordPrompt(
+  articles: NewsItem[],
+  tavilyResults: TavilyResult[],
+  topN: number,
+): ChatMessage[] {
+  // 库内新闻（带 index 便于回填关联文章）
   const articlesText = articles
     .map((a, i) => {
       const summary = a.summary ? ` | ${a.summary}` : '';
@@ -200,29 +208,43 @@ function buildKeywordPrompt(articles: NewsItem[], topN: number): ChatMessage[] {
     })
     .join('\n');
 
+  // Tavily 热点（带 score，体现全网热度）
+  const tavilyText = tavilyResults.length > 0
+    ? tavilyResults
+      .slice(0, 30) // 限制长度，避免 prompt 过长
+      .map((r, i) => `[热度${r.score.toFixed(2)}] ${r.title}${r.content ? ' - ' + r.content.slice(0, 100) : ''}`)
+      .join('\n')
+    : '（无 Tavily 热点数据，仅基于库内新闻生成）';
+
   const systemContent =
-    '你是一个新闻编辑，擅长从一批新闻中识别"事件主题"并归类。\n'
+    '你是热搜榜编辑，要生成一份"科技热搜 Top ' + topN + '"。\n'
+    + '你有两部分数据：\n'
+    + '【库内新闻】已抓取的详细新闻（带编号，用于关联）\n'
+    + '【全网热点】来自 Tavily 搜索的热点新闻（带 0-1 热度分，体现全网传播热度）\n\n'
     + '要求：\n'
-    + `1. 输出 Top ${topN} 个事件主题关键词，按重要性降序\n`
-    + '2. 关键词应是"事件/主题"而非泛词（如"AI内存短缺"而非"shortage"），中文为主，专有名词保留英文\n'
-    + '3. 同一事件只输出一个关键词（如多条干旱新闻合并为"全球干旱粮食危机"）\n'
-    + '4. 每个关键词关联 1-3 条相关新闻的 index（1-based）\n'
-    + '5. 严格按 JSON 格式输出，不要任何其他内容：\n'
+    + `1. 输出 Top ${topN} 热搜话题，按热度从高到低排序\n`
+    + '2. 话题名用"热搜词条"风格：#开头，口语化有传播力（如"#AI内存短缺危机"、"#折叠屏苹果躺赢"，而非"内存短缺"）\n'
+    + '3. 每个话题给 heat_score（0-100 整数），综合考量：Tavily 热度分、出现次数、多源覆盖、突发性/争议性\n'
+    + '4. 同一事件只输出一个话题（如多条干旱新闻合并成"#全球干旱粮食危机"）\n'
+    + '5. 每个话题关联 1-3 条库内新闻的 index（1-based，用于回填详情）\n'
+    + '6. 优先选 Tavily 热度高且库内有的话题；若库内无对应新闻，indices 填空数组\n'
+    + '7. 严格按 JSON 格式输出，不要任何其他内容：\n'
     + '{\n'
     + '  "keywords": [\n'
-    + '    {"keyword": "事件主题1", "indices": [1, 3]},\n'
-    + '    {"keyword": "事件主题2", "indices": [2]}\n'
+    + '    {"keyword": "#话题1", "heat_score": 92, "indices": [1, 3]},\n'
+    + '    {"keyword": "#话题2", "heat_score": 78, "indices": [2]}\n'
     + '  ]\n'
     + '}';
 
   return [
     { role: 'system', content: systemContent },
-    { role: 'user', content: `从下面这批新闻中提取 Top ${topN} 事件主题：\n\n${articlesText}` },
+    { role: 'user', content: `【库内新闻】（共 ${articles.length} 条）：\n${articlesText}\n\n【全网热点】（Tavily，按热度降序）：\n${tavilyText}` },
   ];
 }
 
 interface LlmKeywordItem {
   keyword: string;
+  heat_score?: number;
   indices: number[];
 }
 
@@ -243,9 +265,11 @@ function parseKeywords(raw: string, articleCount: number): LlmKeywordItem[] {
           const validIndices = item.indices
             .map((n: any) => Number(n))
             .filter((n: number) => Number.isInteger(n) && n >= 1 && n <= articleCount);
-          if (validIndices.length > 0) {
-            items.push({ keyword: item.keyword.trim(), indices: validIndices });
-          }
+          items.push({
+            keyword: item.keyword.trim(),
+            heat_score: typeof item.heat_score === 'number' ? item.heat_score : 0,
+            indices: validIndices,
+          });
         }
       }
       return items;
@@ -257,7 +281,8 @@ function parseKeywords(raw: string, articleCount: number): LlmKeywordItem[] {
 }
 
 /**
- * 用 LLM 从新闻列表中提取 Top N 事件主题关键词
+ * 用 LLM + Tavily 生成热搜风格 Top N 关键词
+ * 数据源：库内新闻 + Tavily 全网热点
  * 返回 KeywordStat[]，articles 字段已回填关联的 NewsItem
  */
 export async function extractKeywordsViaLLM(
@@ -275,10 +300,20 @@ export async function extractKeywordsViaLLM(
     return [];
   }
 
+  // 并行拉取 Tavily 热点（失败不影响主流程，降级为仅库内新闻）
+  const tavilyQueries = ['今日科技热点 AI热点', 'today trending tech news'];
+  let tavilyResults: TavilyResult[] = [];
+  try {
+    tavilyResults = await searchTrending(env, tavilyQueries, 10);
+    console.log(`Tavily returned ${tavilyResults.length} trending results`);
+  } catch (e) {
+    console.error('Tavily search failed, falling back to library-only:', e instanceof Error ? e.message : String(e));
+  }
+
   const MAX_RETRIES = 3;
   for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
     try {
-      const messages = buildKeywordPrompt(articles, topN);
+      const messages = buildKeywordPrompt(articles, tavilyResults, topN);
       const res = await fetch(`${baseUrl}/chat/completions`, {
         method: 'POST',
         headers: {
@@ -312,18 +347,21 @@ export async function extractKeywordsViaLLM(
         continue;
       }
 
-      // 回填关联文章
-      return items.slice(0, topN).map(item => {
-        const relatedArticles = item.indices
-          .map(idx => articles[idx - 1])
-          .filter(Boolean)
-          .slice(0, 3);
-        return {
-          keyword: item.keyword,
-          count: relatedArticles.length,
-          articles: relatedArticles,
-        };
-      });
+      // 回填关联文章，按 heat_score 降序
+      return items
+        .slice(0, topN)
+        .sort((a, b) => (b.heat_score || 0) - (a.heat_score || 0))
+        .map(item => {
+          const relatedArticles = item.indices
+            .map(idx => articles[idx - 1])
+            .filter(Boolean)
+            .slice(0, 3);
+          return {
+            keyword: item.keyword,
+            count: relatedArticles.length,
+            articles: relatedArticles,
+          };
+        });
     } catch (e) {
       console.error(`Keywords attempt ${attempt + 1}/${MAX_RETRIES} threw:`, e instanceof Error ? e.message : String(e));
     }
