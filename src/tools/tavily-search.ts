@@ -1,6 +1,8 @@
 // Tavily Search API client
 // 文档: https://docs.tavily.com/documentation/api-reference/endpoint/search
-// 用途: 搜索全网热点新闻，返回带 score 的结果，为 Top10 关键词提供热度维度
+// 用途:
+//   1. 作为新闻源：搜全领域今日热点，结果与 RSS 平级入库
+//   2. 为 Top10 提供热度信号：搜索结果带 score，体现全网传播热度
 //
 // 参考: blog 项目的 .blog-ops/scripts/search_client.py
 
@@ -30,7 +32,7 @@ export interface TavilySearchResponse {
  * topic: news（新闻） / general（通用）
  * time_range: day / week / month / year
  */
-async function search(
+export async function search(
   apiKey: string,
   query: string,
   opts: {
@@ -84,13 +86,25 @@ async function search(
   }
 }
 
+// 全领域热点查询词（覆盖新闻的主要方向，不局限科技/AI）
+// 每个查询词对应一个领域，并行搜索后合并
+export const TRENDING_QUERIES = [
+  '今日热点新闻 头条',          // 综合/社会
+  '科技新闻 AI 互联网',          // 科技
+  '财经新闻 股市 经济',          // 财经
+  '国际新闻 地缘政治',           // 国际
+  '体育新闻 赛事',              // 体育
+  '娱乐新闻 影视',              // 娱乐
+];
+
 /**
- * 搜索今日热点（多查询词并行，合并去重）
+ * 搜索全领域今日热点（多查询词并行，合并去重）
+ * 用途：作为新闻源入库，与 RSS 平级
  * 返回带 score 的结果，按 score 降序
  */
 export async function searchTrending(
   env: Env,
-  queries: string[],
+  queries: string[] = TRENDING_QUERIES,
   maxPerQuery = 8,
 ): Promise<TavilyResult[]> {
   const apiKey = await getConfigByEnv(env, 'news', 'tavily_api_key');
@@ -105,7 +119,7 @@ export async function searchTrending(
       searchDepth: 'basic',
       topic: 'news',
       maxResults: maxPerQuery,
-      timeRange: 'week',
+      timeRange: 'day', // 入库用 day，保证是最新热点
       includeAnswer: false,
     })),
   );
@@ -124,3 +138,4 @@ export async function searchTrending(
   merged.sort((a, b) => b.score - a.score);
   return merged;
 }
+

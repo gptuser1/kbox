@@ -1568,11 +1568,20 @@ function mountNewsTool() {
         const rank = i + 1;
         const rankStyle = rank <= 3 ? 'color:#fff;background:var(--primary)' : 'color:var(--text-muted);background:var(--tag-bg)';
         const articlesHtml = (kw.articles || []).map(a => renderNewsCard(a)).join('');
+        // 热度分 + 分类标签
+        const heatBadge = (kw.heat_score != null)
+          ? '<span style="color:#fff;background:linear-gradient(135deg,#ff6b6b,#ee5a6f);padding:1px 8px;border-radius:10px;font-size:11px;font-weight:600">🔥 ' + kw.heat_score + '</span>'
+          : '';
+        const catBadge = kw.category
+          ? '<span style="color:var(--text-muted);background:var(--tag-bg);padding:1px 8px;border-radius:10px;font-size:11px">' + esc(kw.category) + '</span>'
+          : '';
+        const countText = kw.count > 0 ? kw.count + ' 条' : '';
         return '<div class="file-item" style="align-items:flex-start;flex-direction:column;gap:8px">' +
-          '<div style="display:flex;gap:8px;align-items:center;width:100%">' +
+          '<div style="display:flex;gap:8px;align-items:center;width:100%;flex-wrap:wrap">' +
             '<span style="' + rankStyle + ';width:22px;height:22px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;flex-shrink:0">' + rank + '</span>' +
             '<span style="font-size:15px;font-weight:600;color:var(--text)">' + esc(kw.keyword) + '</span>' +
-            '<span style="margin-left:auto;color:var(--text-muted);font-size:12px">' + kw.count + ' 条' + generatedAt + '</span>' +
+            heatBadge + catBadge +
+            '<span style="margin-left:auto;color:var(--text-muted);font-size:12px">' + countText + generatedAt + '</span>' +
           '</div>' +
           '<div style="width:100%;display:flex;flex-direction:column;gap:6px">' + articlesHtml + '</div>' +
         '</div>';

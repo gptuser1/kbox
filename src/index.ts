@@ -675,7 +675,7 @@ async function handleNewsCron(env: Bindings) {
     )`);
 
     const now = new Date(Date.now() + 8 * 60 * 60 * 1000).toISOString();
-    const articles = await crawlAll();
+    const articles = await crawlAll(env);
     if (articles.length === 0) {
       console.log('[news-cron] No articles crawled');
       return;
@@ -702,19 +702,28 @@ async function handleNewsCron(env: Bindings) {
       return;
     }
 
+    // LLM 语义去重：识别"同一事件不同标题"并合并
+    const { dedupeArticlesByLLM } = await import('./tools/news-llm');
+    const deduped = await dedupeArticlesByLLM(env, unique);
+
+    if (deduped.length === 0) {
+      console.log('[news-cron] All articles deduped');
+      return;
+    }
+
     const summaries = await summarizeArticles(
       env,
-      unique.map((a: any) => ({ title: a.title, source: a.source })),
+      deduped.map((a: any) => ({ title: a.title, source: a.source })),
     );
 
     const CHUNK_SIZE = 15;
-    for (let i = 0; i < unique.length; i += CHUNK_SIZE) {
-      const chunkEnd = Math.min(i + CHUNK_SIZE, unique.length);
+    for (let i = 0; i < deduped.length; i += CHUNK_SIZE) {
+      const chunkEnd = Math.min(i + CHUNK_SIZE, deduped.length);
       const placeholders: string[] = [];
       const values: any[] = [];
       for (let j = i; j < chunkEnd; j++) {
         placeholders.push('(?, ?, ?, ?, ?, ?)');
-        const a = unique[j];
+        const a = deduped[j];
         values.push(now, a.source, a.title, a.url, summaries[j] || '', a.category);
       }
       await db.execute(
@@ -730,7 +739,7 @@ async function handleNewsCron(env: Bindings) {
       [60],
     );
 
-    console.log(`[news-cron] Inserted ${unique.length} articles`);
+    console.log(`[news-cron] Inserted ${deduped.length} articles`);
   } catch (e) {
     console.error('[news-cron] failed:', e instanceof Error ? e.message : String(e));
   }

@@ -1,3 +1,5 @@
+import { searchTrending, type TavilyResult } from './tavily-search'
+
 interface RawArticle {
   title: string
   url: string
@@ -6,7 +8,7 @@ interface RawArticle {
 interface Source {
   name: string
   category: string
-  fetch(): Promise<RawArticle[]>
+  fetch(env?: any): Promise<RawArticle[]>
 }
 
 /** Remove CDATA markers and trim */
@@ -177,6 +179,16 @@ const SOURCES: Source[] = [
     category: 'tech',
     fetch: () => fetchRSSSource('https://sspai.com/feed'),
   },
+  // Tavily 作为全领域新闻源：搜全网今日热点，结果与 RSS 平级入库
+  // 覆盖科技/财经/国际/社会/体育/娱乐等全领域，不局限单一方向
+  {
+    name: 'Tavily 热点',
+    category: 'trending',
+    fetch: async (env?: any) => {
+      const results = await searchTrending(env)
+      return results.map(r => ({ title: r.title, url: r.url }))
+    },
+  },
 ]
 
 /** Filter out titles that are empty or only punctuation */
@@ -185,13 +197,13 @@ function isValidTitle(s: string): boolean {
   return cleaned.length > 0
 }
 
-export async function crawlAll(): Promise<
+export async function crawlAll(env?: any): Promise<
   { source: string; category: string; title: string; url: string }[]
 > {
   const results = await Promise.all(
     SOURCES.map(async (s) => {
       try {
-        const articles = await s.fetch()
+        const articles = await s.fetch(env)
         // Decode HTML entities then filter out invalid titles
         return articles
           .map(a => ({ ...a, title: decodeHTMLEntities(a.title) }))

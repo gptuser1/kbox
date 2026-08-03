@@ -2,7 +2,7 @@ import { Hono } from 'hono';
 import { createDb, DbError } from '../db';
 import { createKv, getKvTableError } from '../kv';
 import { crawlAll } from './news-crawler';
-import { summarizeArticles, extractKeywordsViaLLM, type KeywordStat } from './news-llm';
+import { summarizeArticles, extractKeywordsViaLLM, dedupeArticlesByLLM, type KeywordStat } from './news-llm';
 
 type Bindings = {
   D1_API_TOKEN: string;
@@ -80,7 +80,7 @@ async function runCron(c: any): Promise<{ success: boolean; articles_count: numb
 
   try {
     const now = nowISO();
-    const articles = await crawlAll();
+    const articles = await crawlAll(c.env);
 
     if (articles.length === 0) {
       return { success: true, articles_count: 0, error: 'No articles crawled' };
@@ -107,20 +107,28 @@ async function runCron(c: any): Promise<{ success: boolean; articles_count: numb
       return { success: true, articles_count: 0, error: 'All articles already exist' };
     }
 
+    // LLM 语义去重：识别"同一事件不同标题"并合并
+    // 字符串去重只能去掉完全相同的，语义去重能进一步压缩同事件重复报道
+    const deduped = await dedupeArticlesByLLM(c.env, unique);
+
+    if (deduped.length === 0) {
+      return { success: true, articles_count: 0, error: 'All articles deduped' };
+    }
+
     const summaries = await summarizeArticles(
       c.env,
-      unique.map((a) => ({ title: a.title, source: a.source })),
+      deduped.map((a) => ({ title: a.title, source: a.source })),
     );
 
     // 分块插入（15 条一批，避免单 SQL 过长）
     const CHUNK_SIZE = 15;
-    for (let i = 0; i < unique.length; i += CHUNK_SIZE) {
-      const chunkEnd = Math.min(i + CHUNK_SIZE, unique.length);
+    for (let i = 0; i < deduped.length; i += CHUNK_SIZE) {
+      const chunkEnd = Math.min(i + CHUNK_SIZE, deduped.length);
       const placeholders: string[] = [];
       const values: any[] = [];
       for (let j = i; j < chunkEnd; j++) {
         placeholders.push('(?, ?, ?, ?, ?, ?)');
-        const a = unique[j];
+        const a = deduped[j];
         values.push(now, a.source, a.title, a.url, summaries[j] || '', a.category);
       }
       await db.execute(
@@ -137,7 +145,7 @@ async function runCron(c: any): Promise<{ success: boolean; articles_count: numb
       [KEEP_LIMIT],
     );
 
-    return { success: true, articles_count: unique.length };
+    return { success: true, articles_count: deduped.length };
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
     console.error('News cron failed:', msg);
