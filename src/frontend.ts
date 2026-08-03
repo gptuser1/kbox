@@ -284,6 +284,38 @@ body:has(.disk-modal-overlay.show) .float-back { display: none !important; }
 .form-inline { display: flex; gap: 6px; margin-bottom: 6px; align-items: center; }
 .form-inline input, .form-inline select { padding: 7px 10px; border: 1px solid var(--border); border-radius: 6px; font-size: 13px; background: var(--input-bg); color: var(--text); outline: none; }
 .form-inline input:focus, .form-inline select:focus { border-color: var(--primary); }
+
+/* ─── DB 管理工具 ─── */
+.db-layout { display: grid; grid-template-columns: 220px 1fr; gap: 16px; margin-top: 16px; }
+.db-sidebar { background: var(--card); border-radius: 10px; padding: 10px; box-shadow: var(--shadow); max-height: 70vh; overflow-y: auto; }
+.db-sidebar-title { font-size: 12px; font-weight: 600; color: var(--text-muted); padding: 4px 8px 8px; text-transform: uppercase; letter-spacing: 0.5px; }
+.db-table-item { padding: 8px 10px; border-radius: 6px; font-size: 13px; cursor: pointer; color: var(--text); display: flex; align-items: center; gap: 6px; transition: background 0.15s; }
+.db-table-item:hover { background: var(--bg); }
+.db-table-item.active { background: var(--primary); color: #fff; }
+.db-table-item .db-table-actions { margin-left: auto; opacity: 0; transition: opacity 0.15s; display: flex; gap: 4px; }
+.db-table-item:hover .db-table-actions, .db-table-item.active .db-table-actions { opacity: 0.85; }
+.db-table-item .db-table-actions button { background: none; border: none; color: inherit; cursor: pointer; font-size: 12px; padding: 2px 4px; border-radius: 3px; }
+.db-table-item .db-table-actions button:hover { background: rgba(255,255,255,0.2); }
+.db-main { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+.db-editor { width: 100%; min-height: 160px; padding: 12px; border-radius: 10px; border: 1px solid var(--border); background: var(--input-bg); color: var(--text); font-family: var(--font-mono, monospace); font-size: 13px; line-height: 1.5; resize: vertical; outline: none; tab-size: 2; }
+.db-editor:focus { border-color: var(--primary); }
+.db-toolbar { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.db-meta { font-size: 12px; color: var(--text-muted); margin-left: auto; }
+.db-results-wrap { background: var(--card); border-radius: 10px; box-shadow: var(--shadow); overflow: hidden; }
+.db-results-head { padding: 10px 14px; font-size: 12px; color: var(--text-muted); border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; }
+.db-results-scroll { max-height: 50vh; overflow: auto; }
+.db-results-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.db-results-table th, .db-results-table td { padding: 8px 12px; text-align: left; border-bottom: 1px solid var(--border); white-space: nowrap; max-width: 360px; overflow: hidden; text-overflow: ellipsis; }
+.db-results-table th { position: sticky; top: 0; background: var(--bg); color: var(--text-secondary); font-weight: 600; z-index: 1; }
+.db-results-table td { color: var(--text); }
+.db-results-table tr:hover td { background: var(--bg); }
+.db-cell-null { color: var(--text-muted); font-style: italic; }
+.db-conn-list { display: flex; flex-direction: column; gap: 6px; margin-bottom: 14px; }
+.db-conn-row { display: flex; gap: 8px; align-items: center; padding: 10px 12px; border: 1px solid var(--border); border-radius: 8px; background: var(--input-bg); }
+.db-conn-row .db-conn-name { font-weight: 600; font-size: 14px; }
+.db-conn-row .db-conn-url { font-size: 12px; color: var(--text-muted); font-family: var(--font-mono, monospace); word-break: break-all; }
+.db-conn-row .db-conn-actions { margin-left: auto; display: flex; gap: 6px; flex-shrink: 0; }
+.db-empty-hint { padding: 32px 20px; text-align: center; color: var(--text-muted); font-size: 14px; }
 </style>
 </head>
 <body>
@@ -407,6 +439,7 @@ const TOOLS = [
   { id: 'disk', name: '微型云盘', icon: '☁️', desc: '基于 D1 的轻量文件存储，支持分片上传', render: renderDiskTool, mount: mountDiskTool },
   { id: 'stock', name: '基金估值', icon: '💰', desc: '多市场基金持仓估值刷新，A股/港股/美股/韩台日', render: renderStockTool, mount: mountStockTool },
   { id: 'news', name: 'AI 新闻锐评', icon: '📰', desc: '抓取科技新闻并由 AI 写贴吧风格锐评', render: renderNewsTool, mount: mountNewsTool },
+  { id: 'db-admin', name: 'DB 管理', icon: '🗄️', desc: '通过 d1-rest 执行 SQL，多连接管理', render: renderDbAdminTool, mount: mountDbAdminTool },
   { id: 'config', name: '配置管理', icon: '⚙️', desc: '集中管理 API 密钥与工具配置，敏感字段加密存储', render: renderConfigTool, mount: mountConfigTool },
 ];
 
@@ -1959,6 +1992,512 @@ function mountConfigTool() {
   };
 
   loadAll();
+}
+
+// ─── DB 管理工具 ───
+function renderDbAdminTool() {
+  return \`
+<h2>🗄️ DB 管理</h2>
+<p class="subtitle">通过 d1-rest 执行 SQL · 多连接管理 · 凭据统一使用当前令牌</p>
+
+<div class="disk-stats">
+  <div class="disk-stat-card">
+    <div class="stat-label">当前连接</div>
+    <div class="stat-value" id="dbCurConn" style="font-size:14px">未选择</div>
+  </div>
+  <div class="disk-stat-card">
+    <div class="stat-label">表数量</div>
+    <div class="stat-value" id="dbTableCount">-</div>
+  </div>
+  <div class="disk-stat-card">
+    <div class="stat-label">上次执行</div>
+    <div class="stat-value" id="dbLastRun" style="font-size:14px">-</div>
+  </div>
+</div>
+
+<div style="display:flex;gap:8px;margin-bottom:8px;flex-wrap:wrap;align-items:center">
+  <select id="dbConnSelect" style="padding:8px 12px;border:1px solid var(--border);border-radius:8px;background:var(--input-bg);color:var(--text);font-size:14px;min-width:200px;outline:none">
+    <option value="">— 选择连接 —</option>
+  </select>
+  <button class="btn btn-outline" id="dbManageBtn">⚙ 管理连接</button>
+  <button class="btn btn-outline" id="dbRefreshTablesBtn">🔄 刷新表</button>
+</div>
+
+<div class="db-layout" id="dbLayout">
+  <div class="db-sidebar" id="dbSidebar">
+    <div class="db-sidebar-title">表</div>
+    <div class="db-empty-hint" id="dbTablesEmpty" style="padding:20px 8px">选择连接后加载</div>
+    <div id="dbTablesList"></div>
+  </div>
+  <div class="db-main">
+    <textarea class="db-editor" id="dbSqlEditor" placeholder="-- 输入 SQL 后按 Ctrl/Cmd + Enter 执行&#10;SELECT * FROM kbox_kv LIMIT 10;" spellcheck="false"></textarea>
+    <div class="db-toolbar">
+      <button class="btn btn-primary" id="dbRunBtn">▶ 执行</button>
+      <button class="btn btn-outline" id="dbClearBtn">清空</button>
+      <span class="db-meta" id="dbMeta"></span>
+    </div>
+    <div class="db-results-wrap" id="dbResultsWrap" style="display:none">
+      <div class="db-results-head">
+        <span id="dbResultsTitle">结果</span>
+        <span id="dbResultsMeta"></span>
+      </div>
+      <div class="db-results-scroll" id="dbResultsScroll"></div>
+    </div>
+  </div>
+</div>
+
+<!-- 连接管理弹层 -->
+<div class="disk-modal-overlay" id="dbConnOverlay">
+  <div class="disk-modal" style="max-width:640px">
+    <div class="disk-modal-header">
+      <h3>连接管理</h3>
+      <button class="disk-modal-close" onclick="closeDbConnModal()">✕</button>
+    </div>
+    <div class="disk-modal-body">
+      <div class="db-conn-list" id="dbConnList"></div>
+      <div class="section-title" id="dbConnFormTitle">添加连接</div>
+      <div class="form-group">
+        <label>名称</label>
+        <input id="dbConnName" placeholder="如：ocean / forest / 本地测试">
+      </div>
+      <div class="form-group">
+        <label>Base URL</label>
+        <input id="dbConnBaseUrl" placeholder="专属域：https://ocean.你的域名 / 主入口：https://db.你的域名">
+      </div>
+      <div class="form-group">
+        <label>数据库 <span style="font-weight:400;color:var(--text-muted)">（留空 = 专属域模式；填库名 = 主入口模式，如 ocean）</span></label>
+        <input id="dbConnDatabase" placeholder="留空或填库名">
+      </div>
+      <div class="result-box" id="dbConnFormResult"></div>
+    </div>
+    <div class="disk-modal-footer">
+      <button class="btn btn-outline" id="dbConnTestBtn" style="margin-right:auto">测试连接</button>
+      <button class="btn btn-outline" style="color:var(--danger);display:none" id="dbConnDeleteBtn">删除</button>
+      <button class="btn btn-outline" onclick="closeDbConnModal()">取消</button>
+      <button class="btn btn-primary" id="dbConnSaveBtn">保存</button>
+    </div>
+  </div>
+</div>
+
+<!-- 表结构弹层 -->
+<div class="disk-modal-overlay" id="dbSchemaOverlay">
+  <div class="disk-modal" style="max-width:680px">
+    <div class="disk-modal-header">
+      <h3 id="dbSchemaTitle">表结构</h3>
+      <button class="disk-modal-close" onclick="closeDbSchemaModal()">✕</button>
+    </div>
+    <div class="disk-modal-body" id="dbSchemaBody">加载中…</div>
+    <div class="disk-modal-footer">
+      <button class="btn btn-outline" onclick="closeDbSchemaModal()">关闭</button>
+    </div>
+  </div>
+</div>
+\`;
+}
+
+function mountDbAdminTool() {
+  const connSelect = $('dbConnSelect');
+  const manageBtn = $('dbManageBtn');
+  const refreshTablesBtn = $('dbRefreshTablesBtn');
+  const tablesList = $('dbTablesList');
+  const tablesEmpty = $('dbTablesEmpty');
+  const sqlEditor = $('dbSqlEditor');
+  const runBtn = $('dbRunBtn');
+  const clearBtn = $('dbClearBtn');
+  const meta = $('dbMeta');
+  const resultsWrap = $('dbResultsWrap');
+  const resultsScroll = $('dbResultsScroll');
+  const resultsTitle = $('dbResultsTitle');
+  const resultsMeta = $('dbResultsMeta');
+
+  // 连接管理弹层
+  const connOverlay = $('dbConnOverlay');
+  const connList = $('dbConnList');
+  const connFormTitle = $('dbConnFormTitle');
+  const connName = $('dbConnName');
+  const connBaseUrl = $('dbConnBaseUrl');
+  const connDatabase = $('dbConnDatabase');
+  const connTestBtn = $('dbConnTestBtn');
+  const connDeleteBtn = $('dbConnDeleteBtn');
+  const connSaveBtn = $('dbConnSaveBtn');
+  const connFormResult = $('dbConnFormResult');
+
+  // 表结构弹层
+  const schemaOverlay = $('dbSchemaOverlay');
+  const schemaTitle = $('dbSchemaTitle');
+  const schemaBody = $('dbSchemaBody');
+
+  let connections = [];
+  let activeConnId = '';
+  let editingConnId = null;
+  let activeTable = '';
+
+  function showResult(el, msg, type) {
+    if (!msg) { el.style.display = 'none'; el.textContent = ''; return; }
+    el.style.display = 'block';
+    el.textContent = msg;
+    el.style.background = type === 'error' ? 'rgba(239,68,68,0.1)' : type === 'ok' ? 'rgba(34,197,94,0.1)' : 'var(--bg)';
+    el.style.color = type === 'error' ? '#ef4444' : type === 'ok' ? '#22c55e' : 'var(--text)';
+  }
+
+  function showConnModal() {
+    connOverlay.classList.add('show');
+    resetConnForm();
+    loadConnectionsList();
+  }
+  window.closeDbConnModal = function() { connOverlay.classList.remove('show'); };
+  window.closeDbSchemaModal = function() { schemaOverlay.classList.remove('show'); };
+
+  function resetConnForm() {
+    editingConnId = null;
+    connFormTitle.textContent = '添加连接';
+    connName.value = '';
+    connBaseUrl.value = '';
+    connDatabase.value = '';
+    connDeleteBtn.style.display = 'none';
+    showResult(connFormResult, '', '');
+  }
+
+  async function loadConnectionsList() {
+    connList.innerHTML = '<div class="db-empty-hint">加载中…</div>';
+    try {
+      const data = await api('/api/tools/db-admin/connections');
+      connections = data.results || [];
+      renderConnList();
+    } catch (e) {
+      if (e.message === 'UNAUTHORIZED') return;
+      connList.innerHTML = '<div class="db-empty-hint">加载失败：' + esc(e.message) + '</div>';
+    }
+  }
+
+  function renderConnList() {
+    if (connections.length === 0) {
+      connList.innerHTML = '<div class="db-empty-hint">暂无连接，下方添加</div>';
+      return;
+    }
+    connList.innerHTML = connections.map(c => {
+      const url = c.database ? c.base_url + '/' + c.database : c.base_url;
+      return '<div class="db-conn-row">' +
+        '<div style="flex:1;min-width:0">' +
+          '<div class="db-conn-name">' + esc(c.name) + '</div>' +
+          '<div class="db-conn-url">' + esc(url) + '</div>' +
+        '</div>' +
+        '<div class="db-conn-actions">' +
+          '<button class="btn btn-outline btn-sm" onclick="editDbConn(\\'' + c.id + '\\')">编辑</button>' +
+        '</div>' +
+      '</div>';
+    }).join('');
+  }
+
+  window.editDbConn = function(id) {
+    const c = connections.find(x => x.id === id);
+    if (!c) return;
+    editingConnId = id;
+    connFormTitle.textContent = '编辑连接';
+    connName.value = c.name;
+    connBaseUrl.value = c.base_url;
+    connDatabase.value = c.database || '';
+    connDeleteBtn.style.display = 'inline-block';
+    showResult(connFormResult, '', '');
+  };
+
+  connDeleteBtn.onclick = async () => {
+    if (!editingConnId) return;
+    if (!confirm('确认删除此连接？')) return;
+    try {
+      await api('/api/tools/db-admin/connections/' + editingConnId, { method: 'DELETE' });
+      toast('已删除', 'success');
+      resetConnForm();
+      loadConnectionsList();
+      loadConnSelect();
+    } catch (e) {
+      if (e.message === 'UNAUTHORIZED') return;
+      toast('删除失败：' + e.message, 'error');
+    }
+  };
+
+  connTestBtn.onclick = async () => {
+    const name = connName.value.trim();
+    const baseUrl = connBaseUrl.value.trim();
+    const database = connDatabase.value.trim();
+    if (!name || !baseUrl) {
+      showResult(connFormResult, '请填写名称和 Base URL', 'error');
+      return;
+    }
+    connTestBtn.disabled = true; connTestBtn.textContent = '测试中…';
+    try {
+      // 临时保存测试（如果新建则不持久化，直接走 query 端点测试）
+      // 这里复用现有连接的 id 走 test 端点；新建中的连接用 query 端点直接测
+      let result;
+      if (editingConnId) {
+        result = await api('/api/tools/db-admin/connections/' + editingConnId + '/test', { method: 'POST' });
+      } else {
+        // 没保存的新连接：直接构造 query URL 测试
+        const url = database ? baseUrl.replace(/\\/+$/, '') + '/' + database + '/query' : baseUrl.replace(/\\/+$/, '') + '/query';
+        const res = await fetch(url, {
+          method: 'POST',
+          headers: { 'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ query: 'SELECT 1 AS ok', params: [] }),
+        });
+        let data; try { data = await res.json(); } catch { data = null; }
+        result = { ok: res.ok, status: res.status, error: data?.error, sample: data?.results?.[0] };
+      }
+      if (result.ok) {
+        showResult(connFormResult, '✓ 连接成功 ' + (result.sample ? JSON.stringify(result.sample) : ''), 'ok');
+      } else {
+        showResult(connFormResult, '✗ ' + (result.error || ('HTTP ' + result.status)), 'error');
+      }
+    } catch (e) {
+      showResult(connFormResult, '✗ ' + e.message, 'error');
+    } finally {
+      connTestBtn.disabled = false; connTestBtn.textContent = '测试连接';
+    }
+  };
+
+  connSaveBtn.onclick = async () => {
+    const name = connName.value.trim();
+    const baseUrl = connBaseUrl.value.trim();
+    const database = connDatabase.value.trim();
+    if (!name || !baseUrl) {
+      showResult(connFormResult, '请填写名称和 Base URL', 'error');
+      return;
+    }
+    const body = { name, base_url: baseUrl, database };
+    connSaveBtn.disabled = true; connSaveBtn.textContent = '保存中…';
+    try {
+      if (editingConnId) {
+        await api('/api/tools/db-admin/connections/' + editingConnId, {
+          method: 'PUT', body: JSON.stringify(body), headers: { 'Content-Type': 'application/json' },
+        });
+      } else {
+        await api('/api/tools/db-admin/connections', {
+          method: 'POST', body: JSON.stringify(body), headers: { 'Content-Type': 'application/json' },
+        });
+      }
+      toast('已保存', 'success');
+      resetConnForm();
+      loadConnectionsList();
+      loadConnSelect();
+    } catch (e) {
+      if (e.message === 'UNAUTHORIZED') return;
+      showResult(connFormResult, '保存失败：' + e.message, 'error');
+    } finally {
+      connSaveBtn.disabled = false; connSaveBtn.textContent = '保存';
+    }
+  };
+
+  async function loadConnSelect() {
+    try {
+      const data = await api('/api/tools/db-admin/connections');
+      connections = data.results || [];
+      const prev = activeConnId;
+      connSelect.innerHTML = '<option value="">— 选择连接 —</option>' +
+        connections.map(c => '<option value="' + c.id + '">' + esc(c.name) + '</option>').join('');
+      if (prev && connections.find(c => c.id === prev)) {
+        connSelect.value = prev;
+      } else {
+        activeConnId = '';
+        $('dbCurConn').textContent = '未选择';
+        $('dbTableCount').textContent = '-';
+        tablesList.innerHTML = '';
+        tablesEmpty.style.display = 'block';
+        tablesEmpty.textContent = '选择连接后加载';
+      }
+    } catch (e) {
+      if (e.message === 'UNAUTHORIZED') return;
+      connSelect.innerHTML = '<option value="">加载失败</option>';
+    }
+  }
+
+  connSelect.onchange = () => {
+    activeConnId = connSelect.value;
+    activeTable = '';
+    if (!activeConnId) {
+      $('dbCurConn').textContent = '未选择';
+      $('dbTableCount').textContent = '-';
+      tablesList.innerHTML = '';
+      tablesEmpty.style.display = 'block';
+      tablesEmpty.textContent = '选择连接后加载';
+      return;
+    }
+    const c = connections.find(x => x.id === activeConnId);
+    $('dbCurConn').textContent = c ? c.name : '';
+    loadTables();
+  };
+
+  async function loadTables() {
+    if (!activeConnId) return;
+    tablesEmpty.style.display = 'block';
+    tablesEmpty.textContent = '加载中…';
+    tablesList.innerHTML = '';
+    try {
+      const data = await api('/api/tools/db-admin/connections/' + activeConnId + '/tables');
+      const tables = (data.results || []).map(r => r.name).filter(Boolean);
+      $('dbTableCount').textContent = tables.length;
+      if (tables.length === 0) {
+        tablesEmpty.textContent = '该库暂无表';
+        return;
+      }
+      tablesEmpty.style.display = 'none';
+      tablesList.innerHTML = tables.map(t =>
+        '<div class="db-table-item" data-table="' + esc(t) + '">' +
+          '<span>📋 ' + esc(t) + '</span>' +
+          '<span class="db-table-actions">' +
+            '<button title="查看结构" data-action="schema">ℹ</button>' +
+            '<button title="预览数据" data-action="preview">👁</button>' +
+          '</span>' +
+        '</div>'
+      ).join('');
+      // 点击表名 → 填入 SELECT * FROM \`table\` LIMIT 100
+      tablesList.querySelectorAll('.db-table-item').forEach(el => {
+        el.onclick = () => {
+          const tname = el.getAttribute('data-table');
+          activeTable = tname;
+          tablesList.querySelectorAll('.db-table-item').forEach(x => x.classList.remove('active'));
+          el.classList.add('active');
+          sqlEditor.value = 'SELECT * FROM \`' + tname + '\` LIMIT 100;';
+        };
+        // 表名旁的操作按钮：结构 / 预览
+        el.querySelectorAll('.db-table-actions button').forEach(btn => {
+          btn.onclick = (ev) => {
+            ev.stopPropagation();
+            const tname = el.getAttribute('data-table');
+            const action = btn.getAttribute('data-action');
+            if (action === 'schema') dbShowSchema(tname);
+            else if (action === 'preview') dbPreviewTable(tname);
+          };
+        });
+      });
+    } catch (e) {
+      if (e.message === 'UNAUTHORIZED') return;
+      tablesEmpty.textContent = '加载失败：' + e.message;
+      $('dbTableCount').textContent = '-';
+    }
+  }
+
+  async function dbShowSchema(tname) {
+    if (!activeConnId) return;
+    schemaTitle.textContent = '表结构：' + tname;
+    schemaBody.innerHTML = '<div class="db-empty-hint">加载中…</div>';
+    schemaOverlay.classList.add('show');
+    try {
+      const data = await api('/api/tools/db-admin/connections/' + activeConnId + '/tables/' + encodeURIComponent(tname) + '/schema');
+      const rows = data.results || [];
+      if (rows.length === 0) {
+        schemaBody.innerHTML = '<div class="db-empty-hint">无字段信息</div>';
+        return;
+      }
+      const cols = Object.keys(rows[0]);
+      schemaBody.innerHTML = '<div class="db-results-scroll"><table class="db-results-table">' +
+        '<thead><tr>' + cols.map(c => '<th>' + esc(c) + '</th>').join('') + '</tr></thead>' +
+        '<tbody>' + rows.map(r => '<tr>' + cols.map(c => {
+          const v = r[c];
+          return '<td>' + (v == null ? '<span class="db-cell-null">NULL</span>' : esc(v)) + '</td>';
+        }).join('') + '</tr>').join('') + '</tbody>' +
+        '</table></div>';
+    } catch (e) {
+      if (e.message === 'UNAUTHORIZED') { closeDbSchemaModal(); return; }
+      schemaBody.innerHTML = '<div class="db-empty-hint">加载失败：' + esc(e.message) + '</div>';
+    }
+  }
+
+  async function dbPreviewTable(tname) {
+    if (!activeConnId) return;
+    sqlEditor.value = 'SELECT * FROM \`' + tname + '\` LIMIT 100;';
+    await runQuery();
+  }
+
+  async function runQuery() {
+    if (!activeConnId) { toast('请先选择连接', 'error'); return; }
+    const sql = sqlEditor.value.trim();
+    if (!sql) { toast('请输入 SQL', 'error'); return; }
+    runBtn.disabled = true; runBtn.textContent = '执行中…';
+    resultsWrap.style.display = 'none';
+    meta.textContent = '执行中…';
+    const t0 = performance.now();
+    try {
+      const data = await api('/api/tools/db-admin/connections/' + activeConnId + '/query', {
+        method: 'POST',
+        body: JSON.stringify({ query: sql, params: [] }),
+        headers: { 'Content-Type': 'application/json' },
+      });
+      const elapsed = Math.round(performance.now() - t0);
+      const results = data.results || [];
+      const changes = data.meta?.changes ?? 0;
+      const read = data.meta?.rows_read ?? null;
+      const duration = data.meta?.duration != null ? (data.meta.duration * 1000).toFixed(1) + 'ms' : elapsed + 'ms';
+
+      // 区分 SELECT（有 results）与 INSERT/UPDATE/DELETE（看 changes）
+      if (results.length > 0) {
+        const cols = Object.keys(results[0]);
+        resultsTitle.textContent = '结果（' + results.length + ' 行）';
+        resultsMeta.textContent = '耗时 ' + duration + (read != null ? ' · 读 ' + read + ' 行' : '');
+        resultsScroll.innerHTML = '<table class="db-results-table">' +
+          '<thead><tr>' + cols.map(c => '<th>' + esc(c) + '</th>').join('') + '</tr></thead>' +
+          '<tbody>' + results.map(r => '<tr>' + cols.map(c => {
+            const v = r[c];
+            let s = v;
+            if (v != null && typeof v === 'object') s = JSON.stringify(v);
+            return '<td title="' + esc(String(s)) + '">' + (v == null ? '<span class="db-cell-null">NULL</span>' : esc(s)) + '</td>';
+          }).join('') + '</tr>').join('') + '</tbody>' +
+          '</table>';
+        resultsWrap.style.display = 'block';
+        meta.textContent = '✓ ' + results.length + ' 行 · ' + duration;
+        $('dbLastRun').textContent = results.length + ' 行 · ' + duration;
+      } else {
+        // 写操作
+        resultsTitle.textContent = '执行结果';
+        resultsMeta.textContent = '耗时 ' + duration;
+        resultsScroll.innerHTML = '<div class="db-empty-hint">✓ 执行成功' +
+          (changes > 0 ? '，影响 ' + changes + ' 行' : '') +
+          (read != null ? ' · 读 ' + read + ' 行' : '') +
+          '</div>';
+        resultsWrap.style.display = 'block';
+        meta.textContent = '✓ ' + (changes > 0 ? changes + ' 行受影响' : 'OK') + ' · ' + duration;
+        $('dbLastRun').textContent = (changes > 0 ? changes + ' 行' : 'OK') + ' · ' + duration;
+      }
+    } catch (e) {
+      if (e.message === 'UNAUTHORIZED') return;
+      meta.textContent = '✗ 失败';
+      resultsTitle.textContent = '错误';
+      resultsMeta.textContent = '';
+      resultsScroll.innerHTML = '<div class="db-empty-hint" style="color:#ef4444">' + esc(e.message) + '</div>';
+      resultsWrap.style.display = 'block';
+    } finally {
+      runBtn.disabled = false; runBtn.textContent = '▶ 执行';
+    }
+  }
+
+  runBtn.onclick = runQuery;
+  clearBtn.onclick = () => {
+    sqlEditor.value = '';
+    resultsWrap.style.display = 'none';
+    meta.textContent = '';
+  };
+  sqlEditor.addEventListener('keydown', e => {
+    if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+      e.preventDefault();
+      runQuery();
+    }
+    // Tab 缩进
+    if (e.key === 'Tab') {
+      e.preventDefault();
+      const s = sqlEditor.selectionStart, en = sqlEditor.selectionEnd;
+      sqlEditor.value = sqlEditor.value.slice(0, s) + '  ' + sqlEditor.value.slice(en);
+      sqlEditor.selectionStart = sqlEditor.selectionEnd = s + 2;
+    }
+  });
+
+  manageBtn.onclick = showConnModal;
+  refreshTablesBtn.onclick = () => {
+    if (!activeConnId) { toast('请先选择连接', 'error'); return; }
+    loadTables();
+  };
+
+  connOverlay.onclick = (e) => { if (e.target === connOverlay) closeDbConnModal(); };
+  schemaOverlay.onclick = (e) => { if (e.target === schemaOverlay) closeDbSchemaModal(); };
+
+  loadConnSelect();
 }
 
 // ─── 初始化 ───

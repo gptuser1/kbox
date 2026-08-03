@@ -3,6 +3,7 @@ import { renderFrontend } from './frontend';
 import disk from './tools/cloud-disk';
 import stock from './tools/stock';
 import news from './tools/news';
+import dbAdmin from './tools/db-admin';
 import { createKv, getKvTableError } from './kv';
 import { getConfig, getAppConfig, getToolConfig, setAppConfig, deleteAppConfig, getConfigSchema, listToolOverrides, setToolConfig, deleteToolConfig, ConfigField } from './config';
 
@@ -99,6 +100,9 @@ app.route('/api/tools/stock', stock);
 // ─── AI 新闻锐评工具 ───
 app.route('/api/tools/news', news);
 
+// ─── DB 管理工具 ───
+app.route('/api/tools/db-admin', dbAdmin);
+
 // 健康检查
 app.get('/api/health', (c) => {
   return c.json({ status: 'ok', d1_token: !!c.env.D1_API_TOKEN });
@@ -110,10 +114,11 @@ app.get('/api/health', (c) => {
 
 // 工具清单（用于前端渲染工具级覆盖 UI）
 const TOOL_LIST = [
-  { id: 'dispatch', name: 'GitHub Actions 触发' },
-  { id: 'disk',     name: '微型云盘' },
-  { id: 'stock',    name: '基金估值' },
-  { id: 'news',     name: 'AI 新闻锐评' },
+  { id: 'dispatch',  name: 'GitHub Actions 触发' },
+  { id: 'disk',      name: '微型云盘' },
+  { id: 'stock',     name: '基金估值' },
+  { id: 'news',      name: 'AI 新闻锐评' },
+  { id: 'db-admin',  name: 'DB 管理' },
 ];
 
 // 敏感值脱敏：用多个 * 号代替明文（不返回真实值）
