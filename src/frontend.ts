@@ -2108,7 +2108,7 @@ function renderDbAdminTool() {
           <button class="btn btn-outline btn-sm" id="dbClearBtn">清空</button>
           <span class="db-meta" id="dbSqlMeta"></span>
         </div>
-        <textarea class="db-editor" id="dbSqlEditor" placeholder="-- Ctrl/Cmd + Enter 执行&#10;SELECT * FROM \`kbox_kv\` LIMIT 10;" spellcheck="false"></textarea>
+        <textarea class="db-editor" id="dbSqlEditor" placeholder="-- Ctrl/Cmd + Enter 执行&#10;SELECT * FROM kbox_kv LIMIT 10;" spellcheck="false"></textarea>
         <div class="db-results-wrap" id="dbSqlResultsWrap" style="display:none;margin-top:12px">
           <div class="db-results-head">
             <span id="dbSqlResultsTitle">结果</span>
