@@ -72,7 +72,7 @@ function nowISO(): string {
   return new Date(Date.now() + 8 * 60 * 60 * 1000).toISOString();
 }
 
-// ─── 抓取 + AI 锐评 + 入库（核心逻辑） ───
+// ─── 抓取 + AI 锐评 + 入库（仅抓取，不含关键词统计） ───
 async function runCron(c: any): Promise<{ success: boolean; articles_count: number; error?: string }> {
   if (!await ensureTable(c.env.D1_API_TOKEN, c.env.D1_API_BASE)) {
     return { success: false, articles_count: 0, error: tableInitError || '建表失败' };
@@ -138,33 +138,54 @@ async function runCron(c: any): Promise<{ success: boolean; articles_count: numb
       [KEEP_LIMIT],
     );
 
-    // 生成 Top 10 关键词快照（基于当前库内全部新闻），存入通用 KV 表
-    try {
-      const allRows = await db.queryAll<{ title: string; source: string; url: string; summary: string; category: string; crawled_at: string }>(
-        `SELECT title, source, url, summary, category, crawled_at FROM newsfeed ORDER BY id DESC LIMIT ?`,
-        [KEEP_LIMIT],
-      );
-      const topKeywords = extractTopKeywords(allRows, 10);
-      const kv = getKv(c);
-      // key 用毫秒时间戳，list 按 key DESC 即可拿到最新
-      const key = String(Date.now());
-      await kv.set(NS_KEYWORDS, key, { generated_at: now, keywords: topKeywords });
-      // 只保留最近 5 份快照：按 key 降序，超出部分删除
-      const all = await kv.list<{ generated_at: string; keywords: KeywordStat[] }>(NS_KEYWORDS);
-      all.sort((a, b) => (a.key > b.key ? -1 : 1));
-      for (const item of all.slice(KEYWORDS_KEEP)) {
-        await kv.delete(NS_KEYWORDS, item.key);
-      }
-    } catch (e) {
-      // 关键词统计失败不影响主流程
-      console.error('Top keywords generation failed:', e instanceof Error ? e.message : String(e));
-    }
-
     return { success: true, articles_count: unique.length };
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
     console.error('News cron failed:', msg);
     return { success: false, articles_count: 0, error: msg };
+  }
+}
+
+// ─── 生成 Top 10 关键词快照（独立入口，基于当前库内新闻） ───
+// 读 newsfeed 最近 KEEP_LIMIT 条 → 抽词 → 存入 kbox_kv（仅保留最近 KEYWORDS_KEEP 份）
+async function generateTopKeywords(c: any): Promise<{ success: boolean; generated_at: string | null; count: number; error?: string }> {
+  if (!await ensureTable(c.env.D1_API_TOKEN, c.env.D1_API_BASE)) {
+    return { success: false, generated_at: null, count: 0, error: tableInitError || '建表失败' };
+  }
+  const db = getDb(c);
+  const kv = getKv(c);
+
+  try {
+    const allRows = await db.queryAll<{ title: string; source: string; url: string; summary: string; category: string; crawled_at: string }>(
+      `SELECT title, source, url, summary, category, crawled_at FROM newsfeed ORDER BY id DESC LIMIT ?`,
+      [KEEP_LIMIT],
+    );
+    if (allRows.length === 0) {
+      return { success: false, generated_at: null, count: 0, error: '暂无新闻数据，请先抓取' };
+    }
+
+    const topKeywords = extractTopKeywords(allRows, 10);
+    const now = nowISO();
+    // key 用毫秒时间戳，list 按 key DESC 即可拿到最新
+    const key = String(Date.now());
+    await kv.set(NS_KEYWORDS, key, { generated_at: now, keywords: topKeywords });
+
+    // 只保留最近 KEYWORDS_KEEP 份快照：按 key 降序，超出部分删除
+    const all = await kv.list<{ generated_at: string; keywords: KeywordStat[] }>(NS_KEYWORDS);
+    all.sort((a, b) => (a.key > b.key ? -1 : 1));
+    for (const item of all.slice(KEYWORDS_KEEP)) {
+      await kv.delete(NS_KEYWORDS, item.key);
+    }
+
+    return { success: true, generated_at: now, count: topKeywords.length };
+  } catch (e) {
+    const kvErr = getKvTableError();
+    if (kvErr) {
+      return { success: false, generated_at: null, count: 0, error: kvErr };
+    }
+    const msg = e instanceof Error ? e.message : String(e);
+    console.error('Top keywords generation failed:', msg);
+    return { success: false, generated_at: null, count: 0, error: msg };
   }
 }
 
@@ -186,13 +207,19 @@ app.get('/list', async (c) => {
   }
 });
 
-// 手动触发抓取
+// 手动触发抓取（仅抓取+入库，不生成关键词）
 app.post('/trigger', async (c) => {
   const result = await runCron(c);
   return c.json(result, result.success ? 200 : 500);
 });
 
-// 获取 Top 10 关键词（最近一次抓取生成的快照，存于通用 KV 表）
+// 手动触发 Top 10 关键词生成（基于当前库内新闻，独立于抓取）
+app.post('/top/refresh', async (c) => {
+  const result = await generateTopKeywords(c);
+  return c.json(result, result.success ? 200 : 500);
+});
+
+// 获取 Top 10 关键词（最近一次生成的快照，存于通用 KV 表）
 app.get('/top', async (c) => {
   if (!await ensureTable(c.env.D1_API_TOKEN, c.env.D1_API_BASE)) return tableError(c);
   const kv = getKv(c);

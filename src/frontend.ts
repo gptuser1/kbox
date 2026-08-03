@@ -1497,6 +1497,7 @@ function renderNewsTool() {
 
 <div style="display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap">
   <button class="btn btn-primary" id="newsTriggerBtn">📡 立即抓取</button>
+  <button class="btn btn-outline" id="newsTopBtn">🎯 生成 Top 10</button>
   <button class="btn btn-outline" id="newsReloadBtn">🔄 刷新</button>
   <button class="btn btn-outline" id="newsToggleBtn">📋 查看全部</button>
 </div>
@@ -1513,6 +1514,7 @@ function renderNewsTool() {
 function mountNewsTool() {
   const list = $('newsList');
   const triggerBtn = $('newsTriggerBtn');
+  const topBtn = $('newsTopBtn');
   const reloadBtn = $('newsReloadBtn');
   const toggleBtn = $('newsToggleBtn');
   const sectionTitle = $('newsSectionTitle');
@@ -1540,7 +1542,7 @@ function mountNewsTool() {
       const data = await api('/api/tools/news/top');
       const keywords = data.keywords || [];
       if (!keywords.length) {
-        list.innerHTML = '<div class="empty">暂无统计，点击「立即抓取」生成 Top 10</div>';
+        list.innerHTML = '<div class="empty">暂无统计，点击「🎯 生成 Top 10」生成</div>';
         return;
       }
       const generatedAt = data.generated_at ? ' · 生成于 ' + formatNewsTime(data.generated_at) : '';
@@ -1627,6 +1629,33 @@ function mountNewsTool() {
       toast('抓取失败', 'error');
     } finally {
       triggerBtn.disabled = false; triggerBtn.textContent = '📡 立即抓取';
+    }
+  };
+
+  topBtn.onclick = async () => {
+    topBtn.disabled = true; topBtn.textContent = '🎯 生成中…';
+    resultBox.className = 'result-box';
+    resultBox.textContent = '⏳ 正在基于当前新闻生成 Top 10 关键词…';
+    try {
+      const data = await api('/api/tools/news/top/refresh', { method: 'POST' });
+      if (data.success) {
+        resultBox.className = 'result-box show success';
+        resultBox.textContent = '✓ 生成完成：' + data.count + ' 个关键词' + (data.generated_at ? ' · ' + formatNewsTime(data.generated_at) : '');
+        toast('Top 10 生成完成', 'success');
+        viewMode = 'top';
+        setView('top');
+        loadTop();
+      } else {
+        resultBox.className = 'result-box show error';
+        resultBox.textContent = '✗ ' + (data.error || '生成失败');
+      }
+    } catch (e) {
+      if (e.message === 'UNAUTHORIZED') return;
+      resultBox.className = 'result-box show error';
+      resultBox.textContent = '✗ ' + e.message;
+      toast('生成失败', 'error');
+    } finally {
+      topBtn.disabled = false; topBtn.textContent = '🎯 生成 Top 10';
     }
   };
 
