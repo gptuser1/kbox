@@ -291,13 +291,28 @@ body:has(.disk-modal-overlay.show) .float-back { display: none !important; }
 .db-topbar select:focus { border-color: var(--primary); }
 .db-layout { display: grid; grid-template-columns: 240px 1fr; gap: 14px; }
 .db-sidebar { background: var(--card); border-radius: 10px; padding: 8px; box-shadow: var(--shadow); max-height: 72vh; overflow-y: auto; position: sticky; top: 12px; }
-.db-sidebar-title { font-size: 11px; font-weight: 700; color: var(--text-muted); padding: 6px 8px 4px; text-transform: uppercase; letter-spacing: 0.6px; display: flex; justify-content: space-between; align-items: center; }
+/* 标题可点击折叠：左侧"表 ▸/▾"，右侧"+ 新建" */
+.db-sidebar-title { font-size: 11px; font-weight: 700; color: var(--text-muted); padding: 6px 8px 4px; text-transform: uppercase; letter-spacing: 0.6px; display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.db-sidebar-toggle { cursor: pointer; display: flex; align-items: center; gap: 4px; user-select: none; }
+.db-sidebar-toggle::before { content: '▾'; font-size: 10px; transition: transform 0.15s; display: inline-block; }
+.db-sidebar.collapsed .db-sidebar-toggle::before { transform: rotate(-90deg); }
+.db-sidebar.collapsed #dbTablesList,
+.db-sidebar.collapsed #dbTablesEmpty { display: none; }
+.db-sidebar.collapsed { max-height: none; overflow: visible; }
 .db-sidebar-title .db-new-table { font-size: 11px; cursor: pointer; color: var(--primary); font-weight: 600; text-transform: none; letter-spacing: 0; }
 .db-table-item { padding: 7px 10px; border-radius: 6px; font-size: 13px; cursor: pointer; color: var(--text); display: flex; align-items: center; gap: 6px; transition: background 0.12s; font-family: var(--font-mono, monospace); }
 .db-table-item:hover { background: var(--bg); }
 .db-table-item.active { background: var(--primary); color: #fff; }
 .db-table-item .db-t-count { margin-left: auto; font-size: 11px; color: var(--text-muted); font-family: var(--font-mono, monospace); }
 .db-table-item.active .db-t-count { color: rgba(255,255,255,0.75); }
+/* 移动端：竖向堆叠，sidebar 折叠成一行标题，点击展开 */
+@media (max-width: 768px) {
+  .db-layout { grid-template-columns: 1fr; gap: 10px; }
+  .db-sidebar { position: static; max-height: none; overflow: visible; padding: 6px 8px; }
+  .db-sidebar:not(.collapsed) { max-height: 60vh; overflow-y: auto; }
+  .db-topbar select { min-width: 0; flex: 1; }
+  .db-results-scroll { max-height: 50vh; }
+}
 .db-main { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
 .db-tabs { display: flex; gap: 2px; border-bottom: 1px solid var(--border); margin-bottom: 4px; flex-wrap: wrap; }
 .db-tab { padding: 8px 16px; font-size: 13px; cursor: pointer; color: var(--text-muted); border: none; background: none; border-bottom: 2px solid transparent; transition: all 0.15s; font-weight: 500; }
@@ -2046,9 +2061,9 @@ function renderDbAdminTool() {
 </div>
 
 <div class="db-layout">
-  <div class="db-sidebar">
+  <div class="db-sidebar" id="dbSidebar">
     <div class="db-sidebar-title">
-      <span>表</span>
+      <span class="db-sidebar-toggle" id="dbSidebarToggle">表</span>
       <span class="db-new-table" id="dbNewTableBtn" title="新建表">+ 新建</span>
     </div>
     <div class="db-empty-hint" id="dbTablesEmpty" style="padding:20px 8px">选择连接后加载</div>
@@ -2218,6 +2233,22 @@ function mountDbAdminTool() {
   const mainContent = $('dbMainContent');
   const tabsEl = $('dbTabs');
   const newTableBtn = $('dbNewTableBtn');
+  const sidebarEl = $('dbSidebar');
+  const sidebarToggle = $('dbSidebarToggle');
+
+  // 移动端判定：窄屏走竖向折叠交互
+  function isMobile() { return window.innerWidth <= 768; }
+  function collapseSidebar() { sidebarEl.classList.add('collapsed'); }
+  function expandSidebar() { sidebarEl.classList.remove('collapsed'); }
+  // 标题点击折叠/展开
+  if (sidebarToggle) {
+    sidebarToggle.onclick = (e) => {
+      e.stopPropagation();
+      sidebarEl.classList.toggle('collapsed');
+    };
+  }
+  // 移动端默认收起表列表，避免占据首屏
+  if (isMobile()) collapseSidebar();
 
   // 选择数据面板
   const filterCol = $('dbFilterCol');
@@ -2367,6 +2398,8 @@ function mountDbAdminTool() {
     }
     const c = connections.find(x => x.id === activeConnId);
     curConnLabel.textContent = c ? ('当前：' + c.name) : '';
+    // 切换连接后展开表列表，方便选择
+    expandSidebar();
     loadTables();
   };
 
@@ -2412,6 +2445,8 @@ function mountDbAdminTool() {
     insertForm.innerHTML = '';
     switchTab('data');
     loadData();
+    // 移动端选表后收起 sidebar，把空间让给主区
+    if (isMobile()) collapseSidebar();
   }
 
   // ─── 选择数据 ───
