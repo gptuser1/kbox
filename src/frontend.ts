@@ -113,12 +113,20 @@ input, select, button, textarea { font-family: inherit; }
 /* ─── 工具视图 ─── */
 .tool-view { display: none; }
 .tool-view.active { display: block; }
-.tool-back {
-  display: inline-flex; align-items: center; gap: 6px; background: none; border: none;
-  color: var(--text-secondary); font-size: 14px; cursor: pointer; margin-bottom: 20px; padding: 6px 0;
-  transition: color 0.2s;
+
+/* ─── 常驻浮动返回按钮 ─── */
+/* 仅在工具子页可见，固定右下角，z-index 高于 toast(999) 和 modal(200) */
+.float-back {
+  position: fixed; right: 24px; bottom: 24px; z-index: 1500;
+  width: 48px; height: 48px; border-radius: 50%; border: none;
+  background: var(--primary); color: #fff; cursor: pointer;
+  display: none; align-items: center; justify-content: center;
+  box-shadow: 0 6px 20px rgba(99, 102, 241, 0.4);
+  transition: background 0.2s, transform 0.15s, box-shadow 0.2s;
 }
-.tool-back:hover { color: var(--primary); }
+.float-back:hover { background: var(--primary-hover); transform: translateY(-2px); box-shadow: 0 8px 24px rgba(99, 102, 241, 0.5); }
+.float-back:active { transform: translateY(0); }
+.float-back.show { display: inline-flex; }
 .tool-view h2 { font-size: 22px; font-weight: 700; margin-bottom: 8px; }
 .tool-view .subtitle { font-size: 14px; color: var(--text-muted); margin-bottom: 24px; }
 
@@ -288,6 +296,13 @@ input, select, button, textarea { font-family: inherit; }
 
 <div class="toast-container" id="toastContainer"></div>
 
+<!-- 常驻浮动返回按钮：仅在工具子页可见，固定右上角，最上层 -->
+<button class="float-back" id="floatBack" onclick="backToGrid()" title="返回首页" aria-label="返回首页">
+  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M19 12H5"/><path d="M12 19l-7-7 7-7"/>
+  </svg>
+</button>
+
 <!-- 主页：工具网格 -->
 <div class="container" id="mainContent">
   <div class="tool-grid" id="toolGrid"></div>
@@ -414,17 +429,21 @@ window.showTool = function(id) {
     if (t.id === id) { v.classList.add('active'); }
     else { v.classList.remove('active'); }
   }
+  // 显示常驻浮动返回按钮
+  $('floatBack').classList.add('show');
 }
 
 window.backToGrid = function() {
   for (const t of TOOLS) { $('view-' + t.id).classList.remove('active'); }
   toolGrid.style.display = 'grid';
+  // 隐藏常驻浮动返回按钮，回到顶部
+  $('floatBack').classList.remove('show');
+  window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
 // ═══ 工具 1：GitHub Workflow Dispatch ═══
 function renderDispatchTool() {
   return \`
-    <button class="tool-back" onclick="backToGrid()">← 返回</button>
     <h2>⚡ GitHub Actions 触发</h2>
     <p class="subtitle">通过 GitHub API 触发指定仓库的 workflow_dispatch</p>
     <div class="saved-configs" id="dispatchSavedConfigs"></div>
@@ -824,7 +843,6 @@ const DISK_MAX_SIZE = 10 * 1024 * 1024; // 10MB
 
 function renderDiskTool() {
   return \`
-    <button class="tool-back" onclick="backToGrid()">← 返回</button>
     <h2>☁️ 微型云盘</h2>
     <p class="subtitle">基于 D1 的轻量文件存储 · 单文件上限 10MB</p>
     <div class="disk-stats" id="diskStats"></div>
@@ -1102,7 +1120,6 @@ function mountDiskTool() {
 // ═══ 工具 4：基金估值 ═══
 function renderStockTool() {
   return \`
-<button class="tool-back" onclick="backToGrid()">← 返回</button>
 <h2>💰 基金估值</h2>
 <p class="subtitle">多市场基金持仓估值刷新 · A股/港股/美股/韩台日</p>
 
@@ -1491,7 +1508,6 @@ function mountStockTool() {
 // ═══ 工具 5：AI 新闻锐评 ═══
 function renderNewsTool() {
   return \`
-<button class="tool-back" onclick="backToGrid()">← 返回</button>
 <h2>📰 AI 新闻锐评</h2>
 <p class="subtitle">抓取科技新闻并由 AI 写贴吧风格锐评 · 保留最近 60 条</p>
 
@@ -1668,7 +1684,6 @@ function mountNewsTool() {
 // ═══ 工具 6：配置管理 ═══
 function renderConfigTool() {
   return \`
-<button class="tool-back" onclick="backToGrid()">← 返回</button>
 <h2>⚙️ 配置管理</h2>
 <p class="subtitle">集中管理 API 密钥与工具配置 · 敏感字段 AES-GCM 加密存储</p>
 
