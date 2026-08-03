@@ -1,6 +1,6 @@
 import { Hono } from 'hono';
 import { createDb, DbError } from '../db';
-import { createKv, getKvTableError } from '../kv';
+import { createKv } from '../kv';
 import { crawlAll } from './news-crawler';
 import { summarizeArticles, extractKeywordsViaLLM, dedupeArticlesByLLM, type KeywordStat } from './news-llm';
 
@@ -183,7 +183,7 @@ async function generateTopKeywords(c: any): Promise<{ success: boolean; generate
 
     return { success: true, generated_at: now, count: topKeywords.length };
   } catch (e) {
-    const kvErr = getKvTableError();
+    const kvErr = kv.error();
     if (kvErr) {
       return { success: false, generated_at: null, count: 0, error: kvErr };
     }
@@ -234,7 +234,7 @@ app.get('/top', async (c) => {
     }
     return c.json({ generated_at: latest.generated_at, keywords: latest.keywords });
   } catch (e) {
-    if (getKvTableError()) return c.json({ error: getKvTableError() }, 503);
+    if (kv.error()) return c.json({ error: kv.error() }, 503);
     return c.json({ error: e instanceof Error ? e.message : '获取 Top 关键词失败' }, 500);
   }
 });

@@ -1,17 +1,26 @@
 import { createDb, DbError } from './db';
 
-// 通用 KV 表：所有小工具共用，避免每个工具单独建表
+// 通用 KV 表：每个 D1 数据库各自维护一份 kbox_kv（同名同结构，物理独立）
 // 表结构：namespace + key 联合主键，value 存 JSON 字符串
 //
 // 适用：小对象（<100KB）、低频读写、按主键查
 // 不适用：大 value（>1MB）、需字段级索引/排序/聚合 → 用专用表
+//
+// 多库说明：建表状态按连接（token+base）缓存，不同数据库各自独立确保。
+// 主 kbox 应用用 ocean 的 kbox_kv，云盘等工具可指向 forest 的 kbox_kv，互不影响。
 
-let kvTableReady = false;
-let kvTableError: string | null = null;
+// 按连接缓存建表状态，避免单例缓存误导其他连接
+const kvTableReady = new Map<string, boolean>();
+const kvTableError = new Map<string, string | null>();
+
+function connKey(token: string, base?: string): string {
+  return token + '|' + (base || '');
+}
 
 async function ensureKvTable(token: string, base?: string): Promise<boolean> {
-  if (kvTableReady) return true;
-  if (kvTableError) return false;
+  const ck = connKey(token, base);
+  if (kvTableReady.get(ck)) return true;
+  if (kvTableError.has(ck)) return false;
 
   const db = createDb(token, base);
   try {
@@ -22,44 +31,43 @@ async function ensureKvTable(token: string, base?: string): Promise<boolean> {
       updated_at TEXT DEFAULT (datetime('now','localtime')),
       PRIMARY KEY (namespace, key)
     )`);
-    kvTableReady = true;
+    kvTableReady.set(ck, true);
     return true;
   } catch (e) {
     const msg = e instanceof DbError ? e.message : '建表失败';
-    kvTableError = msg;
+    kvTableError.set(ck, msg);
     console.error('KV table init error:', msg);
     return false;
   }
 }
 
-export function getKvTableError() {
-  return kvTableError;
-}
-
-export function isKvReady() {
-  return kvTableReady;
-}
-
 // 重置状态（仅测试用）
 export function _resetKvState() {
-  kvTableReady = false;
-  kvTableError = null;
+  kvTableReady.clear();
+  kvTableError.clear();
 }
 
 export function createKv(token: string, base?: string) {
   const apiBase = base;
+  const ck = connKey(token, base);
 
   async function ensure(): Promise<boolean> {
     return ensureKvTable(token, apiBase);
   }
 
+  // 返回该连接的建表错误（无错误或未尝试返回 null）
+  function error(): string | null {
+    return kvTableError.get(ck) || null;
+  }
+
   return {
     ensure,
+    error,
 
     // ─── 读单条 ───
     // 返回解析后的对象，不存在返回 null
     async get<T = any>(namespace: string, key: string): Promise<T | null> {
-      if (!await ensure()) throw new Error(kvTableError || 'KV 表未就绪');
+      if (!await ensure()) throw new Error(error() || 'KV 表未就绪');
       const db = createDb(token, apiBase);
       const row = await db.queryOne<{ value: string }>(
         `SELECT value FROM kbox_kv WHERE namespace = ? AND key = ?`,
@@ -76,7 +84,7 @@ export function createKv(token: string, base?: string) {
     // ─── 读多条（按 namespace） ───
     // 返回 [{key, value}] 数组，value 已解析
     async list<T = any>(namespace: string, keyPrefix?: string): Promise<Array<{ key: string; value: T }>> {
-      if (!await ensure()) throw new Error(kvTableError || 'KV 表未就绪');
+      if (!await ensure()) throw new Error(error() || 'KV 表未就绪');
       const db = createDb(token, apiBase);
       let rows: Array<{ key: string; value: string }>;
       if (keyPrefix) {
@@ -101,7 +109,7 @@ export function createKv(token: string, base?: string) {
     // ─── 写（upsert） ───
     // 整体覆盖模式：直接替换 value，避免读-改-写竞态
     async set<T = any>(namespace: string, key: string, value: T): Promise<void> {
-      if (!await ensure()) throw new Error(kvTableError || 'KV 表未就绪');
+      if (!await ensure()) throw new Error(error() || 'KV 表未就绪');
       const db = createDb(token, apiBase);
       const jsonStr = JSON.stringify(value);
       // SQLite 参数化绑定处理引号转义，JSON.stringify 已处理内部转义
@@ -115,7 +123,7 @@ export function createKv(token: string, base?: string) {
 
     // ─── 删单条 ───
     async delete(namespace: string, key: string): Promise<void> {
-      if (!await ensure()) throw new Error(kvTableError || 'KV 表未就绪');
+      if (!await ensure()) throw new Error(error() || 'KV 表未就绪');
       const db = createDb(token, apiBase);
       await db.execute(
         `DELETE FROM kbox_kv WHERE namespace = ? AND key = ?`,
@@ -125,7 +133,7 @@ export function createKv(token: string, base?: string) {
 
     // ─── 删整个 namespace（或带前缀的子集） ───
     async clear(namespace: string, keyPrefix?: string): Promise<void> {
-      if (!await ensure()) throw new Error(kvTableError || 'KV 表未就绪');
+      if (!await ensure()) throw new Error(error() || 'KV 表未就绪');
       const db = createDb(token, apiBase);
       if (keyPrefix) {
         await db.execute(

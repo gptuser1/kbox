@@ -1,6 +1,6 @@
 import { Hono } from 'hono';
 import { DbError } from '../db';
-import { createKv, getKvTableError } from '../kv';
+import { createKv } from '../kv';
 
 // DB 管理工具：通过 d1-rest API 执行 SQL，支持多连接管理（adminer 风格）
 // 连接配置存于 kbox_kv（namespace='db_admin_connections'），凭据统一使用 env.D1_API_TOKEN
@@ -57,8 +57,8 @@ function errorResponse(c: any, e: unknown, defaultMsg = '服务器内部错误')
   return c.json({ error: msg }, 500);
 }
 
-function kvError(c: any) {
-  return c.json({ error: getKvTableError() || 'KV 表初始化失败，请检查 D1_API_TOKEN' }, 503);
+function kvError(c: any, kv: any) {
+  return c.json({ error: kv.error() || 'KV 表初始化失败，请检查 D1_API_TOKEN' }, 503);
 }
 
 // 表名/列名仅允许字母数字下划线，防止注入
@@ -103,7 +103,7 @@ async function getConn(c: any, id: string): Promise<DbConnection | Response> {
     if (!conn) return c.json({ error: '连接不存在' }, 404);
     return conn;
   } catch (e) {
-    if (getKvTableError()) return kvError(c);
+    if (kv.error()) return kvError(c, kv);
     return errorResponse(c, e, '读取连接失败');
   }
 }
@@ -120,7 +120,7 @@ app.get('/connections', async (c) => {
       .sort((a, b) => (a.created_at > b.created_at ? -1 : 1));
     return c.json({ results: conns, count: conns.length });
   } catch (e) {
-    if (getKvTableError()) return kvError(c);
+    if (kv.error()) return kvError(c, kv);
     return errorResponse(c, e, '获取连接列表失败');
   }
 });
@@ -145,7 +145,7 @@ app.post('/connections', async (c) => {
     await kv.set(NS, conn.id, conn);
     return c.json({ ok: true, connection: conn }, 201);
   } catch (e) {
-    if (getKvTableError()) return kvError(c);
+    if (kv.error()) return kvError(c, kv);
     return errorResponse(c, e, '创建连接失败');
   }
 });
@@ -168,7 +168,7 @@ app.put('/connections/:id', async (c) => {
     await kv.set(NS, id, updated);
     return c.json({ ok: true, connection: updated });
   } catch (e) {
-    if (getKvTableError()) return kvError(c);
+    if (kv.error()) return kvError(c, kv);
     return errorResponse(c, e, '更新连接失败');
   }
 });
@@ -183,7 +183,7 @@ app.delete('/connections/:id', async (c) => {
     await kv.delete(NS, id);
     return c.json({ ok: true });
   } catch (e) {
-    if (getKvTableError()) return kvError(c);
+    if (kv.error()) return kvError(c, kv);
     return errorResponse(c, e, '删除连接失败');
   }
 });

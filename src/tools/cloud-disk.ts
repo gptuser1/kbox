@@ -1,6 +1,6 @@
 import { Hono } from 'hono';
 import { createDb, DbError } from '../db';
-import { createKv, getKvTableError } from '../kv';
+import { createKv } from '../kv';
 import { getConfig } from '../config';
 
 type Bindings = {
@@ -281,7 +281,7 @@ app.post('/files/:id/download-token', async (c) => {
       url: `/api/tools/disk/files/${fileId}/download?dt=${dt}`,
     });
   } catch (e) {
-    if (getKvTableError()) return c.json({ error: getKvTableError() }, 503);
+    if (kv.error()) return c.json({ error: kv.error() }, 503);
     return c.json({ error: e instanceof Error ? e.message : '生成下载令牌失败' }, 500);
   }
 });
@@ -343,7 +343,7 @@ app.get('/files/:id/download', async (c) => {
       },
     });
   } catch (e) {
-    if (getKvTableError()) return c.json({ error: getKvTableError() }, 503);
+    if (kv.error()) return c.json({ error: kv.error() }, 503);
     return c.json({ error: e instanceof Error ? e.message : '下载失败' }, 500);
   }
 });

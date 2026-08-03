@@ -4,7 +4,7 @@ import disk from './tools/cloud-disk';
 import stock from './tools/stock';
 import news from './tools/news';
 import dbAdmin from './tools/db-admin';
-import { createKv, getKvTableError } from './kv';
+import { createKv } from './kv';
 import { getConfig, getAppConfig, getToolConfig, setAppConfig, deleteAppConfig, getConfigSchema, listToolOverrides, setToolConfig, deleteToolConfig, ConfigField } from './config';
 
 type Bindings = {
@@ -420,8 +420,8 @@ interface DispatchConfig {
 
 const NS_DISPATCH = 'dispatch_configs';
 
-function kvError(c: any) {
-  return c.json({ error: getKvTableError() || 'KV 表初始化失败，请检查 D1_API_TOKEN' }, 503);
+function kvError(c: any, kv: any) {
+  return c.json({ error: kv.error() || 'KV 表初始化失败，请检查 D1_API_TOKEN' }, 503);
 }
 
 // 列出所有 dispatch 配置
@@ -435,7 +435,7 @@ app.get('/api/tools/dispatch-configs', async (c) => {
     }));
     return c.json({ configs });
   } catch (e) {
-    if (getKvTableError()) return kvError(c);
+    if (kv.error()) return kvError(c, kv);
     return c.json({ error: e instanceof Error ? e.message : '获取配置失败' }, 500);
   }
 });
@@ -467,7 +467,7 @@ app.post('/api/tools/dispatch-configs', async (c) => {
     await kv.set(NS_DISPATCH, id, config);
     return c.json({ ok: true, id, ...config });
   } catch (e) {
-    if (getKvTableError()) return kvError(c);
+    if (kv.error()) return kvError(c, kv);
     return c.json({ error: e instanceof Error ? e.message : '保存配置失败' }, 500);
   }
 });
@@ -481,7 +481,7 @@ app.delete('/api/tools/dispatch-configs/:id', async (c) => {
     await kv.delete(NS_DISPATCH, id);
     return c.json({ ok: true });
   } catch (e) {
-    if (getKvTableError()) return kvError(c);
+    if (kv.error()) return kvError(c, kv);
     return c.json({ error: e instanceof Error ? e.message : '删除配置失败' }, 500);
   }
 });

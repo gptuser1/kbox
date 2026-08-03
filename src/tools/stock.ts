@@ -1,6 +1,6 @@
 import { Hono } from 'hono';
 import { DbError } from '../db';
-import { createKv, getKvTableError } from '../kv';
+import { createKv } from '../kv';
 import { refreshValuations } from './stock-fetcher';
 import { getConfig } from '../config';
 
@@ -49,8 +49,8 @@ function getKv(c: any) {
   return createKv(c.env.D1_API_TOKEN, c.env.D1_API_BASE);
 }
 
-function kvError(c: any) {
-  return c.json({ error: getKvTableError() || 'KV 表初始化失败，请检查 D1_API_TOKEN' }, 503);
+function kvError(c: any, kv: any) {
+  return c.json({ error: kv.error() || 'KV 表初始化失败，请检查 D1_API_TOKEN' }, 503);
 }
 
 // 验证 holdings JSON
@@ -98,7 +98,7 @@ app.get('/funds', async (c) => {
       .sort((a, b) => (a.created_at > b.created_at ? -1 : 1));
     return c.json({ results: funds, count: funds.length });
   } catch (e) {
-    if (getKvTableError()) return kvError(c);
+    if (kv.error()) return kvError(c, kv);
     return errorResponse(c, e, '获取列表失败');
   }
 });
@@ -111,7 +111,7 @@ app.get('/funds/:id', async (c) => {
     if (!fund) return c.json({ error: '记录不存在' }, 404);
     return c.json({ results: [fund] });
   } catch (e) {
-    if (getKvTableError()) return kvError(c);
+    if (kv.error()) return kvError(c, kv);
     return errorResponse(c, e, '获取基金失败');
   }
 });
@@ -155,7 +155,7 @@ app.post('/funds', async (c) => {
     await kv.set(NS_STOCK, id, record);
     return c.json({ id, fund_name: record.fund_name, fund_code: record.fund_code, holdings }, 201);
   } catch (e) {
-    if (getKvTableError()) return kvError(c);
+    if (kv.error()) return kvError(c, kv);
     return errorResponse(c, e, '创建失败');
   }
 });
@@ -264,7 +264,7 @@ app.put('/funds/:id', async (c) => {
     await kv.set(NS_STOCK, id, existing);
     return c.json(existing);
   } catch (e) {
-    if (getKvTableError()) return kvError(c);
+    if (kv.error()) return kvError(c, kv);
     return errorResponse(c, e, '更新失败');
   }
 });
@@ -276,7 +276,7 @@ app.delete('/funds/:id', async (c) => {
     await kv.delete(NS_STOCK, c.req.param('id'));
     return c.json({ ok: true, message: '删除成功' });
   } catch (e) {
-    if (getKvTableError()) return kvError(c);
+    if (kv.error()) return kvError(c, kv);
     return errorResponse(c, e, '删除失败');
   }
 });
@@ -330,7 +330,7 @@ app.post('/refresh', async (c) => {
       },
     });
   } catch (e) {
-    if (getKvTableError()) return kvError(c);
+    if (kv.error()) return kvError(c, kv);
     return errorResponse(c, e, '刷新估值失败');
   }
 });
