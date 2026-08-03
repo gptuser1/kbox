@@ -138,10 +138,12 @@ app.get('/api/config/schema', (c) => {
 });
 
 // GET /api/config — 列出所有全局配置（敏感脱敏）
+// 工具专用配置（field.tools 非空）不在此返回，仅在对应工具的覆盖区可见
 app.get('/api/config', async (c) => {
   const schema = getConfigSchema();
   const configs = [];
   for (const field of schema) {
+    if (field.tools) continue; // 工具专用项不在全局默认区展示
     const raw = await getAppConfig(c, field.key);
     const masked = maskField(field, raw);
     configs.push({

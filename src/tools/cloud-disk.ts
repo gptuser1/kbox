@@ -1,6 +1,7 @@
 import { Hono } from 'hono';
 import { createDb, DbError } from '../db';
 import { createKv, getKvTableError } from '../kv';
+import { getConfig } from '../config';
 
 type Bindings = {
   D1_API_TOKEN: string;
@@ -16,6 +17,17 @@ const CHUNK_SIZE = 1.4 * 1024 * 1024; // 1.4MB → Base64 ≈ 1.87MB < 2MB 单�
 const DOWNLOAD_TOKEN_TTL_SEC = 300; // 下载令牌有效期 5 分钟
 
 const app = new Hono<{ Bindings: Bindings; Variables: Variables }>();
+
+// ─── 工具专用 D1 配置读取 ───
+// disk_d1_base / disk_d1_token 未设置时降级到全局主令牌 D1_API_TOKEN/D1_API_BASE
+async function diskD1Creds(c: any): Promise<{ token: string; base?: string }> {
+  const base = await getConfig(c, 'disk', 'disk_d1_base');
+  const token = await getConfig(c, 'disk', 'disk_d1_token');
+  return {
+    token: token || c.env.D1_API_TOKEN,
+    base: base || c.env.D1_API_BASE,
+  };
+}
 
 // ─── 自动建表 ───
 let tableReady = false;
@@ -61,8 +73,8 @@ function localtimeNow(): string {
   return `${now.getUTCFullYear()}-${pad(now.getUTCMonth() + 1)}-${pad(now.getUTCDate())} ${pad(now.getUTCHours())}:${pad(now.getUTCMinutes())}:${pad(now.getUTCSeconds())}`;
 }
 
-function getDb(c: any) {
-  return createDb(c.env.D1_API_TOKEN, c.env.D1_API_BASE);
+function getDb(c: any, creds: { token: string; base?: string }) {
+  return createDb(creds.token, creds.base);
 }
 
 // ensureTable 失败时返回明确错误
@@ -112,8 +124,9 @@ async function getDbUsage(db: ReturnType<typeof createDb>): Promise<number> {
 
 // ─── 容量统计 ───
 app.get('/stats', async (c) => {
-  if (!await ensureTable(c.env.D1_API_TOKEN, c.env.D1_API_BASE)) return tableError(c);
-  const db = getDb(c);
+  const creds = await diskD1Creds(c);
+  if (!await ensureTable(creds.token, creds.base)) return tableError(c);
+  const db = getDb(c, creds);
   try {
     // 文件数量和总大小（仅 kbox_disk_files 表，对应前端"文件大小"卡片）
     const stats = await db.queryOne<{ count: number; total_size: number }>(
@@ -135,8 +148,9 @@ app.get('/stats', async (c) => {
 
 // ─── 文件列表 ───
 app.get('/files', async (c) => {
-  if (!await ensureTable(c.env.D1_API_TOKEN, c.env.D1_API_BASE)) return tableError(c);
-  const db = getDb(c);
+  const creds = await diskD1Creds(c);
+  if (!await ensureTable(creds.token, creds.base)) return tableError(c);
+  const db = getDb(c, creds);
   try {
     const files = await db.queryAll(
       `SELECT id, name, mime_type, size, chunks, created_at FROM kbox_disk_files ORDER BY created_at DESC`
@@ -149,8 +163,9 @@ app.get('/files', async (c) => {
 
 // ─── 创建文件记录 ───
 app.post('/files', async (c) => {
-  if (!await ensureTable(c.env.D1_API_TOKEN, c.env.D1_API_BASE)) return tableError(c);
-  const db = getDb(c);
+  const creds = await diskD1Creds(c);
+  if (!await ensureTable(creds.token, creds.base)) return tableError(c);
+  const db = getDb(c, creds);
 
   let body: any;
   try {
@@ -189,8 +204,9 @@ app.post('/files', async (c) => {
 
 // ─── 上传分片 ───
 app.post('/files/:id/chunks', async (c) => {
-  if (!await ensureTable(c.env.D1_API_TOKEN, c.env.D1_API_BASE)) return tableError(c);
-  const db = getDb(c);
+  const creds = await diskD1Creds(c);
+  if (!await ensureTable(creds.token, creds.base)) return tableError(c);
+  const db = getDb(c, creds);
   const fileId = Number(c.req.param('id'));
 
   let body: any;
@@ -224,9 +240,10 @@ app.post('/files/:id/chunks', async (c) => {
 // 令牌存于通用 KV 表：namespace='disk_tokens', key=dt, value={file_id, expires_at}
 // 用后即删，不残留；生成新令牌时顺手清理过期令牌
 app.post('/files/:id/download-token', async (c) => {
-  if (!await ensureTable(c.env.D1_API_TOKEN, c.env.D1_API_BASE)) return tableError(c);
-  const db = getDb(c);
-  const kv = createKv(c.env.D1_API_TOKEN, c.env.D1_API_BASE);
+  const creds = await diskD1Creds(c);
+  if (!await ensureTable(creds.token, creds.base)) return tableError(c);
+  const db = getDb(c, creds);
+  const kv = createKv(creds.token, creds.base);
   const fileId = Number(c.req.param('id'));
 
   try {
@@ -271,9 +288,10 @@ app.post('/files/:id/download-token', async (c) => {
 
 // ─── 下载文件（用一次性 dt 令牌鉴权，不走主鉴权） ───
 app.get('/files/:id/download', async (c) => {
-  if (!await ensureTable(c.env.D1_API_TOKEN, c.env.D1_API_BASE)) return tableError(c);
-  const db = getDb(c);
-  const kv = createKv(c.env.D1_API_TOKEN, c.env.D1_API_BASE);
+  const creds = await diskD1Creds(c);
+  if (!await ensureTable(creds.token, creds.base)) return tableError(c);
+  const db = getDb(c, creds);
+  const kv = createKv(creds.token, creds.base);
   const fileId = Number(c.req.param('id'));
   const dt = c.req.query('dt')?.trim() || '';
 
@@ -332,8 +350,9 @@ app.get('/files/:id/download', async (c) => {
 
 // ─── 删除文件 ───
 app.delete('/files/:id', async (c) => {
-  if (!await ensureTable(c.env.D1_API_TOKEN, c.env.D1_API_BASE)) return tableError(c);
-  const db = getDb(c);
+  const creds = await diskD1Creds(c);
+  if (!await ensureTable(creds.token, creds.base)) return tableError(c);
+  const db = getDb(c, creds);
   const fileId = Number(c.req.param('id'));
 
   try {

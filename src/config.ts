@@ -19,6 +19,7 @@ export interface ConfigField {
   default?: string;
   placeholder?: string;
   envName?: string; // env 兼容期映射
+  tools?: string[]; // 限定可见工具：未设置=所有工具可用；设置=仅这些工具可覆盖（且不出现在全局默认区）
 }
 
 // 全局默认配置（namespace='app'）
@@ -30,6 +31,9 @@ const APP_CONFIG_SCHEMA: ConfigField[] = [
   { key: 'tencent_api_base', desc: '腾讯行情 API',     sensitive: false, default: 'https://qt.gtimg.cn' },
   { key: 'yahoo_api_base',  desc: 'Yahoo 行情 API',    sensitive: false, default: 'https://query1.finance.yahoo.com' },
   { key: 'tavily_api_key',  desc: 'Tavily 搜索 API Key', sensitive: true, placeholder: 'tvly-...', envName: 'TAVILY_API_KEY' },
+  // ── 工具专用配置：仅对应工具可见/可覆盖，不出现在全局默认区 ──
+  { key: 'disk_d1_base',  desc: '云盘 D1 REST API 地址', sensitive: false, placeholder: 'https://ocean.klinux.dpdns.org', tools: ['disk'] },
+  { key: 'disk_d1_token', desc: '云盘 D1 REST API Token', sensitive: true,  placeholder: '留空则使用全局主令牌', tools: ['disk'] },
 ];
 
 export const NS_APP = 'app';
@@ -148,6 +152,7 @@ export async function getToolConfig(c: any, tool: string, key: string): Promise<
 export async function setAppConfig(c: any, key: string, value: string) {
   const field = APP_CONFIG_SCHEMA.find(f => f.key === key);
   if (!field) throw new Error('未知配置项: ' + key);
+  if (field.tools) throw new Error('该配置项为工具专用，不可写入全局默认');
   await writeConfig(c, NS_APP, key, value, field.sensitive);
 }
 
@@ -162,6 +167,7 @@ export async function deleteAppConfig(c: any, key: string) {
 export async function setToolConfig(c: any, tool: string, key: string, value: string) {
   const field = APP_CONFIG_SCHEMA.find(f => f.key === key);
   if (!field) throw new Error('未知配置项: ' + key);
+  if (field.tools && !field.tools.includes(tool)) throw new Error('该配置项为 ' + field.tools.join('/') + ' 专用，不可写入 ' + tool);
   await writeConfig(c, toolNs(tool), key, value, field.sensitive);
 }
 

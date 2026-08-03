@@ -1922,9 +1922,9 @@ function mountConfigTool() {
             '<span class="del" onclick="event.stopPropagation();clearConfig(\\'tool\\',\\'' + t.id + '\\',\\'' + esc(o.key) + '\\')">✕</span></span>';
         }).join('') + '</div>';
       }
-      // 工具可覆盖的配置项（schema 中所有 key 减去已覆盖的）
+      // 工具可覆盖的配置项：工具专用项仅对限定工具可见，通用项所有工具可见
       const existing = new Set(overrides.map(o => o.key));
-      const available = schema.filter(f => !existing.has(f.key));
+      const available = schema.filter(f => !existing.has(f.key) && (!f.tools || f.tools.includes(t.id)));
       const addBtn = available.length
         ? '<button class="btn btn-outline btn-sm" style="margin-left:8px" onclick="addToolOverride(\\'' + t.id + '\\')">+ 添加覆盖</button>'
         : '';
@@ -1998,9 +1998,10 @@ function mountConfigTool() {
 
   window.addToolOverride = function(tool) {
     // 列出该工具未覆盖的所有配置项，让用户选择
+    // 工具专用配置（tools 非空）仅对限定工具可见；通用配置所有工具可见
     const overrides = toolOverrides[tool] || [];
     const existing = new Set(overrides.map(o => o.key));
-    const available = schema.filter(f => !existing.has(f.key));
+    const available = schema.filter(f => !existing.has(f.key) && (!f.tools || f.tools.includes(tool)));
     if (!available.length) { toast('该工具已覆盖所有配置项', 'info'); return; }
     pickBody.innerHTML = available.map(f => {
       const sensitiveTag = f.sensitive ? ' <span style="color:var(--text-muted);font-size:11px">（敏感）</span>' : '';
