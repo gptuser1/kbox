@@ -19,10 +19,10 @@ type Variables = {
 const app = new Hono<{ Bindings: Bindings; Variables: Variables }>();
 
 const KEEP_LIMIT = 60;
-// Top 关键词快照存于通用 KV 表：namespace='news_top_keywords', key=时间戳字符串
-// 仅保留最近 5 份快照（list 后按 key DESC 取前 5，多余删除）
+// Top 关键词快照存于通用 KV 表：namespace='news_top_keywords', key=固定 'latest'
+// 单用户自用，只保留最新 1 份：生成新快照前先删旧的
 const NS_KEYWORDS = 'news_top_keywords';
-const KEYWORDS_KEEP = 5;
+const KEYWORDS_KEY = 'latest';
 
 // ─── 自动建表 ───
 let tableReady = false;
@@ -154,7 +154,7 @@ async function runCron(c: any): Promise<{ success: boolean; articles_count: numb
 }
 
 // ─── 生成 Top 10 关键词快照（独立入口，基于当前库内新闻，LLM 提取） ───
-// 读 newsfeed 最近 KEEP_LIMIT 条 → LLM 识别事件主题 → 存入 kbox_kv（仅保留最近 KEYWORDS_KEEP 份）
+// 读 newsfeed 最近 KEEP_LIMIT 条 → LLM 识别事件主题 → 存入 kbox_kv（固定 key='latest'，覆盖更新）
 async function generateTopKeywords(c: any): Promise<{ success: boolean; generated_at: string | null; count: number; error?: string }> {
   if (!await ensureTable(c.env.D1_API_TOKEN, c.env.D1_API_BASE)) {
     return { success: false, generated_at: null, count: 0, error: tableInitError || '建表失败' };
@@ -178,16 +178,8 @@ async function generateTopKeywords(c: any): Promise<{ success: boolean; generate
     }
 
     const now = nowISO();
-    // key 用毫秒时间戳，list 按 key DESC 即可拿到最新
-    const key = String(Date.now());
-    await kv.set(NS_KEYWORDS, key, { generated_at: now, keywords: topKeywords });
-
-    // 只保留最近 KEYWORDS_KEEP 份快照：按 key 降序，超出部分删除
-    const all = await kv.list<{ generated_at: string; keywords: KeywordStat[] }>(NS_KEYWORDS);
-    all.sort((a, b) => (a.key > b.key ? -1 : 1));
-    for (const item of all.slice(KEYWORDS_KEEP)) {
-      await kv.delete(NS_KEYWORDS, item.key);
-    }
+    // 单用户自用：固定 key='latest'，直接覆盖（KV upsert），无需清理旧快照
+    await kv.set(NS_KEYWORDS, KEYWORDS_KEY, { generated_at: now, keywords: topKeywords });
 
     return { success: true, generated_at: now, count: topKeywords.length };
   } catch (e) {
@@ -236,13 +228,10 @@ app.get('/top', async (c) => {
   if (!await ensureTable(c.env.D1_API_TOKEN, c.env.D1_API_BASE)) return tableError(c);
   const kv = getKv(c);
   try {
-    const all = await kv.list<{ generated_at: string; keywords: KeywordStat[] }>(NS_KEYWORDS);
-    if (all.length === 0) {
+    const latest = await kv.get<{ generated_at: string; keywords: KeywordStat[] }>(NS_KEYWORDS, KEYWORDS_KEY);
+    if (!latest) {
       return c.json({ generated_at: null, keywords: [] });
     }
-    // 按 key 降序取最新一份
-    all.sort((a, b) => (a.key > b.key ? -1 : 1));
-    const latest = all[0].value;
     return c.json({ generated_at: latest.generated_at, keywords: latest.keywords });
   } catch (e) {
     if (getKvTableError()) return c.json({ error: getKvTableError() }, 503);

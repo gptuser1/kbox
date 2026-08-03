@@ -399,7 +399,8 @@ app.get('/api/tools/workflow-runs', async (c) => {
 });
 
 // ─── Dispatch 配置 CRUD（基于通用 KV 表） ───
-// namespace = 'dispatch_configs'，key = '{token}:{id}'，value = { repo, workflow_id, branch, inputs }
+// namespace = 'dispatch_configs'，key = id（单用户自用，无需 token 隔离）
+// value = { repo, workflow_id, branch, inputs }
 
 interface DispatchConfig {
   id?: string;  // 存储时不带 id（id 作为 KV key），读取时由 list 拼回
@@ -416,16 +417,14 @@ function kvError(c: any) {
   return c.json({ error: getKvTableError() || 'KV 表初始化失败，请检查 D1_API_TOKEN' }, 503);
 }
 
-// 列出当前用户所有 dispatch 配置
+// 列出所有 dispatch 配置
 app.get('/api/tools/dispatch-configs', async (c) => {
-  const token = c.get('token');
   const kv = createKv(c.env.D1_API_TOKEN, c.env.D1_API_BASE);
   try {
-    const items = await kv.list<DispatchConfig>(NS_DISPATCH, token + ':');
-    // key 格式 '{token}:{id}'，提取 id 拼到对象里
+    const items = await kv.list<DispatchConfig>(NS_DISPATCH);
     const configs = items.map(item => ({
       ...item.value,
-      id: item.key.split(':').slice(1).join(':'),
+      id: item.key,
     }));
     return c.json({ configs });
   } catch (e) {
@@ -436,7 +435,6 @@ app.get('/api/tools/dispatch-configs', async (c) => {
 
 // 新增配置（自动生成 id）
 app.post('/api/tools/dispatch-configs', async (c) => {
-  const token = c.get('token');
   const kv = createKv(c.env.D1_API_TOKEN, c.env.D1_API_BASE);
 
   let body: any;
@@ -459,7 +457,7 @@ app.post('/api/tools/dispatch-configs', async (c) => {
   };
 
   try {
-    await kv.set(NS_DISPATCH, token + ':' + id, config);
+    await kv.set(NS_DISPATCH, id, config);
     return c.json({ ok: true, id, ...config });
   } catch (e) {
     if (getKvTableError()) return kvError(c);
@@ -469,12 +467,11 @@ app.post('/api/tools/dispatch-configs', async (c) => {
 
 // 删除配置
 app.delete('/api/tools/dispatch-configs/:id', async (c) => {
-  const token = c.get('token');
   const kv = createKv(c.env.D1_API_TOKEN, c.env.D1_API_BASE);
   const id = c.req.param('id');
 
   try {
-    await kv.delete(NS_DISPATCH, token + ':' + id);
+    await kv.delete(NS_DISPATCH, id);
     return c.json({ ok: true });
   } catch (e) {
     if (getKvTableError()) return kvError(c);
