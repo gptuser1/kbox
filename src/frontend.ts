@@ -117,7 +117,7 @@ input, select, button, textarea { font-family: inherit; }
 /* ─── 常驻浮动返回按钮 ─── */
 /* 仅在工具子页可见，固定右下角，z-index 高于 toast(999) 和 modal(200) */
 .float-back {
-  position: fixed; right: 24px; bottom: 24px; z-index: 1500;
+  position: fixed; left: 24px; bottom: 24px; z-index: 1500;
   width: 48px; height: 48px; border-radius: 50%; border: none;
   background: var(--primary); color: #fff; cursor: pointer;
   display: none; align-items: center; justify-content: center;
