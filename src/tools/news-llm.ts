@@ -1,11 +1,8 @@
-// 配置通过 getConfig 动态读取（三级降级：tool:news → app → env 兼容）
 import { getConfigByEnv } from '../config'
 
-// env 最小集合：只需 D1 连接信息（其余配置从 D1 读）
 interface Env {
   D1_API_TOKEN: string
   D1_API_BASE?: string
-  // 兼容期字段（首次部署未填配置时降级用）
   OPENAI_API_KEY?: string
   OPENAI_BASE_URL?: string
   OPENAI_MODEL?: string
@@ -71,7 +68,6 @@ function buildPrompt(articles: { title: string; source: string }[], attempt: num
 function parseSummaries(raw: string, articleCount: number): Map<number, string> {
   const map = new Map<number, string>()
 
-  // Attempt 1: JSON parse
   try {
     let jsonStr = raw.trim()
     const fenceMatch = jsonStr.match(/```(?:json)?\n?([\s\S]*?)```/)
@@ -90,10 +86,9 @@ function parseSummaries(raw: string, articleCount: number): Map<number, string> 
       return map
     }
   } catch {
-    // JSON failed, try fallback parsing
+    // 尝试编号行解析
   }
 
-  // Attempt 2: numbered line parsing "1: xxx" or "1. xxx"
   for (const line of raw.split('\n')) {
     const match = line.trim().match(/^(\d+)[:.\、\s]\s*(.+)/)
     if (match) {
@@ -124,7 +119,6 @@ export async function summarizeArticles(
   let lastError: string | null = null
   let lastSummaries: string[] | null = null
 
-  // 动态读取配置（tool:news 覆盖 → app 全局 → env 兼容）
   const apiKey = await getConfigByEnv(env, 'news', 'openai_api_key')
   const baseUrl = await getConfigByEnv(env, 'news', 'openai_base_url')
   const model = await getConfigByEnv(env, 'news', 'openai_model')
@@ -190,11 +184,9 @@ export async function summarizeArticles(
 }
 
 // ═══ 语义去重（LLM 版）═══
-// 字符串去重只能去掉标题完全相同的，无法识别"同一事件不同标题"
-// 让 LLM 判断哪些文章讲的是同一事件，每组合并保留一条代表
 
 interface DedupeItem {
-  index: number; // 原数组中的下标，用于回填
+  index: number;
   title: string;
   source: string;
 }
@@ -256,10 +248,6 @@ function parseDedupeGroups(raw: string, itemCount: number): number[][] | null {
 
 /**
  * 用 LLM 对一批新闻做语义去重
- * 输入：文章数组（含 title/source）
- * 输出：去重后的文章数组（每组保留第一条）
- *
- * 注意：仅对单批内去重，不跨批（跨批由 news.ts 的字符串去重 + 库内已有判断兜底）
  */
 export async function dedupeArticlesByLLM<T extends { title: string; source: string }>(
   env: Env,
@@ -271,7 +259,6 @@ export async function dedupeArticlesByLLM<T extends { title: string; source: str
   const baseUrl = await getConfigByEnv(env, 'news', 'openai_base_url');
   const model = await getConfigByEnv(env, 'news', 'openai_model');
   if (!apiKey || !baseUrl || !model) {
-    // LLM 不可用时降级为不去重（让字符串去重兜底）
     console.log('LLM not configured for dedupe, skipping semantic dedupe');
     return articles;
   }
@@ -329,11 +316,6 @@ export async function dedupeArticlesByLLM<T extends { title: string; source: str
 }
 
 // ═══ 关键词提取（LLM 版 + Tavily 热度）═══
-// 数据源：
-//   1. 库内新闻（newsfeed 表，已抓取的详细内容，含 Tavily 入库的全领域热点）
-//   2. Tavily 全网热点搜索（带 score，提供实时热度维度）
-// LLM 综合两部分，输出今日热点榜 Top N，按热度分降序
-// 覆盖全领域（科技/财经/国际/社会/体育/娱乐等），不局限单一方向
 
 import { searchTrending, type TavilyResult } from './tavily-search';
 
@@ -401,7 +383,6 @@ interface LlmKeywordItem {
 }
 
 function parseKeywords(raw: string, articleCount: number): LlmKeywordItem[] {
-  // 去掉 ```json fence
   let jsonStr = raw.trim();
   const fenceMatch = jsonStr.match(/```(?:json)?\n?([\s\S]*?)```/);
   if (fenceMatch) jsonStr = fenceMatch[1].trim();
@@ -413,7 +394,6 @@ function parseKeywords(raw: string, articleCount: number): LlmKeywordItem[] {
       for (const item of parsed.keywords) {
         if (item && typeof item.keyword === 'string' && item.keyword.trim()
           && Array.isArray(item.indices)) {
-          // 过滤越界 index
           const validIndices = item.indices
             .map((n: any) => Number(n))
             .filter((n: number) => Number.isInteger(n) && n >= 1 && n <= articleCount);
@@ -435,8 +415,6 @@ function parseKeywords(raw: string, articleCount: number): LlmKeywordItem[] {
 
 /**
  * 用 LLM + Tavily 生成热搜风格 Top N 关键词
- * 数据源：库内新闻 + Tavily 全网热点
- * 返回 KeywordStat[]，articles 字段已回填关联的 NewsItem
  */
 export async function extractKeywordsViaLLM(
   env: Env,
@@ -453,8 +431,6 @@ export async function extractKeywordsViaLLM(
     return [];
   }
 
-  // 并行拉取 Tavily 全领域热点（失败不影响主流程，降级为仅库内新闻）
-  // 使用默认 TRENDING_QUERIES，覆盖科技/财经/国际/社会/体育/娱乐等全领域
   let tavilyResults: TavilyResult[] = [];
   try {
     tavilyResults = await searchTrending(env);
@@ -463,7 +439,6 @@ export async function extractKeywordsViaLLM(
     console.error('Tavily search failed, falling back to library-only:', e instanceof Error ? e.message : String(e));
   }
 
-  // 取北京时间日期，用于 prompt 里明确日期（不写"今日"）
   const beijingDate = new Date(Date.now() + 8 * 60 * 60 * 1000);
   const dateStr = `${beijingDate.getUTCFullYear()}年${beijingDate.getUTCMonth() + 1}月${beijingDate.getUTCDate()}日`;
 

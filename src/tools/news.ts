@@ -19,8 +19,6 @@ type Variables = {
 const app = new Hono<{ Bindings: Bindings; Variables: Variables }>();
 
 const KEEP_LIMIT = 60;
-// Top 关键词快照存于通用 KV 表：namespace='news_top_keywords', key=固定 'latest'
-// 单用户自用，只保留最新 1 份：生成新快照前先删旧的
 const NS_KEYWORDS = 'news_top_keywords';
 const KEYWORDS_KEY = 'latest';
 
@@ -43,7 +41,6 @@ async function ensureTable(token: string, base?: string): Promise<boolean> {
       summary TEXT NOT NULL DEFAULT '',
       category TEXT NOT NULL DEFAULT 'general'
     )`);
-    // Top 关键词快照已迁移到通用 KV 表（namespace='news_top_keywords'），此处不再单独建表
     tableReady = true;
     return true;
   } catch (e) {
@@ -66,12 +63,11 @@ function tableError(c: any) {
   return c.json({ error: tableInitError || '数据库初始化失败，请检查 D1_API_TOKEN' }, 503);
 }
 
-// 北京时间 ISO（原 now-u-know 用 ISO，这里保持一致）
 function nowISO(): string {
   return new Date(Date.now() + 8 * 60 * 60 * 1000).toISOString();
 }
 
-// ─── 抓取 + AI 锐评 + 入库（仅抓取，不含关键词统计） ───
+// ─── 抓取 + AI 锐评 + 入库 ───
 async function runCron(c: any): Promise<{ success: boolean; articles_count: number; error?: string }> {
   if (!await ensureTable(c.env.D1_API_TOKEN, c.env.D1_API_BASE)) {
     return { success: false, articles_count: 0, error: tableInitError || '建表失败' };
@@ -86,7 +82,7 @@ async function runCron(c: any): Promise<{ success: boolean; articles_count: numb
       return { success: true, articles_count: 0, error: 'No articles crawled' };
     }
 
-    // 去重：跳过已存在记录（source + title 相同）
+    // ─── 去重 ───
     const existingRows = await db.queryAll<{ source: string; title: string }>(
       `SELECT DISTINCT source, title FROM newsfeed`
     );
@@ -107,8 +103,6 @@ async function runCron(c: any): Promise<{ success: boolean; articles_count: numb
       return { success: true, articles_count: 0, error: 'All articles already exist' };
     }
 
-    // LLM 语义去重：识别"同一事件不同标题"并合并
-    // 字符串去重只能去掉完全相同的，语义去重能进一步压缩同事件重复报道
     const deduped = await dedupeArticlesByLLM(c.env, unique);
 
     if (deduped.length === 0) {
@@ -120,7 +114,7 @@ async function runCron(c: any): Promise<{ success: boolean; articles_count: numb
       deduped.map((a) => ({ title: a.title, source: a.source })),
     );
 
-    // 分块插入（15 条一批，避免单 SQL 过长）
+    // 分块插入
     const CHUNK_SIZE = 15;
     for (let i = 0; i < deduped.length; i += CHUNK_SIZE) {
       const chunkEnd = Math.min(i + CHUNK_SIZE, deduped.length);
@@ -153,8 +147,7 @@ async function runCron(c: any): Promise<{ success: boolean; articles_count: numb
   }
 }
 
-// ─── 生成 Top 10 关键词快照（独立入口，基于当前库内新闻，LLM 提取） ───
-// 读 newsfeed 最近 KEEP_LIMIT 条 → LLM 识别事件主题 → 存入 kbox_kv（固定 key='latest'，覆盖更新）
+// ─── 生成 Top 10 关键词快照 ───
 async function generateTopKeywords(c: any): Promise<{ success: boolean; generated_at: string | null; count: number; error?: string }> {
   if (!await ensureTable(c.env.D1_API_TOKEN, c.env.D1_API_BASE)) {
     return { success: false, generated_at: null, count: 0, error: tableInitError || '建表失败' };
@@ -171,14 +164,12 @@ async function generateTopKeywords(c: any): Promise<{ success: boolean; generate
       return { success: false, generated_at: null, count: 0, error: '暂无新闻数据，请先抓取' };
     }
 
-    // LLM 提取事件主题关键词（失败返回空数组，前端会提示重试）
     const topKeywords = await extractKeywordsViaLLM(c.env, allRows, 10);
     if (topKeywords.length === 0) {
       return { success: false, generated_at: null, count: 0, error: 'LLM 提取失败，请检查 OPENAI 配置后重试' };
     }
 
     const now = nowISO();
-    // 单用户自用：固定 key='latest'，直接覆盖（KV upsert），无需清理旧快照
     await kv.set(NS_KEYWORDS, KEYWORDS_KEY, { generated_at: now, keywords: topKeywords });
 
     return { success: true, generated_at: now, count: topKeywords.length };
@@ -211,19 +202,19 @@ app.get('/list', async (c) => {
   }
 });
 
-// 手动触发抓取（仅抓取+入库，不生成关键词）
+// 手动触发抓取
 app.post('/trigger', async (c) => {
   const result = await runCron(c);
   return c.json(result, result.success ? 200 : 500);
 });
 
-// 手动触发 Top 10 关键词生成（基于当前库内新闻，独立于抓取）
+// 手动触发 Top 10 关键词生成
 app.post('/top/refresh', async (c) => {
   const result = await generateTopKeywords(c);
   return c.json(result, result.success ? 200 : 500);
 });
 
-// 获取 Top 10 关键词（最近一次生成的快照，存于通用 KV 表）
+// 获取 Top 10 关键词
 app.get('/top', async (c) => {
   if (!await ensureTable(c.env.D1_API_TOKEN, c.env.D1_API_BASE)) return tableError(c);
   const kv = getKv(c);

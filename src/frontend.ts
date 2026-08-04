@@ -1064,12 +1064,10 @@ function mountDiskTool() {
     }
   }
 
-  // 一次性下载令牌：先 POST 换 dt，再用 dt 跳转下载（链接不含主 token）
   window.downloadFile = async function(id, name) {
     try {
       const data = await api('/api/tools/disk/files/' + id + '/download-token', { method: 'POST' });
       if (!data.dt) throw new Error('未获取到下载令牌');
-      // 用 dt 跳转，浏览器自动触发下载
       const a = document.createElement('a');
       a.href = '/api/tools/disk/files/' + id + '/download?dt=' + encodeURIComponent(data.dt);
       a.download = name;
@@ -1870,13 +1868,11 @@ function mountConfigTool() {
   let editing = null;       // { scope: 'app'|'tool', tool?, key, field }
 
   function valueDisplay(cfg) {
-    // 敏感字段：用 ****** 脱敏显示
     if (cfg.sensitive) {
       return cfg.hasValue
         ? '<span class="num" style="color:var(--success)">******</span>'
         : '<span style="color:var(--text-muted)">○ 未设置</span>';
     }
-    // 非敏感：显示值或默认
     if (cfg.hasValue && cfg.value) {
       return '<span class="num">' + esc(cfg.value) + '</span>';
     }

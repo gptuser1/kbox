@@ -2,15 +2,6 @@ import { Hono } from 'hono';
 import { DbError } from '../db';
 import { createKv } from '../kv';
 
-// DB 管理工具：通过 d1-rest API 执行 SQL，支持多连接管理（adminer 风格）
-// 连接配置存于 kbox_kv（namespace='db_admin_connections'），凭据统一使用 env.D1_API_TOKEN
-//
-// 连接模式两种（与 d1-rest 路由对齐）：
-//   1. 专属域：database 留空 → 查询端点 = ${base_url}/query
-//      例如 base_url = https://ocean.klinux.dpdns.org
-//   2. 主入口：database 填库名 → 查询端点 = ${base_url}/${database}/query
-//      例如 base_url = https://db.klinux.dpdns.org, database = ocean
-
 type Bindings = {
   D1_API_TOKEN: string;
   D1_API_BASE?: string;
@@ -28,7 +19,7 @@ interface DbConnection {
   id: string;
   name: string;
   base_url: string;
-  database: string;        // '' = 专属域模式；非空 = 主入口模式（路径前缀）
+  database: string;
   created_at: string;
   updated_at: string;
 }
@@ -66,7 +57,7 @@ function sanitizeIdent(name: string): string {
   return name.replace(/[^a-zA-Z0-9_]/g, '');
 }
 
-// 拼接 d1-rest 的 /query 端点 URL
+// 拼接 /query 端点 URL
 function buildQueryUrl(conn: Pick<DbConnection, 'base_url' | 'database'>): string {
   const base = conn.base_url.replace(/\/+$/, '');
   return conn.database
@@ -74,7 +65,7 @@ function buildQueryUrl(conn: Pick<DbConnection, 'base_url' | 'database'>): strin
     : `${base}/query`;
 }
 
-// 调用 d1-rest 执行 SQL（凭据统一用 env.D1_API_TOKEN）
+// 调用 d1-rest 执行 SQL
 async function callD1Rest(
   env: Bindings,
   conn: Pick<DbConnection, 'base_url' | 'database'>,
@@ -270,7 +261,7 @@ app.get('/connections/:id/tables/:table/schema', async (c) => {
 
     if (!colsRes.ok) return c.json({ error: colsRes.data?.error || `HTTP ${colsRes.status}` }, 500);
 
-    // 索引详情：每个索引再查 index_info 拿列名
+    // 索引详情
     const indexes: any[] = [];
     if (idxRes.ok && idxRes.data?.results) {
       for (const idx of idxRes.data.results) {
@@ -350,14 +341,12 @@ app.get('/connections/:id/tables/:table/row', async (c) => {
     const table = sanitizeIdent(c.req.param('table'));
     if (!table) return c.json({ error: '无效表名' }, 400);
 
-    // 主键列名（默认用 rowid 兜底，无显式主键时也能定位）
     const colsRes = await callD1Rest(c.env, conn, `PRAGMA table_info(\`${table}\`)`);
     if (!colsRes.ok) return c.json({ error: colsRes.data?.error || '获取列信息失败' }, 500);
     const cols = colsRes.data?.results || [];
     const pkCols = cols.filter((c: any) => c.pk).map((c: any) => c.name);
 
     const where = c.req.query();
-    // 用查询参数构造 WHERE：col=val
     const conditions: string[] = [];
     const params: any[] = [];
     for (const [k, v] of Object.entries(where)) {

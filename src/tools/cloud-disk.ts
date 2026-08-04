@@ -12,14 +12,13 @@ type Variables = {
   token: string;
 };
 
-const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
-const CHUNK_SIZE = 1.4 * 1024 * 1024; // 1.4MB → Base64 ≈ 1.87MB < 2MB 单行限制
-const DOWNLOAD_TOKEN_TTL_SEC = 300; // 下载令牌有效期 5 分钟
+const MAX_FILE_SIZE = 10 * 1024 * 1024;
+const CHUNK_SIZE = 1.4 * 1024 * 1024;
+const DOWNLOAD_TOKEN_TTL_SEC = 300;
 
 const app = new Hono<{ Bindings: Bindings; Variables: Variables }>();
 
 // ─── 工具专用 D1 配置读取 ───
-// disk_d1_base / disk_d1_token 未设置时降级到全局主令牌 D1_API_TOKEN/D1_API_BASE
 async function diskD1Creds(c: any): Promise<{ token: string; base?: string }> {
   const base = await getConfig(c, 'disk', 'disk_d1_base');
   const token = await getConfig(c, 'disk', 'disk_d1_token');
@@ -55,7 +54,6 @@ async function ensureTable(token: string, base?: string): Promise<boolean> {
       chunk_size INTEGER NOT NULL DEFAULT 0
     )`);
     await db.query(`CREATE INDEX IF NOT EXISTS idx_disk_chunks_file_id ON kbox_disk_chunks(file_id)`);
-    // 下载令牌已迁移到通用 KV 表（namespace='disk_tokens'），此处不再单独建表
     tableReady = true;
     return true;
   } catch (e) {
@@ -67,7 +65,6 @@ async function ensureTable(token: string, base?: string): Promise<boolean> {
 }
 
 function localtimeNow(): string {
-  // Cloudflare Workers 运行在 UTC，+8 得到北京时间
   const now = new Date(Date.now() + 8 * 60 * 60 * 1000);
   const pad = (n: number) => String(n).padStart(2, '0');
   return `${now.getUTCFullYear()}-${pad(now.getUTCMonth() + 1)}-${pad(now.getUTCDate())} ${pad(now.getUTCHours())}:${pad(now.getUTCMinutes())}:${pad(now.getUTCSeconds())}`;
@@ -83,18 +80,14 @@ function tableError(c: any) {
 }
 
 // ─── 全库占用统计 ───
-// 优先用 dbstat 虚拟表（含索引、schema 页面，最准确）
-// 降级：逐表累加所有列内容长度
 async function getDbUsage(db: ReturnType<typeof createDb>): Promise<number> {
-  // 方案1：dbstat 虚拟表（D1 REST API 不支持 PRAGMA，但 dbstat 是普通表查询）
   try {
     const r = await db.queryOne<{ total: number }>(
       `SELECT COALESCE(SUM(pgsize), 0) as total FROM dbstat WHERE name NOT LIKE 'sqlite_%' AND name NOT LIKE '_cf_%'`
     );
     if (r && typeof r.total === 'number' && r.total > 0) return r.total;
-  } catch { /* 降级到逐表方案 */ }
+  } catch { /* 降级 */ }
 
-  // 方案2：逐表累加所有列 LENGTH 之和（含 state / replies / kbox_disk_* 等全部表）
   try {
     const tables = await db.queryAll<{ name: string }>(
       `SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' AND name NOT LIKE '_cf_%'`
@@ -128,11 +121,10 @@ app.get('/stats', async (c) => {
   if (!await ensureTable(creds.token, creds.base)) return tableError(c);
   const db = getDb(c, creds);
   try {
-    // 文件数量和总大小（仅 kbox_disk_files 表，对应前端"文件大小"卡片）
+    // 文件数量和总大小
     const stats = await db.queryOne<{ count: number; total_size: number }>(
       `SELECT COUNT(*) as count, COALESCE(SUM(size), 0) as total_size FROM kbox_disk_files`
     );
-    // 整个 D1 库的实际占用（含 state/replies 等所有表 + 索引）
     const dbSize = await getDbUsage(db);
     return c.json({
       file_count: stats?.count || 0,
@@ -236,9 +228,6 @@ app.post('/files/:id/chunks', async (c) => {
 });
 
 // ─── 生成一次性下载令牌 ───
-// 主鉴权后调用，返回的 dt 仅能用于下载指定文件，5 分钟内一次性有效
-// 令牌存于通用 KV 表：namespace='disk_tokens', key=dt, value={file_id, expires_at}
-// 用后即删，不残留；生成新令牌时顺手清理过期令牌
 app.post('/files/:id/download-token', async (c) => {
   const creds = await diskD1Creds(c);
   if (!await ensureTable(creds.token, creds.base)) return tableError(c);
@@ -247,18 +236,15 @@ app.post('/files/:id/download-token', async (c) => {
   const fileId = Number(c.req.param('id'));
 
   try {
-    // 文件必须存在
     const file = await db.queryOne<{ id: number }>(
       `SELECT id FROM kbox_disk_files WHERE id = ?`,
       [fileId]
     );
     if (!file) return c.json({ error: '文件不存在' }, 404);
 
-    // 生成随机令牌（Workers 支持 crypto.randomUUID）
     const dt = crypto.randomUUID();
     const expiresAt = Math.floor(Date.now() / 1000) + DOWNLOAD_TOKEN_TTL_SEC;
 
-    // 顺手清理过期/已用的令牌（避免 kbox_kv 残留）
     try {
       const all = await kv.list<{ expires_at: number }>('disk_tokens');
       const now = Math.floor(Date.now() / 1000);
@@ -271,7 +257,6 @@ app.post('/files/:id/download-token', async (c) => {
       // 清理失败不影响主流程
     }
 
-    // 存入 KV 表
     await kv.set('disk_tokens', dt, { file_id: fileId, expires_at: expiresAt });
 
     return c.json({
@@ -286,7 +271,7 @@ app.post('/files/:id/download-token', async (c) => {
   }
 });
 
-// ─── 下载文件（用一次性 dt 令牌鉴权，不走主鉴权） ───
+// ─── 下载文件 ───
 app.get('/files/:id/download', async (c) => {
   const creds = await diskD1Creds(c);
   if (!await ensureTable(creds.token, creds.base)) return tableError(c);
@@ -300,18 +285,16 @@ app.get('/files/:id/download', async (c) => {
   }
 
   try {
-    // 从 KV 表读取令牌（用后即删，所以读到即有效）
     const tk = await kv.get<{ file_id: number; expires_at: number }>('disk_tokens', dt);
     if (!tk) return c.json({ error: '下载令牌无效或已使用' }, 401);
     if (tk.expires_at < Math.floor(Date.now() / 1000)) {
-      await kv.delete('disk_tokens', dt); // 过期的也清掉
+      await kv.delete('disk_tokens', dt);
       return c.json({ error: '下载令牌已过期' }, 401);
     }
     if (tk.file_id !== fileId) {
       return c.json({ error: '下载令牌与文件不匹配' }, 403);
     }
 
-    // 一次性令牌：用后立即删除，不残留
     await kv.delete('disk_tokens', dt);
 
     const file = await db.queryOne<{ name: string; mime_type: string; size: number; chunks: number }>(

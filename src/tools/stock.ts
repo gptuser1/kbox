@@ -7,7 +7,6 @@ import { getConfig } from '../config';
 type Bindings = {
   D1_API_TOKEN: string;
   D1_API_BASE?: string;
-  // env 兼容期字段（首次部署未填配置时降级用）
   TENCENT_API_BASE?: string;
   YAHOO_API_BASE?: string;
 };
@@ -18,15 +17,14 @@ type Variables = {
 
 const app = new Hono<{ Bindings: Bindings; Variables: Variables }>();
 
-// 基金数据存于通用 KV 表，namespace = 'stock_funds'，key = 基金 id（字符串）
 const NS_STOCK = 'stock_funds';
 
 interface FundRecord {
   id: string;
   fund_name: string;
   fund_code: string;
-  holdings: string;          // JSON 字符串，兼容旧格式
-  holdings_detail: any[];    // 估值详情
+  holdings: string;
+  holdings_detail: any[];
   estimated_change: number;
   estimated_time: string;
   created_at: string;
@@ -40,7 +38,7 @@ function localtimeNow(): string {
   return `${now.getUTCFullYear()}-${pad(now.getUTCMonth() + 1)}-${pad(now.getUTCDate())} ${pad(now.getUTCHours())}:${pad(now.getUTCMinutes())}:${pad(now.getUTCSeconds())}`;
 }
 
-// 生成短 id（与 dispatch_configs 一致的风格）
+// 生成短 id
 function genId(): string {
   return Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
 }
@@ -286,17 +284,14 @@ app.post('/refresh', async (c) => {
   const kv = getKv(c);
 
   try {
-    // 行情 API 地址走配置（tool:stock 覆盖 → app 全局 → env 兼容 → 代码默认）
     const tencentBase = await getConfig(c, 'stock', 'tencent_api_base');
     const yahooBase = await getConfig(c, 'stock', 'yahoo_api_base');
 
-    // 读出全部基金
     const items = await kv.list<FundRecord>(NS_STOCK);
     const allFunds = items
       .map(item => item.value)
       .sort((a, b) => (a.created_at > b.created_at ? -1 : 1));
 
-    // refreshValuations 需要读和写回调
     const { funds: updated, stats } = await refreshValuations(
       async () => allFunds,
       async (id: string, data: any) => {

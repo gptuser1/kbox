@@ -8,10 +8,9 @@ import { createKv } from './kv';
 import { getConfig, getAppConfig, getToolConfig, setAppConfig, deleteAppConfig, getConfigSchema, listToolOverrides, setToolConfig, deleteToolConfig, ConfigField } from './config';
 
 type Bindings = {
-  ACCESS_TOKEN: string;       // = KBOX_TOKEN（鉴权）
-  D1_API_TOKEN: string;       // = KBOX_TOKEN（D1 访问 + 配置加密主密钥）
+  ACCESS_TOKEN: string;
+  D1_API_TOKEN: string;
   D1_API_BASE?: string;
-  // 以下为 env 兼容期字段（首次部署未填配置时降级用）
   GH_TOKEN?: string;
   OPENAI_API_KEY?: string;
   OPENAI_BASE_URL?: string;
@@ -49,13 +48,11 @@ const FAVICON_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"
 
 // ─── 鉴权中间件 ───
 app.use('/api/*', async (c, next) => {
-  // 下载端点用一次性 dt 令牌鉴权，跳过主鉴权（dt 由 POST /files/:id/download-token 生成）
   const path = new URL(c.req.url).pathname;
   if (/^\/api\/tools\/disk\/files\/\d+\/download$/.test(path)) {
     await next();
     return;
   }
-  // 优先 Authorization header，其次支持 ?token= query param（保留兼容）
   const auth = c.req.header('Authorization');
   let token = '';
   if (auth && auth.startsWith('Bearer ')) {
@@ -109,8 +106,6 @@ app.get('/api/health', (c) => {
 });
 
 // ─── 配置管理 ───
-// 所有业务配置集中存 D1 kbox_kv 表，敏感字段 AES-GCM 加密
-// 三级降级：tool:<name> → app → env 兼容期 → 代码默认值
 
 // 工具清单（用于前端渲染工具级覆盖 UI）
 const TOOL_LIST = [
@@ -121,13 +116,13 @@ const TOOL_LIST = [
   { id: 'db-admin',  name: 'DB 管理' },
 ];
 
-// 敏感值脱敏：用多个 * 号代替明文（不返回真实值）
+// 敏感值脱敏：用多个 * 号代替明文
 function maskField(field: ConfigField, value: string | null) {
   if (value == null || value === '') {
     return { hasValue: false, value: null };
   }
   if (field.sensitive) {
-    return { hasValue: true, value: '******' }; // 用 * 号脱敏，不返回明文
+    return { hasValue: true, value: '******' };
   }
   return { hasValue: true, value };
 }
@@ -138,12 +133,11 @@ app.get('/api/config/schema', (c) => {
 });
 
 // GET /api/config — 列出所有全局配置（敏感脱敏）
-// 工具专用配置（field.tools 非空）不在此返回，仅在对应工具的覆盖区可见
 app.get('/api/config', async (c) => {
   const schema = getConfigSchema();
   const configs = [];
   for (const field of schema) {
-    if (field.tools) continue; // 工具专用项不在全局默认区展示
+    if (field.tools) continue;
     const raw = await getAppConfig(c, field.key);
     const masked = maskField(field, raw);
     configs.push({
@@ -188,7 +182,6 @@ app.put('/api/config/:key', async (c) => {
   const value = typeof body.value === 'string' ? body.value : '';
   try {
     if (value === '') {
-      // 空值 → 删除配置（回退到 env/默认）
       await deleteAppConfig(c, key);
     } else {
       await setAppConfig(c, key, value);
@@ -211,7 +204,7 @@ app.get('/api/config/tools/:tool', async (c) => {
   for (const key of overrideKeys) {
     const field = schema.find(f => f.key === key);
     if (!field) continue;
-    // 直接读工具级值（不经降级）
+    // 直接读工具级值
     const raw = await getToolConfig(c, tool, key);
     const masked = maskField(field, raw);
     overrides.push({
@@ -358,7 +351,6 @@ app.post('/api/tools/dispatch', async (c) => {
 });
 
 // ─── 查询 workflow 最近执行状态 ───
-// 返回该 workflow 最近 N 次 runs（默认 1），用于"上次执行"和"实时执行"展示
 app.get('/api/tools/workflow-runs', async (c) => {
   const owner = c.req.query('owner')?.trim();
   const repo = c.req.query('repo')?.trim();
@@ -406,11 +398,9 @@ app.get('/api/tools/workflow-runs', async (c) => {
 });
 
 // ─── Dispatch 配置 CRUD（基于通用 KV 表） ───
-// namespace = 'dispatch_configs'，key = id（单用户自用，无需 token 隔离）
-// value = { repo, workflow_id, branch, inputs }
 
 interface DispatchConfig {
-  id?: string;  // 存储时不带 id（id 作为 KV key），读取时由 list 拼回
+  id?: string;
   repo: string;
   workflow_id: string;
   branch: string;
@@ -517,7 +507,7 @@ function parseWorkflowInputs(yamlContent: string): WorkflowInput[] {
     const line = lines[i];
     if (!line.trim()) { i++; continue; }
     const indent = (line.match(/^(\s*)/) || ['', ''])[1].length;
-    if (indent <= wdIndent) return []; // 离开 workflow_dispatch 块
+    if (indent <= wdIndent) return [];
     if (/^\s*inputs\s*:/.test(line)) { inputsLine = i; break; }
     i++;
   }
@@ -536,7 +526,6 @@ function parseWorkflowInputs(yamlContent: string): WorkflowInput[] {
     const indent = (line.match(/^(\s*)/) || ['', ''])[1].length;
     if (indent < inputsIndent) break;
 
-    // 新 input key（缩进等于 inputsIndent）
     if (indent === inputsIndent) {
       const keyMatch = line.match(/^\s+(\S[\w-]*)\s*:/);
       if (keyMatch) {
@@ -548,7 +537,6 @@ function parseWorkflowInputs(yamlContent: string): WorkflowInput[] {
       }
     }
 
-    // 解析属性
     if (current) {
       const propMatch = line.match(/^\s*(description|required|default|type|options)\s*:\s*(.*)$/);
       if (propMatch) {
@@ -641,7 +629,6 @@ app.get('/api/tools/workflow-inputs', async (c) => {
       return c.json({ error: data?.message || `GitHub API ${res.status}` }, res.status as any);
     }
 
-    // data.content 是 base64 编码的文件内容
     const content = data.content ? atob(data.content.replace(/\n/g, '')) : '';
     const inputs = parseWorkflowInputs(content);
     return c.json({ inputs });
@@ -653,21 +640,17 @@ app.get('/api/tools/workflow-inputs', async (c) => {
 export default {
   ...app,
   async scheduled(controller: ScheduledController, env: Bindings, ctx: ExecutionContext) {
-    // cron 触发：抓取新闻并 AI 锐评
     ctx.waitUntil(handleNewsCron(env));
   },
 };
 
-// news cron 任务：复用 news 工具的抓取逻辑
 async function handleNewsCron(env: Bindings) {
-  // 直接内联核心流程，避免 Hono 路由依赖
   try {
     const { createDb } = await import('./db');
     const { crawlAll } = await import('./tools/news-crawler');
     const { summarizeArticles } = await import('./tools/news-llm');
 
     const db = createDb(env.D1_API_TOKEN, env.D1_API_BASE);
-    // 建表
     await db.query(`CREATE TABLE IF NOT EXISTS newsfeed (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       crawled_at TEXT NOT NULL,
@@ -706,7 +689,6 @@ async function handleNewsCron(env: Bindings) {
       return;
     }
 
-    // LLM 语义去重：识别"同一事件不同标题"并合并
     const { dedupeArticlesByLLM } = await import('./tools/news-llm');
     const deduped = await dedupeArticlesByLLM(env, unique);
 

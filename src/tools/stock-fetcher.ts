@@ -43,7 +43,6 @@ interface YahooChartResponse {
 function normalizeCode(code: string, market: string): string {
   const trimmed = code.trim();
   if (market === 'HK') {
-    // 港股代码统一补齐5位，如 "700" → "00700"
     return trimmed.padStart(5, '0');
   }
   return trimmed;
@@ -52,7 +51,6 @@ function normalizeCode(code: string, market: string): string {
 // 获取腾讯行情symbol
 function toTencentSymbol(code: string, market: string): string | null {
   if (market === 'A') {
-    // 6开头→sh（沪市），0/3开头→sz（深市）
     return code.startsWith('6') ? `sh${code}` : `sz${code}`;
   }
   if (market === 'HK') {
@@ -66,14 +64,14 @@ function toYahooSymbol(code: string, market: string): string | null {
   if (market === 'US') return code;
   if (market === 'KR') return `${code}.KS`;
   if (market === 'TW') return `${code}.TW`;
-  if (market === 'JP') return `${code}.T`; // 东京证券交易所
+  if (market === 'JP') return `${code}.T`;
   return null;
 }
 
 // ─── 交易所交易时间状态判断 ───
 interface MarketSession {
   tz: string;
-  sessions: [number, number][]; // 每段交易时段 [startHM, endHM]，如 930 表示 09:30
+  sessions: [number, number][];
 }
 
 function getMarketInfo(market: string): MarketSession | null {
@@ -122,7 +120,6 @@ export function getMarketStatus(market: string, now: Date = new Date()): MarketS
   for (let i = 0; i < info.sessions.length; i++) {
     const [start, end] = info.sessions[i];
     if (hm >= start && hm <= end) { inSession = true; break; }
-    // 在两段交易时段之间的午休
     if (i > 0 && hm > info.sessions[i - 1][1] && hm < start) { betweenSessions = true; }
   }
 
@@ -152,14 +149,12 @@ async function fetchWithTimeout(url: string, timeoutMs: number = 8000, headers?:
 
 // 解析腾讯行情单行数据
 function parseTencentLine(line: string): PriceData | null {
-  // 格式: v_sh600519="...";  或  v_hk00700="...";
   const match = line.match(/^v_\w+="(.*)";$/);
   if (!match) return null;
 
   const fields = match[1].split('~');
   if (fields.length < 33) return null;
 
-  // fields[3] = 当前价, fields[32] = 涨跌幅%
   const price = parseFloat(fields[3]);
   const changePct = parseFloat(fields[32]);
 
@@ -186,18 +181,16 @@ async function fetchTencent(symbols: string[], apiBase: string): Promise<Map<str
     }
 
     const text = await res.text();
-    // 每行一条数据，格式: v_sh600519="...";\n
     const lines = text.split('\n');
 
     for (const line of lines) {
       const trimmed = line.trim();
       if (!trimmed) continue;
 
-      // 提取symbol key: v_sh600519
       const keyMatch = trimmed.match(/^v_(\w+)=".*";$/);
       if (!keyMatch) continue;
 
-      const symbol = keyMatch[1]; // e.g., "sh600519" or "hk00700"
+      const symbol = keyMatch[1];
       const priceData = parseTencentLine(trimmed);
       if (priceData) {
         map.set(symbol, priceData);
@@ -214,7 +207,6 @@ async function fetchYahooBatch(symbols: string[], apiBase: string): Promise<Map<
   const map = new Map<string, PriceData>();
   if (symbols.length === 0) return map;
 
-  // 尝试v7批量接口
   try {
     const url = `${apiBase}/v7/finance/quote?symbols=${symbols.join(',')}`;
     const res = await fetchWithTimeout(url, 8000, { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' });
@@ -229,10 +221,8 @@ async function fetchYahooBatch(symbols: string[], apiBase: string): Promise<Map<
             });
           }
         }
-        // 检查是否所有symbol都有数据
         const missing = symbols.filter(s => !map.has(s));
         if (missing.length === 0) return map;
-        // 有缺失的继续用v8补
         symbols = missing;
       }
     }
@@ -240,7 +230,6 @@ async function fetchYahooBatch(symbols: string[], apiBase: string): Promise<Map<
     console.error('Yahoo batch API error, falling back to individual:', e instanceof Error ? e.message : e);
   }
 
-  // 逐个拉取v8 chart接口（并行）
   await Promise.allSettled(
     symbols.map(async (symbol) => {
       try {
@@ -251,7 +240,6 @@ async function fetchYahooBatch(symbols: string[], apiBase: string): Promise<Map<
         const meta = data?.chart?.result?.[0]?.meta;
         if (meta?.regularMarketPrice != null) {
           let changePct = meta.regularMarketChangePercent ?? null;
-          // Yahoo 不再返回 changePercent 时用前收价计算
           if (changePct == null) {
             const prev = meta.chartPreviousClose ?? meta.previousClose ?? null;
             if (prev && prev !== 0) {
@@ -279,7 +267,7 @@ export interface HoldingDetail {
   weight: number;
   price: number | null;
   changePct: number | null;
-  contribution: number | null; // 该持仓对基金涨跌幅的贡献（百分比）
+  contribution: number | null;
   status: string;
   statusLabel: string;
 }
@@ -318,7 +306,6 @@ export async function refreshValuations(
     };
   }
 
-  // 收集所有持仓，按数据源分组
   const tencentLookup: { symbol: string; code: string; fundId: string; holding: Holding }[] = [];
   const yahooLookup: { symbol: string; fundId: string; holding: Holding }[] = [];
   const markets = new Set<string>();
@@ -338,14 +325,12 @@ export async function refreshValuations(
 
       const normalizedCode = normalizeCode(h.code, h.market);
 
-      // 腾讯行情（A股+港股）
       const tSymbol = toTencentSymbol(normalizedCode, h.market);
       if (tSymbol) {
         tencentLookup.push({ symbol: tSymbol, code: normalizedCode, fundId: fund.id, holding: h });
         continue;
       }
 
-      // Yahoo Finance（美/韩/台/日）
       const ySymbol = toYahooSymbol(normalizedCode, h.market);
       if (ySymbol) {
         yahooLookup.push({ symbol: ySymbol, fundId: fund.id, holding: h });
@@ -353,7 +338,6 @@ export async function refreshValuations(
     }
   }
 
-  // 去重后拉取
   const uniqueTencent = [...new Set(tencentLookup.map(x => x.symbol))];
   const uniqueYahoo = [...new Set(yahooLookup.map(x => x.symbol))];
 
@@ -365,7 +349,6 @@ export async function refreshValuations(
     fetchYahooBatch(uniqueYahoo, yahooBase),
   ]);
 
-  // 为每个持仓匹配价格
   function getPrice(holding: Holding): PriceData {
     const code = normalizeCode(holding.code, holding.market);
 
@@ -380,7 +363,6 @@ export async function refreshValuations(
     return yahooPrices.get(symbol) ?? { price: null, changePct: null };
   }
 
-  // 计算每个基金的加权涨跌幅
   const nowDate = new Date();
   const now = nowDate.toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai' });
   const updated: FundUpdate[] = [];
@@ -434,7 +416,6 @@ export async function refreshValuations(
       ? Math.round((weightedChange / totalWeight) * 10000) / 10000
       : 0;
 
-    // 同时规范化 contribution 单位为百分比（保留4位小数）
     for (const d of details) {
       if (d.contribution !== null && totalWeight > 0) {
         d.contribution = Math.round((d.contribution / totalWeight) * 10000) / 10000;

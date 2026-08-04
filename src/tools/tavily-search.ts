@@ -1,11 +1,3 @@
-// Tavily Search API client
-// 文档: https://docs.tavily.com/documentation/api-reference/endpoint/search
-// 用途:
-//   1. 作为新闻源：搜全领域今日热点，结果与 RSS 平级入库
-//   2. 为 Top10 提供热度信号：搜索结果带 score，体现全网传播热度
-//
-// 参考: blog 项目的 .blog-ops/scripts/search_client.py
-
 import { getConfigByEnv } from '../config';
 
 interface Env {
@@ -18,7 +10,7 @@ export interface TavilyResult {
   title: string;
   url: string;
   content: string;
-  score: number; // 0-1，相关性/热度
+  score: number;
 }
 
 export interface TavilySearchResponse {
@@ -86,9 +78,6 @@ export async function search(
   }
 }
 
-// 全领域热点查询词：一次综合搜索，带日期，max_results=20 拿全领域热点
-// 比分领域多次搜索更省配额（120 次/月 vs 720 次/月），且 score 基准统一
-// 日期由调用方传入（北京时间），避免"今日"跨时区歧义
 export function buildTrendingQuery(): string {
   const now = new Date(Date.now() + 8 * 60 * 60 * 1000); // 北京时间
   const month = now.getUTCMonth() + 1;
@@ -97,13 +86,11 @@ export function buildTrendingQuery(): string {
 }
 
 /**
- * 搜索全领域今日热点（一次综合搜索，带日期）
- * 用途：作为新闻源入库，与 RSS 平级；也为 Top10 提供热度信号
- * 返回带 score 的结果，按 score 降序
+ * 搜索全领域今日热点
  */
 export async function searchTrending(
   env: Env,
-  _queries?: string[], // 保留参数兼容旧调用，实际不使用
+  _queries?: string[],
   maxResults = 20,
 ): Promise<TavilyResult[]> {
   const apiKey = await getConfigByEnv(env, 'news', 'tavily_api_key');
@@ -117,11 +104,10 @@ export async function searchTrending(
     searchDepth: 'basic',
     topic: 'news',
     maxResults,
-    timeRange: 'day', // 入库用 day，保证是最新热点
+    timeRange: 'day',
     includeAnswer: false,
   });
 
-  // 按 url 去重（单次搜索一般无重复，防御性处理）
   const seen = new Set<string>();
   const merged: TavilyResult[] = [];
   for (const r of results) {
