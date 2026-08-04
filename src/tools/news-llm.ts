@@ -315,13 +315,10 @@ export async function dedupeArticlesByLLM<T extends { title: string; source: str
   return articles;
 }
 
-// ═══ 关键词提取（LLM 版 + Tavily 热度）═══
-
-import { searchTrending, type TavilyResult } from './tavily-search';
+// ═══ 关键词提取（纯基于库内新闻）═══
 
 function buildKeywordPrompt(
   articles: NewsItem[],
-  tavilyResults: TavilyResult[],
   topN: number,
   dateStr: string,
 ): ChatMessage[] {
@@ -333,45 +330,47 @@ function buildKeywordPrompt(
     })
     .join('\n');
 
-  // Tavily 热点（带 score，体现全网热度）
-  const tavilyText = tavilyResults.length > 0
-    ? tavilyResults
-      .slice(0, 30) // 限制长度，避免 prompt 过长
-      .map((r, i) => `[热度${r.score.toFixed(2)}] ${r.title}${r.content ? ' - ' + r.content.slice(0, 100) : ''}`)
-      .join('\n')
-    : '（无 Tavily 实时热点数据，仅基于库内新闻生成）';
-
   const systemContent =
-    `你是热点榜编辑，要生成一份"${dateStr}热点 Top ${topN}"榜单。\n`
-    + '榜单覆盖全领域（科技、财经、国际、社会、体育、娱乐、政策等），不局限单一方向。\n'
-    + '你有两部分数据：\n'
-    + '【库内新闻】已抓取的详细新闻（带编号和来源/分类，用于关联）\n'
-    + '【全网热点】来自 Tavily 搜索的实时热点新闻（带 0-1 热度分，体现全网传播热度）\n\n'
-    + '要求：\n'
-    + `1. 输出 Top ${topN} 热点话题，按热度从高到低排序\n`
-    + '2. 话题名用"热搜词条"风格：#开头，口语化有传播力，能让人一眼看懂事件核心\n'
-    + '   - 好的例子："#AI内存短缺危机"、"#折叠屏苹果躺赢"、"#美联储9月降息预期"、"#奥运女排决赛"、"#某地暴雨内涝"\n'
-    + '   - 差的例子：内存短缺、AI、drought（太泛，信息量低）\n'
-    + '3. 每个话题给 heat_score（0-100 整数），综合考量：\n'
-    + '   - Tavily 热度分（全网传播度，权重最高）\n'
-    + '   - 库内多源覆盖（同一事件被多个来源报道，说明重要）\n'
-    + '   - 出现次数（同一事件多条新闻）\n'
-    + '   - 突发性/争议性（突发大事件、有争议的话题加分）\n'
-    + '4. 语义去重：同一事件（即使标题措辞不同）只输出一个话题，合并相关新闻的 index\n'
-    + '   - 例如 BBC 的 "Prolonged drought could cause shortage" 和 "Continued drought could cause shortage" 是同一事件，必须合并\n'
-    + '5. 领域多样性：尽量让榜单覆盖不同领域，不要全是科技或全是社会\n'
-    + '6. 每个话题关联 1-3 条库内新闻的 index（1-based，用于回填详情）；若库内无对应新闻，indices 填空数组\n'
-    + '7. 严格按 JSON 格式输出，不要任何其他内容：\n'
+    `你是热点榜编辑，任务是基于下面给出的"库内新闻"生成一份"${dateStr}热点 Top ${topN}"榜单。\n`
+    + '\n'
+    + '【输入数据】\n'
+    + `下面有 ${articles.length} 条库内新闻，每条带编号（1-based）、来源、分类、标题。\n`
+    + '\n'
+    + '【硬性规则】\n'
+    + '1. 只能用下面列出的库内新闻生成话题，绝对禁止编造、联想、补充任何未在列表中出现的新闻事件。若某个话题在列表里找不到对应新闻，就绝不输出该话题。\n'
+    + `2. 输出正好 Top ${topN} 个话题（若库内新闻不足 ${topN} 个独立事件，则按实际事件数输出，宁少勿造）。\n`
+    + '3. 每个话题的 indices 必须精确指向下面列表中真实存在的编号（1-based）。indices 里的编号必须对应到讲同一事件的新闻，绝不能张冠李戴。\n'
+    + '4. 语义去重（强制）：同一事件即使被多条新闻以不同措辞报道，也只输出一个话题，并把它们的编号全部合并到该话题的 indices 里。\n'
+    + '   - 例如 BBC 的 "Prolonged drought could cause shortage" 和 "Continued drought could cause shortage" 是同一事件，必须合并为一个话题，indices 包含两条的编号。\n'
+    + '5. 领域多样性：尽量覆盖科技/财经/国际/社会/体育/娱乐/政策等不同领域，不要扎堆单一方向。\n'
+    + '\n'
+    + '【话题命名风格】\n'
+    + '- 以 # 开头，口语化、有传播力，让人一眼看懂事件核心。\n'
+    + '- 好的例子："#AI内存短缺危机"、"#折叠屏苹果躺赢"、"#美联储9月降息预期"、"#奥运女排决赛"、"#某地暴雨内涝"。\n'
+    + '- 差的例子：内存短缺、AI、drought（太泛、信息量低，不可接受）。\n'
+    + '\n'
+    + '【热度评分 heat_score】\n'
+    + '0-100 整数，综合考量：\n'
+    + '- 多源覆盖（同一事件被多个来源报道 → 重要，加分）\n'
+    + '- 出现次数（同一事件多条新闻 → 加分）\n'
+    + '- 突发性/争议性（突发大事件、有争议的话题 → 加分）\n'
+    + '- 领域权重（重大国际/政策事件可适当加分）\n'
+    + '\n'
+    + '【输出格式】\n'
+    + '严格输出以下 JSON，不要任何额外文字、不要 markdown 代码块、不要解释：\n'
     + '{\n'
     + '  "keywords": [\n'
     + '    {"keyword": "#话题1", "heat_score": 92, "category": "科技", "indices": [1, 3]},\n'
     + '    {"keyword": "#话题2", "heat_score": 78, "category": "财经", "indices": [2]}\n'
     + '  ]\n'
-    + '}';
+    + '}\n'
+    + '\n'
+    + 'category 字段从以下选一个：科技/财经/国际/社会/体育/娱乐/政策/其他。\n'
+    + 'indices 至少 1 个，最多 5 个，必须是上面列表中真实存在的编号。';
 
   return [
     { role: 'system', content: systemContent },
-    { role: 'user', content: `【库内新闻】（共 ${articles.length} 条）：\n${articlesText}\n\n【全网热点】（Tavily，按热度降序）：\n${tavilyText}` },
+    { role: 'user', content: `库内新闻（共 ${articles.length} 条，编号 1-based）：\n${articlesText}` },
   ];
 }
 
@@ -413,8 +412,29 @@ function parseKeywords(raw: string, articleCount: number): LlmKeywordItem[] {
   return [];
 }
 
+// 归一化关键词用于做语义去重前的粗筛：去 #、去标点、转小写
+function normalizeKeyword(s: string): string {
+  return s.replace(/^#/, '').replace(/[，。、！？：；""''《》（）【】\[\]{}!?,.:;'"()\s\-—–·…#]+/g, '').toLowerCase();
+}
+
+// 简单字符重叠度（Jaccard on bigrams），用于检测 LLM 是否在同一事件上重复造话题
+function bigramJaccard(a: string, b: string): number {
+  if (a.length < 2 || b.length < 2) return a === b ? 1 : 0;
+  const big = (s: string) => {
+    const set = new Set<string>();
+    for (let i = 0; i < s.length - 1; i++) set.add(s.slice(i, i + 2));
+    return set;
+  };
+  const sa = big(a), sb = big(b);
+  let inter = 0;
+  for (const g of sa) if (sb.has(g)) inter++;
+  return inter / (sa.size + sb.size - inter);
+}
+
 /**
- * 用 LLM + Tavily 生成热搜风格 Top N 关键词
+ * 用 LLM 基于库内新闻生成热搜风格 Top N 关键词。
+ * 注意：信息源仅有库内已抓取的 newsfeed（RSS + 抓取阶段入库的 Tavily），
+ *       此函数不再二次调用 Tavily。LLM 只能基于传入的 articles 生成话题。
  */
 export async function extractKeywordsViaLLM(
   env: Env,
@@ -431,21 +451,13 @@ export async function extractKeywordsViaLLM(
     return [];
   }
 
-  let tavilyResults: TavilyResult[] = [];
-  try {
-    tavilyResults = await searchTrending(env);
-    console.log(`Tavily returned ${tavilyResults.length} trending results`);
-  } catch (e) {
-    console.error('Tavily search failed, falling back to library-only:', e instanceof Error ? e.message : String(e));
-  }
-
   const beijingDate = new Date(Date.now() + 8 * 60 * 60 * 1000);
   const dateStr = `${beijingDate.getUTCFullYear()}年${beijingDate.getUTCMonth() + 1}月${beijingDate.getUTCDate()}日`;
 
   const MAX_RETRIES = 3;
   for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
     try {
-      const messages = buildKeywordPrompt(articles, tavilyResults, topN, dateStr);
+      const messages = buildKeywordPrompt(articles, topN, dateStr);
       const res = await fetch(`${baseUrl}/chat/completions`, {
         method: 'POST',
         headers: {
@@ -479,10 +491,10 @@ export async function extractKeywordsViaLLM(
         continue;
       }
 
-      // 回填关联文章，按 heat_score 降序
-      return items
-        .slice(0, topN)
-        .sort((a, b) => (b.heat_score || 0) - (a.heat_score || 0))
+      // ─── 后处理：丢弃无关联文章的话题、做语义去重 ───
+      // 1) indices 为空 = LLM 无法在库内找到对应新闻 = 极可能是幻觉，直接丢弃
+      const withArticles = items
+        .filter(item => item.indices.length > 0)
         .map(item => {
           const relatedArticles = item.indices
             .map(idx => articles[idx - 1])
@@ -495,7 +507,30 @@ export async function extractKeywordsViaLLM(
             count: relatedArticles.length,
             articles: relatedArticles,
           };
-        });
+        })
+        .filter(item => item.articles.length > 0);
+
+      // 2) 话题语义去重：归一化后 bigram Jaccard > 0.6 视为同一事件，保留 heat_score 更高的
+      const deduped: typeof withArticles = [];
+      const usedNorms: string[] = [];
+      for (const item of withArticles.sort((a, b) => b.heat_score - a.heat_score)) {
+        const norm = normalizeKeyword(item.keyword);
+        let dup = false;
+        for (const used of usedNorms) {
+          if (bigramJaccard(norm, used) > 0.6) {
+            dup = true;
+            break;
+          }
+        }
+        if (!dup) {
+          deduped.push(item);
+          usedNorms.push(norm);
+        } else {
+          console.log(`Top keywords dedupe: dropped "${item.keyword}" as duplicate`);
+        }
+      }
+
+      return deduped.slice(0, topN);
     } catch (e) {
       console.error(`Keywords attempt ${attempt + 1}/${MAX_RETRIES} threw:`, e instanceof Error ? e.message : String(e));
     }
