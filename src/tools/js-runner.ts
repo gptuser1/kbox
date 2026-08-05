@@ -39,14 +39,13 @@ interface JsScript {
   published: boolean;
   created_at: string;
   updated_at: string;
-  last_run?: { at: string; status: 'ok' | 'error'; duration_ms: number; error?: string };
+  last_run?: { at: string; status: 'ok' | 'error'; error?: string };
 }
 
 interface RunResult {
   logs: string[];
   result?: any;
   error?: { message: string; stack?: string };
-  duration_ms: number;
   truncated?: boolean;
 }
 
@@ -159,7 +158,6 @@ export async function executeScript(env: any, code: string, params: Record<strin
     return {
       logs,
       result: result === undefined ? null : result,
-      duration_ms: Date.now() - started,
       truncated: totalBytes > MAX_LOG_BYTES,
     };
   } catch (e) {
@@ -170,7 +168,6 @@ export async function executeScript(env: any, code: string, params: Record<strin
         message: e instanceof Error ? e.message : String(e),
         stack: e instanceof Error ? e.stack : undefined,
       },
-      duration_ms: Date.now() - started,
       truncated: totalBytes > MAX_LOG_BYTES,
     };
   } finally {
@@ -406,7 +403,6 @@ app.post('/scripts/:id/run', async (c) => {
     script.last_run = {
       at: nowISO(),
       status: result.error ? 'error' : 'ok',
-      duration_ms: result.duration_ms,
       error: result.error?.message,
     };
     await kv.set(NS_SCRIPTS, id, script);
@@ -429,7 +425,6 @@ app.post('/scripts/:id/record-run', async (c) => {
     script.last_run = {
       at: nowISO(),
       status: body.status === 'ok' ? 'ok' : 'error',
-      duration_ms: body.duration_ms || 0,
       error: body.error,
     };
     await kv.set(NS_SCRIPTS, id, script);

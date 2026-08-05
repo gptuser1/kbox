@@ -3987,9 +3987,9 @@ async function executeJsCode(code, params = {}) {
       fn(kbox, sandboxConsole, params),
       new Promise((_, rej) => setTimeout(() => rej(new Error('执行超时（5s）')), 5000)),
     ]);
-    return { logs, result: result === undefined ? null : result, duration_ms: Date.now() - started };
+    return { logs, result: result === undefined ? null : result };
   } catch (e) {
-    return { logs, error: { message: e instanceof Error ? e.message : String(e), stack: e instanceof Error ? e.stack : undefined }, duration_ms: Date.now() - started };
+    return { logs, error: { message: e instanceof Error ? e.message : String(e), stack: e instanceof Error ? e.stack : undefined } };
   }
 }
 
@@ -4014,7 +4014,7 @@ window.runJsScript = async function(id) {
     // 记录 last_run
     api('/api/tools/js/scripts/' + id + '/record-run', {
       method: 'POST',
-      body: JSON.stringify({ status: r.error ? 'error' : 'ok', error: r.error?.message, duration_ms: r.duration_ms }),
+      body: JSON.stringify({ status: r.error ? 'error' : 'ok', error: r.error?.message }),
       headers: { 'Content-Type': 'application/json' },
     }).catch(() => {});
     toast(r.error ? '执行出错' : '执行完成', r.error ? 'error' : 'success');
