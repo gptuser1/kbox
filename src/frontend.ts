@@ -136,6 +136,15 @@ input, select, button, textarea { font-family: inherit; }
   display: inline-flex; align-items: center; justify-content: center; padding: 0;
 }
 .tool-card-actions button:hover { background: var(--primary); color: #fff; border-color: var(--primary); }
+
+/* 通用图标方按钮（排序 ↑↓ 等，与首页卡片操作按钮同款） */
+.icon-btn {
+  background: var(--bg); border: 1px solid var(--border); border-radius: 6px;
+  width: 28px; height: 28px; cursor: pointer; font-size: 13px; color: var(--text-secondary);
+  display: inline-flex; align-items: center; justify-content: center; padding: 0; flex-shrink: 0;
+}
+.icon-btn:hover:not(:disabled) { background: var(--primary); color: #fff; border-color: var(--primary); }
+.icon-btn:disabled { opacity: 0.4; cursor: not-allowed; }
 .tool-card.hidden-tool { opacity: 0.45; }
 .tool-card.hidden-tool .tool-name::after { content: ' (已隐藏)'; font-size: 11px; color: var(--text-muted); font-weight: 400; }
 
@@ -2111,9 +2120,12 @@ function renderConfigTool() {
   return \`
 <h2>⚙️ 配置管理</h2>
 
-<div class="db-tabs" id="configTabs">
-  <button class="db-tab active" data-ctab="global">全局配置</button>
-  <button class="db-tab" data-ctab="tools">工具级</button>
+<div style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:12px;flex-wrap:wrap">
+  <div class="db-tabs" id="configTabs">
+    <button class="db-tab active" data-ctab="global">全局配置</button>
+    <button class="db-tab" data-ctab="tools">工具级</button>
+  </div>
+  <button class="btn btn-outline btn-sm" id="configSortBtn">调整顺序</button>
 </div>
 
 <div id="configGlobalPane">
@@ -2174,6 +2186,7 @@ function mountConfigTool() {
   const modalTitle = $('configModalTitle');
   const pickOverlay = $('configPickOverlay');
   const pickBody = $('configPickBody');
+  const sortBtn = $('configSortBtn');
 
   let schema = [];
   let tools = [];
@@ -2182,6 +2195,23 @@ function mountConfigTool() {
   let editing = null;
   let globalOrder = [];   // 全局配置项顺序 [key...]
   let toolOrder = [];     // 工具条目顺序 [toolId...]
+  let sortMode = false;   // 排序模式：true 时条目右侧显示 ↑↓
+
+  function applySortBtn() {
+    if (!sortBtn) return;
+    sortBtn.textContent = sortMode ? '完成' : '调整顺序';
+    sortBtn.classList.toggle('btn-primary', sortMode);
+    sortBtn.classList.toggle('btn-outline', !sortMode);
+  }
+
+  if (sortBtn) {
+    sortBtn.onclick = () => {
+      sortMode = !sortMode;
+      applySortBtn();
+      renderGlobal();
+      renderTools();
+    };
+  }
 
   if (tabsEl) {
     tabsEl.querySelectorAll('.db-tab').forEach(btn => {
@@ -2248,16 +2278,18 @@ function mountConfigTool() {
       const tag = cfg.sensitive ? ' <span class="badge badge-err">密</span>' : '';
       const upDisabled = i === 0 ? ' disabled' : '';
       const downDisabled = i === list.length - 1 ? ' disabled' : '';
+      // 排序模式：右侧显示 ↑↓；非排序模式：显示 编辑/清除
+      const actions = sortMode
+        ? '<button class="icon-btn"' + upDisabled + ' onclick="moveConfigItem(\\'global\\',-1,\\'' + esc(cfg.key) + '\\')">↑</button>' +
+          '<button class="icon-btn"' + downDisabled + ' onclick="moveConfigItem(\\'global\\',1,\\'' + esc(cfg.key) + '\\')">↓</button>'
+        : '<button class="btn btn-outline btn-sm" onclick="editConfig(\\'app\\',null,\\'' + esc(cfg.key) + '\\')">编辑</button>' +
+          (cfg.hasValue ? '<button class="btn btn-outline btn-sm" style="color:var(--danger)" onclick="clearConfig(\\'app\\',null,\\'' + esc(cfg.key) + '\\')">清除</button>' : '');
       return '<div class="file-item">' +
-        '<button class="btn btn-outline btn-sm" style="width:28px;padding:0"' + upDisabled + ' onclick="moveConfigItem(\\'global\\',-1,\\'' + esc(cfg.key) + '\\')">↑</button>' +
-        '<button class="btn btn-outline btn-sm" style="width:28px;padding:0"' + downDisabled + ' onclick="moveConfigItem(\\'global\\',1,\\'' + esc(cfg.key) + '\\')">↓</button>' +
         '<div class="file-info"><div class="file-name">' + esc(cfg.key) + tag + '</div>' +
         '<div class="file-meta">' + esc(cfg.desc) + '</div></div>' +
         '<div style="margin-right:12px;font-size:13px">' + valueDisplay(cfg) + '</div>' +
-        '<div class="file-actions">' +
-        '<button class="btn btn-outline btn-sm" onclick="editConfig(\\'app\\',null,\\'' + esc(cfg.key) + '\\')">编辑</button>' +
-        (cfg.hasValue ? '<button class="btn btn-outline btn-sm" style="color:var(--danger)" onclick="clearConfig(\\'app\\',null,\\'' + esc(cfg.key) + '\\')">清除</button>' : '') +
-        '</div></div>';
+        '<div class="file-actions" style="display:flex;gap:6px;align-items:center">' + actions + '</div>' +
+        '</div>';
     }).join('');
   }
 
@@ -2279,19 +2311,19 @@ function mountConfigTool() {
       }
       const existing = new Set(overrides.map(o => o.key));
       const available = schema.filter(f => !existing.has(f.key) && (!f.tools || f.tools.includes(t.id)));
-      const addBtn = available.length
-        ? '<button class="btn btn-outline btn-sm" onclick="addToolOverride(\\'' + t.id + '\\')">+ 添加</button>'
-        : '';
       const upDisabled = i === 0 ? ' disabled' : '';
       const downDisabled = i === list.length - 1 ? ' disabled' : '';
+      // 排序模式：右侧显示 ↑↓；非排序模式：显示 + 添加
+      const actions = sortMode
+        ? '<button class="icon-btn"' + upDisabled + ' onclick="moveConfigItem(\\'tool\\',-1,\\'' + esc(t.id) + '\\')">↑</button>' +
+          '<button class="icon-btn"' + downDisabled + ' onclick="moveConfigItem(\\'tool\\',1,\\'' + esc(t.id) + '\\')">↓</button>'
+        : (available.length ? '<button class="btn btn-outline btn-sm" onclick="addToolOverride(\\'' + t.id + '\\')">+ 添加</button>' : '');
       return '<div class="file-item" style="display:block;padding:10px 14px">' +
         '<div style="display:flex;align-items:center;gap:8px">' +
-        '<button class="btn btn-outline btn-sm" style="width:28px;padding:0"' + upDisabled + ' onclick="moveConfigItem(\\'tool\\',-1,\\'' + esc(t.id) + '\\')">↑</button>' +
-        '<button class="btn btn-outline btn-sm" style="width:28px;padding:0"' + downDisabled + ' onclick="moveConfigItem(\\'tool\\',1,\\'' + esc(t.id) + '\\')">↓</button>' +
         '<div style="font-weight:600;font-size:14px;flex:1">' + esc(t.name) + '</div>' +
-        addBtn +
+        '<div style="display:flex;gap:6px;align-items:center">' + actions + '</div>' +
         '</div>' +
-        (chips ? '<div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:8px;margin-left:44px">' + chips + '</div>' : '') +
+        (chips ? '<div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:8px">' + chips + '</div>' : '') +
         '</div>';
     }).join('');
   }
