@@ -970,6 +970,7 @@ function renderDispatchTool() {
     <div class="form-group" id="dispatchBranchGroup" style="display:none">
       <label>分支</label>
       <select id="dispatchBranch"></select>
+      <div id="dispatchCommitInfo" style="font-size:12px;color:var(--text-muted);margin-top:6px"></div>
     </div>
     <div class="section-title" id="dispatchWfTitle" style="display:none">选择工作流</div>
     <div class="wf-list" id="dispatchWfList"></div>
@@ -1101,6 +1102,23 @@ function mountDispatchTool() {
 
   renderSavedConfigs();
 
+  // 渲染分支最新 commit 信息
+  const commitInfoEl = $('dispatchCommitInfo');
+  function renderCommitInfo(commit) {
+    if (!commit || !commit.sha) {
+      commitInfoEl.textContent = '';
+      return;
+    }
+    const sha = commit.sha.substring(0, 7);
+    const date = commit.date ? formatDate(commit.date.replace('T', ' ').replace('Z', '')) : '';
+    commitInfoEl.innerHTML =
+      '<span style="opacity:0.7">最新</span> ' +
+      esc(commit.message) + ' · ' +
+      '<a href="' + esc(commit.url) + '" target="_blank" rel="noopener" style="color:var(--primary);text-decoration:none">' + sha + '</a>' +
+      (date ? ' · ' + date : '') +
+      (commit.author ? ' · ' + esc(commit.author) : '');
+  }
+
   // 从数据库加载已保存配置
   let savedConfigs = []; // [{id, repo, workflow_id, branch, inputs}]
 
@@ -1187,10 +1205,12 @@ function mountDispatchTool() {
     runSection.style.display = 'none';
 
     try {
-      // 并行加载工作流和分支
-      const [wfData, branchData] = await Promise.all([
+      // 并行加载工作流、分支和默认分支 commit 信息
+      const defaultBranch = 'main';
+      const [wfData, branchData, commitData] = await Promise.all([
         api('/api/tools/workflows?owner=' + encodeURIComponent(owner) + '&repo=' + encodeURIComponent(repoName)),
         api('/api/tools/branches?owner=' + encodeURIComponent(owner) + '&repo=' + encodeURIComponent(repoName)),
+        api('/api/tools/branch-commit?owner=' + encodeURIComponent(owner) + '&repo=' + encodeURIComponent(repoName) + '&branch=' + encodeURIComponent(defaultBranch)),
       ]);
 
       // 渲染分支
@@ -1201,6 +1221,17 @@ function mountDispatchTool() {
           '<option value="' + esc(b.name) + '"' + (b.name === 'main' ? ' selected' : '') + '>' + esc(b.name) + '</option>'
         ).join('');
       }
+
+      // 显示默认分支最新 commit
+      renderCommitInfo(commitData.commit);
+
+      // 分支切换时更新 commit 信息
+      branchSelect.onchange = () => {
+        const selectedBranch = branchSelect.value;
+        api('/api/tools/branch-commit?owner=' + encodeURIComponent(owner) + '&repo=' + encodeURIComponent(repoName) + '&branch=' + encodeURIComponent(selectedBranch))
+          .then(d => renderCommitInfo(d.commit))
+          .catch(() => {});
+      };
 
       // 渲染工作流
       if (!wfData.workflows || !wfData.workflows.length) {

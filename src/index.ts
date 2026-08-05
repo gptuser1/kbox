@@ -727,6 +727,53 @@ app.get('/api/tools/branches', async (c) => {
   }
 });
 
+// 获取指定分支的最新 commit 信息
+app.get('/api/tools/branch-commit', async (c) => {
+  const owner = c.req.query('owner')?.trim();
+  const repo = c.req.query('repo')?.trim();
+  const branch = c.req.query('branch')?.trim() || 'main';
+  if (!owner || !repo) {
+    return c.json({ error: '需要 owner 和 repo 参数' }, 400);
+  }
+
+  const ghToken = await getConfig(c, 'dispatch', 'gh_token');
+  if (!ghToken) {
+    return c.json({ error: '未配置 GitHub Token，请到配置管理设置 gh_token' }, 500);
+  }
+
+  try {
+    const res = await fetch(
+      `https://api.github.com/repos/${owner}/${repo}/commits?sha=${encodeURIComponent(branch)}&per_page=1`,
+      {
+        headers: {
+          'Authorization': `Bearer ${ghToken}`,
+          'Accept': 'application/vnd.github+json',
+          'User-Agent': 'kbox',
+        },
+      }
+    );
+    const data: any = await res.json();
+    if (!res.ok) {
+      return c.json({ error: data?.message || `GitHub API ${res.status}` }, res.status as any);
+    }
+    if (!Array.isArray(data) || data.length === 0) {
+      return c.json({ commit: null });
+    }
+    const item = data[0];
+    return c.json({
+      commit: {
+        sha: item.sha,
+        message: item.commit?.message?.split('\n')[0] || '',
+        author: item.commit?.author?.name || '',
+        date: item.commit?.author?.date || '',
+        url: item.html_url || '',
+      },
+    });
+  } catch (e) {
+    return c.json({ error: e instanceof Error ? e.message : '请求失败' }, 500);
+  }
+});
+
 // 获取 workflow inputs 定义
 app.get('/api/tools/workflow-inputs', async (c) => {
   const owner = c.req.query('owner')?.trim();
