@@ -499,9 +499,9 @@ input[type="checkbox"] { accent-color: var(--primary); width: 16px; height: 16px
         <input type="text" id="toolEditName" autocomplete="off" spellcheck="false">
       </div>
       <div class="form-group">
-        <label>图标（选择一个 emoji 或粘贴 SVG 代码）</label>
+        <label>图标</label>
         <div id="toolEditIconPicker" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px"></div>
-        <input type="text" id="toolEditIconInput" placeholder="emoji 或 <svg>...</svg>" autocomplete="off" spellcheck="false">
+        <input type="text" id="toolEditIconInput" placeholder="输入 emoji" autocomplete="off" spellcheck="false">
       </div>
       <div class="form-group">
         <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
@@ -610,14 +610,14 @@ function parseRepo(input) {
 // ─── 工具注册表（模块化：新增工具只需在此注册 + 实现 render/mount） ───
 // 注意：name/icon 是默认值，用户偏好（preferences/home_layout）会覆盖
 const TOOLS = [
-  { id: 'dispatch', name: 'GitHub Actions 触发', icon: '⚡', desc: '通过 API 触发 GitHub workflow dispatch', render: renderDispatchTool, mount: mountDispatchTool },
-  { id: 'disk', name: '微型云盘', icon: '☁️', desc: '基于 D1 的轻量文件存储，支持分片上传', render: renderDiskTool, mount: mountDiskTool },
-  { id: 'stock', name: '基金估值', icon: '💰', desc: '多市场基金持仓估值刷新，A股/港股/美股/韩台日', render: renderStockTool, mount: mountStockTool },
-  { id: 'news', name: 'AI 新闻锐评', icon: '📰', desc: '抓取科技新闻并由 AI 写贴吧风格锐评', render: renderNewsTool, mount: mountNewsTool },
-  { id: 'db-admin', name: 'DB 管理', icon: '🗄️', desc: '通过 d1-rest 执行 SQL，多连接管理', render: renderDbAdminTool, mount: mountDbAdminTool },
-  { id: 'js', name: 'JS 运行工具', icon: '📜', desc: '运行自定义 JS 脚本，可发布为工具、可定时', render: renderJsTool, mount: mountJsTool },
-  { id: 'cron', name: 'Cron 任务', icon: '⏰', desc: '软定时任务管理，新闻抓取/脚本定时执行', render: renderCronTool, mount: mountCronTool },
-  { id: 'config', name: '配置管理', icon: '⚙️', desc: '集中管理 API 密钥与工具配置，敏感字段加密存储', render: renderConfigTool, mount: mountConfigTool },
+  { id: 'dispatch', name: 'GitHub Actions', icon: '⚡', desc: '触发 GitHub 工作流', render: renderDispatchTool, mount: mountDispatchTool },
+  { id: 'disk', name: '微型云盘', icon: '☁️', desc: '轻量文件存储，单文件 10MB', render: renderDiskTool, mount: mountDiskTool },
+  { id: 'stock', name: '基金估值', icon: '💰', desc: '多市场基金持仓估值', render: renderStockTool, mount: mountStockTool },
+  { id: 'news', name: 'AI 新闻锐评', icon: '📰', desc: '抓取科技新闻并由 AI 写锐评', render: renderNewsTool, mount: mountNewsTool },
+  { id: 'db-admin', name: 'DB 管理', icon: '🗄️', desc: '浏览与编辑数据库', render: renderDbAdminTool, mount: mountDbAdminTool },
+  { id: 'js', name: 'JS 运行工具', icon: '📜', desc: '运行自定义 JS 脚本', render: renderJsTool, mount: mountJsTool },
+  { id: 'cron', name: '定时任务', icon: '⏰', desc: '定时执行脚本', render: renderCronTool, mount: mountCronTool },
+  { id: 'config', name: '配置管理', icon: '⚙️', desc: '管理 API 密钥与工具配置', render: renderConfigTool, mount: mountConfigTool },
 ];
 
 // ─── 首页布局偏好 ───
@@ -773,7 +773,7 @@ function bindHomeToolbar() {
     editMode = true;
     editBtn.style.display = 'none';
     exitBtn.style.display = 'inline-flex';
-    toast('拖拽卡片排序，点 ✎ 编辑名称/图标', 'info');
+    toast('点 ↑↓ 排序，点 ✎ 编辑名称/图标', 'info');
     renderToolGrid();
   });
   if (exitBtn) exitBtn.addEventListener('click', () => {
@@ -888,12 +888,11 @@ window.backToGrid = function() {
 function renderDispatchTool() {
   return \`
     <h2>⚡ GitHub Actions 触发</h2>
-    <p class="subtitle">通过 GitHub API 触发指定仓库的 workflow_dispatch</p>
     <div class="saved-configs" id="dispatchSavedConfigs"></div>
     <div class="form-row">
       <div class="form-group">
-        <label>仓库（支持 GitHub 链接 / SSH / owner/repo）</label>
-        <input type="text" id="dispatchRepo" placeholder="例如 user/repo 或粘贴 GitHub 链接">
+        <label>仓库</label>
+        <input type="text" id="dispatchRepo" placeholder="user/repo 或粘贴 GitHub 链接">
       </div>
       <button class="btn btn-outline" id="dispatchLoadBtn" style="margin-bottom:0">加载</button>
     </div>
@@ -904,10 +903,10 @@ function renderDispatchTool() {
     <div class="section-title" id="dispatchWfTitle" style="display:none">选择工作流</div>
     <div class="wf-list" id="dispatchWfList"></div>
     <div id="dispatchInputsSection" style="display:none">
-      <div class="section-title" id="dispatchInputsTitle">Workflow Inputs</div>
+      <div class="section-title" id="dispatchInputsTitle">输入参数</div>
       <div id="dispatchInputs"></div>
     </div>
-    <div style="margin-top:24px">
+    <div style="display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap">
       <button class="btn btn-primary" id="dispatchTriggerBtn" disabled>触发</button>
       <button class="btn btn-outline" id="dispatchSaveBtn">保存配置</button>
     </div>
@@ -1152,7 +1151,7 @@ function mountDispatchTool() {
 
           // 获取 workflow inputs 定义（无参数时由 renderInputs 隐藏区块）
           inputsBox.innerHTML = '<div class="empty">加载参数定义中…</div>';
-          inputsTitle.textContent = 'Workflow Inputs';
+          inputsTitle.textContent = '输入参数';
 
           const [owner2, repoName2] = repoInput.value.split('/');
           api('/api/tools/workflow-inputs?owner=' + encodeURIComponent(owner2) + '&repo=' + encodeURIComponent(repoName2) + '&path=' + encodeURIComponent(selectedWfPath))
@@ -1287,7 +1286,6 @@ const DISK_MAX_SIZE = 10 * 1024 * 1024; // 10MB
 function renderDiskTool() {
   return \`
     <h2>☁️ 微型云盘</h2>
-    <p class="subtitle">基于 D1 的轻量文件存储 · 单文件上限 10MB</p>
     <div class="disk-stats" id="diskStats"></div>
     <div class="disk-upload">
       <div class="disk-drop-zone" id="diskDropZone">
@@ -1305,25 +1303,6 @@ function renderDiskTool() {
     </div>
     <div class="section-title">文件列表</div>
     <div class="file-list" id="diskFileList"></div>
-    <details class="disk-api-docs" style="margin-top:24px">
-      <summary style="cursor:pointer;font-size:14px;font-weight:600;color:var(--text-secondary);padding:12px;background:var(--card);border-radius:8px;box-shadow:var(--shadow)">📋 API 接口文档</summary>
-      <div style="padding:16px;background:var(--card);border-radius:8px;margin-top:8px;box-shadow:var(--shadow);font-size:13px;line-height:1.8;color:var(--text-secondary);overflow-x:auto">
-        <p style="color:var(--text);font-weight:600">所有接口需鉴权（除下载端点）：</p>
-        <p>Header: <code>Authorization: Bearer &lt;token&gt;</code></p>
-        <p style="color:var(--text-muted)">下载端点不接收主 token，必须先换取一次性 dt 令牌</p>
-        <hr style="border:none;border-top:1px solid var(--border);margin:12px 0">
-        <p><b>GET</b> <code>/api/tools/disk/stats</code> — 容量统计</p>
-        <p><b>GET</b> <code>/api/tools/disk/files</code> — 文件列表</p>
-        <p><b>POST</b> <code>/api/tools/disk/files</code> — 创建文件记录<br>
-        <span style="color:var(--text-muted)">body: { name, size, mime_type }</span></p>
-        <p><b>POST</b> <code>/api/tools/disk/files/:id/chunks</code> — 上传分片<br>
-        <span style="color:var(--text-muted)">body: { chunk_index, content(base64), chunk_size }</span></p>
-        <p><b>POST</b> <code>/api/tools/disk/files/:id/download-token</code> — 生成一次性下载令牌<br>
-        <span style="color:var(--text-muted)">返回 { dt, expires_in: 300, url }，5 分钟内一次性有效</span></p>
-        <p><b>GET</b> <code>/api/tools/disk/files/:id/download?dt=xxx</code> — 用 dt 下载文件</p>
-        <p><b>DELETE</b> <code>/api/tools/disk/files/:id</code> — 删除文件</p>
-      </div>
-    </details>
   \`;
 }
 
@@ -1373,7 +1352,7 @@ function mountDiskTool() {
       statsBox.innerHTML =
         '<div class="disk-stat-card"><div class="stat-label">文件数</div><div class="stat-value">' + s.file_count + '</div></div>' +
         '<div class="disk-stat-card"><div class="stat-label">文件大小</div><div class="stat-value">' + formatSize(s.total_size) + '</div></div>' +
-        '<div class="disk-stat-card"><div class="stat-label">D1 存储占用</div><div class="stat-value">' + formatSize(s.db_size) + '</div><div class="stat-sub">上限 ' + formatSize(s.max_db_size) + '</div><div class="disk-usage-bar"><div class="disk-usage-fill ' + (usagePct > 80 ? 'warn' : '') + '" style="width:' + usagePct + '%"></div></div></div>';
+        '<div class="disk-stat-card"><div class="stat-label">存储占用</div><div class="stat-value">' + formatSize(s.db_size) + '</div><div class="stat-sub">上限 ' + formatSize(s.max_db_size) + '</div><div class="disk-usage-bar"><div class="disk-usage-fill ' + (usagePct > 80 ? 'warn' : '') + '" style="width:' + usagePct + '%"></div></div></div>';
     } catch (e) {
       if (e.message === 'UNAUTHORIZED') return;
       statsBox.innerHTML = '<div class="empty">统计加载失败</div>';
@@ -1392,7 +1371,7 @@ function mountDiskTool() {
       fileList.innerHTML = files.map(f =>
         '<div class="file-item"><div class="file-icon">' + fileIcon(f.mime_type) + '</div>' +
         '<div class="file-info"><div class="file-name">' + esc(f.name) + '</div>' +
-        '<div class="file-meta">' + formatSize(f.size) + ' · ' + formatDate(f.created_at) + ' · ' + f.chunks + ' 片</div></div>' +
+        '<div class="file-meta">' + formatSize(f.size) + ' · ' + formatDate(f.created_at) + '</div></div>' +
         '<div class="file-actions">' +
         '<button class="btn btn-outline btn-sm" onclick="downloadFile(' + f.id + ',\\'' + esc(f.name) + '\\')">下载</button>' +
         '<button class="btn btn-outline btn-sm" onclick="deleteFile(' + f.id + ',\\'' + esc(f.name) + '\\')" style="color:var(--danger)">删除</button>' +
@@ -1496,7 +1475,7 @@ function mountDiskTool() {
     // 创建进度条
     const row = document.createElement('div');
     row.className = 'progress-row';
-    row.innerHTML = '<span style="flex-shrink:0;width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + esc(file.name) + '</span><div class="progress-bar"><div class="progress-fill" style="width:0%"></div></div><span style="flex-shrink:0;font-size:12px;color:var(--text-muted)">0/' + chunkCount + '</span>';
+    row.innerHTML = '<span style="flex-shrink:0;width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + esc(file.name) + '</span><div class="progress-bar"><div class="progress-fill" style="width:0%"></div></div><span style="flex-shrink:0;font-size:12px;color:var(--text-muted)">0%</span>';
     progressBox.appendChild(row);
     const fill = row.querySelector('.progress-fill');
     const status = row.querySelectorAll('span')[1];
@@ -1530,7 +1509,7 @@ function mountDiskTool() {
 
         const pct = Math.round(((i + 1) / chunkCount) * 100);
         fill.style.width = pct + '%';
-        status.textContent = (i + 1) + '/' + chunkCount;
+        status.textContent = pct + '%';
       }
 
       row.querySelector('span').textContent = '✓ ' + file.name;
@@ -1562,7 +1541,6 @@ function mountDiskTool() {
 function renderStockTool() {
   return \`
 <h2>💰 基金估值</h2>
-<p class="subtitle">多市场基金持仓估值刷新 · A股/港股/美股/韩台日</p>
 
 <div class="disk-stats" id="stockStats">
   <div class="disk-stat-card"><div class="stat-label">基金数</div><div class="stat-value" id="stockCount">-</div></div>
@@ -1879,9 +1857,7 @@ function mountStockTool() {
       const data = await api('/api/tools/stock/refresh', { method: 'POST' });
       const s = data.stats || {};
       resultBox.className = 'result-box show success';
-      resultBox.textContent = '✓ 刷新完成：' + s.updated_funds + '/' + s.total_funds + ' 只基金 · ' +
-        s.matched_holdings + '/' + s.total_holdings + ' 持仓匹配 (' + s.match_rate + ') · ' +
-        (s.time_ms ? (s.time_ms + 'ms') : '');
+      resultBox.textContent = '✓ 已刷新 ' + (s.updated_funds || 0) + '/' + (s.total_funds || 0) + ' 只基金估值';
       toast('估值已刷新', 'success');
       loadFunds();
     } catch (e) {
@@ -1950,7 +1926,6 @@ function mountStockTool() {
 function renderNewsTool() {
   return \`
 <h2>📰 AI 新闻锐评</h2>
-<p class="subtitle">抓取科技新闻并由 AI 写贴吧风格锐评 · 保留最近 60 条</p>
 
 <div style="display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap">
   <button class="btn btn-primary" id="newsTriggerBtn">📡 立即抓取</button>
@@ -2486,7 +2461,6 @@ function mountConfigTool() {
 function renderDbAdminTool() {
   return \`
 <h2>🗄️ DB 管理</h2>
-<p class="subtitle">通过 d1-rest 浏览与编辑数据库 · 凭据统一使用当前令牌</p>
 
 <div class="db-topbar">
   <select id="dbConnSelect"><option value="">— 选择连接 —</option></select>
@@ -2558,7 +2532,7 @@ function renderDbAdminTool() {
           <button class="btn btn-outline btn-sm" id="dbClearBtn">清空</button>
           <span class="db-meta" id="dbSqlMeta"></span>
         </div>
-        <textarea class="db-editor" id="dbSqlEditor" placeholder="-- Ctrl/Cmd + Enter 执行&#10;SELECT * FROM kbox_kv LIMIT 10;" spellcheck="false"></textarea>
+        <textarea class="db-editor" id="dbSqlEditor" placeholder="-- Ctrl/Cmd + Enter 执行&#10;SELECT * FROM 表名 LIMIT 10;" spellcheck="false"></textarea>
         <div class="db-results-wrap" id="dbSqlResultsWrap" style="display:none;margin-top:12px">
           <div class="db-results-head">
             <span id="dbSqlResultsTitle">结果</span>
@@ -2595,12 +2569,12 @@ function renderDbAdminTool() {
         <input id="dbConnName" placeholder="如：ocean / forest / 本地测试">
       </div>
       <div class="form-group">
-        <label>Base URL</label>
-        <input id="dbConnBaseUrl" placeholder="专属域：https://ocean.你的域名 / 主入口：https://db.你的域名">
+        <label>地址</label>
+        <input id="dbConnBaseUrl" placeholder="https://db.example.com">
       </div>
       <div class="form-group">
-        <label>数据库 <span style="font-weight:400;color:var(--text-muted)">（留空 = 专属域模式；填库名 = 主入口模式，如 ocean）</span></label>
-        <input id="dbConnDatabase" placeholder="留空或填库名">
+        <label>数据库 <span style="font-weight:400;color:var(--text-muted)">（可选）</span></label>
+        <input id="dbConnDatabase" placeholder="留空则使用默认库">
       </div>
       <div class="result-box" id="dbConnFormResult"></div>
     </div>
@@ -3644,9 +3618,8 @@ if (token) {
 // ═══ 工具：Cron 任务管理 ═══
 function renderCronTool() {
   return \`
-    <h2>⏰ Cron 任务</h2>
-    <p class="subtitle">定时执行 JS 脚本。每小时由 cron 触发，按执行间隔判断是否到期。</p>
-    <div style="margin:12px 0">
+    <h2>⏰ 定时任务</h2>
+    <div style="display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap">
       <button class="btn btn-primary" id="cronNewBtn">+ 新建任务</button>
       <button class="btn btn-outline" id="cronRefreshBtn">刷新</button>
     </div>
@@ -3678,11 +3651,11 @@ function mountCronTool() {
 async function loadCronTasks() {
   const list = $('cronList');
   if (!list) return;
-  list.innerHTML = '<p class="subtitle">加载中...</p>';
+  list.innerHTML = '<div class="empty">加载中…</div>';
   try {
     const data = await api('/api/cron-tasks');
     if (!data.tasks || data.tasks.length === 0) {
-      list.innerHTML = '<p class="subtitle">暂无任务，点击「新建任务」创建</p>';
+      list.innerHTML = '<div class="empty">暂无任务</div>';
       return;
     }
     let html = '<table class="data-table"><thead><tr><th>名称</th><th>间隔</th><th>启用</th><th>上次执行</th><th>状态</th><th>操作</th></tr></thead><tbody>';
@@ -3692,12 +3665,12 @@ async function loadCronTasks() {
         : '<span class="badge">-</span>';
       const lastRun = t.lastRunAt ? new Date(t.lastRunAt).toLocaleString('zh-CN') : '从未';
       const errTip = t.lastError ? ' title="' + esc(t.lastError) + '"' : '';
-      html += '<tr' + errTip + '><td>' + esc(t.name) + '</td><td>' + t.everyMinutes + '分</td><td>' + (t.enabled ? '✓' : '✗') + '</td><td>' + esc(lastRun) + '</td><td>' + statusBadge + '</td><td class="row-actions"><button class="btn btn-sm" onclick="triggerCronTask(\\'' + t.id + '\\')">运行</button><button class="btn btn-sm" onclick="renderCronEditor(\\'' + t.id + '\\')">编辑</button><button class="btn btn-sm btn-danger" onclick="deleteCronTask(\\'' + t.id + '\\')">删除</button></td></tr>';
+      html += '<tr' + errTip + '><td>' + esc(t.name) + '</td><td>' + t.everyMinutes + '分</td><td>' + (t.enabled ? '✓' : '✗') + '</td><td>' + esc(lastRun) + '</td><td>' + statusBadge + '</td><td class="row-actions"><button class="btn btn-outline btn-sm" onclick="triggerCronTask(\\'' + t.id + '\\')">运行</button><button class="btn btn-outline btn-sm" onclick="renderCronEditor(\\'' + t.id + '\\')">编辑</button><button class="btn btn-sm btn-danger" onclick="deleteCronTask(\\'' + t.id + '\\')">删除</button></td></tr>';
     }
     html += '</tbody></table>';
     list.innerHTML = html;
   } catch (e) {
-    list.innerHTML = '<p class="subtitle">加载失败：' + esc(e.message) + '</p>';
+    list.innerHTML = '<div class="empty">加载失败：' + esc(e.message) + '</div>';
   }
 }
 
@@ -3795,22 +3768,21 @@ window.renderCronEditor = async function(id) {
 function renderJsTool() {
   return \`
     <h2>📜 JS 运行工具</h2>
-    <p class="subtitle">运行自定义 JS 脚本，可发布为首页工具、可定时执行。注入对象 <code>kbox</code> 提供 log/fetch/kv/news/stock/disk 等能力。</p>
-    <div style="margin:12px 0">
+    <div style="display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap">
       <button class="btn btn-primary" id="jsNewBtn">+ 新建脚本</button>
       <button class="btn btn-outline" id="jsRefreshBtn">刷新</button>
     </div>
     <div class="section-title">脚本列表</div>
     <div id="jsScriptsList"></div>
-    <div class="section-title" style="margin-top:24px">临时运行</div>
-    <textarea id="jsCodeInput" class="sql-editor" rows="10" placeholder="// 输入代码，可用 kbox.log / kbox.news.top() / kbox.fetch(...) 等
-const top = await kbox.news.top();
-kbox.log(JSON.stringify(top, null, 2));"></textarea>
-    <div style="margin:8px 0">
-      <button class="btn btn-primary" id="jsRunTmpBtn">▶ 运行</button>
-      <button class="btn btn-outline" id="jsSaveAsBtn">存为脚本</button>
-    </div>
-    <div class="result-box" id="jsTmpResult"></div>
+    <details style="margin-top:24px">
+      <summary style="cursor:pointer;font-size:14px;font-weight:600;color:var(--text-secondary);padding:8px 0">临时运行</summary>
+      <textarea id="jsCodeInput" class="sql-editor" rows="10" placeholder="// 输入代码" style="margin-top:8px"></textarea>
+      <div style="display:flex;gap:8px;margin:8px 0;flex-wrap:wrap">
+        <button class="btn btn-primary" id="jsRunTmpBtn">▶ 运行</button>
+        <button class="btn btn-outline" id="jsSaveAsBtn">存为脚本</button>
+      </div>
+      <div class="result-box" id="jsTmpResult"></div>
+    </details>
     <div class="disk-modal-overlay" id="jsModalOverlay">
       <div class="disk-modal" style="max-width:680px">
         <div class="disk-modal-header">
@@ -3842,22 +3814,22 @@ function mountJsTool() {
 async function loadJsScripts() {
   const list = $('jsScriptsList');
   if (!list) return;
-  list.innerHTML = '<p class="subtitle">加载中...</p>';
+  list.innerHTML = '<div class="empty">加载中…</div>';
   try {
     const data = await api('/api/tools/js/scripts');
     if (!data.scripts || data.scripts.length === 0) {
-      list.innerHTML = '<p class="subtitle">暂无脚本，点击「新建脚本」创建</p>';
+      list.innerHTML = '<div class="empty">暂无脚本</div>';
       return;
     }
     let html = '<table class="data-table"><thead><tr><th>名称</th><th>已发布</th><th>上次运行</th><th>操作</th></tr></thead><tbody>';
     for (const s of data.scripts) {
-      const lastRun = s.last_run ? new Date(s.last_run.at).toLocaleString('zh-CN') + ' (' + (s.last_run.status === 'ok' ? 'OK' : 'ERR') + ', ' + s.last_run.duration_ms + 'ms)' : '从未';
-      html += '<tr><td>' + esc(s.icon) + ' ' + esc(s.name) + '</td><td>' + (s.published ? '✓' : '✗') + '</td><td>' + esc(lastRun) + '</td><td class="row-actions"><button class="btn btn-sm" onclick="runJsScript(\\'' + s.id + '\\')">运行</button><button class="btn btn-sm" onclick="toggleJsPublish(\\'' + s.id + '\\', ' + !s.published + ')">' + (s.published ? '取消发布' : '发布') + '</button><button class="btn btn-sm" onclick="renderJsEditor(\\'' + s.id + '\\')">编辑</button><button class="btn btn-sm btn-danger" onclick="deleteJsScript(\\'' + s.id + '\\')">删除</button></td></tr>';
+      const lastRun = s.last_run ? new Date(s.last_run.at).toLocaleString('zh-CN') + ' (' + (s.last_run.status === 'ok' ? 'OK' : 'ERR') + ')' : '从未';
+      html += '<tr><td>' + esc(s.icon) + ' ' + esc(s.name) + '</td><td>' + (s.published ? '✓' : '✗') + '</td><td>' + esc(lastRun) + '</td><td class="row-actions"><button class="btn btn-outline btn-sm" onclick="runJsScript(\\'' + s.id + '\\')">运行</button><button class="btn btn-outline btn-sm" onclick="toggleJsPublish(\\'' + s.id + '\\', ' + !s.published + ')">' + (s.published ? '取消发布' : '发布') + '</button><button class="btn btn-outline btn-sm" onclick="renderJsEditor(\\'' + s.id + '\\')">编辑</button><button class="btn btn-sm btn-danger" onclick="deleteJsScript(\\'' + s.id + '\\')">删除</button></td></tr>';
     }
     html += '</tbody></table>';
     list.innerHTML = html;
   } catch (e) {
-    list.innerHTML = '<p class="subtitle">加载失败：' + esc(e.message) + '</p>';
+    list.innerHTML = '<div class="empty">加载失败：' + esc(e.message) + '</div>';
   }
 }
 
@@ -3865,12 +3837,12 @@ async function runJsTmp() {
   const code = ($('jsCodeInput')?.value) || '';
   const resultBox = $('jsTmpResult');
   if (!resultBox) return;
-  resultBox.innerHTML = '<p class="subtitle">运行中...</p>';
+  resultBox.innerHTML = '<div class="empty">运行中…</div>';
   try {
     const r = await api('/api/tools/js/run', { method: 'POST', body: JSON.stringify({ code }), headers: {'Content-Type':'application/json'} });
     resultBox.innerHTML = formatJsResult(r);
   } catch (e) {
-    resultBox.innerHTML = '<p class="subtitle">运行失败：' + esc(e.message) + '</p>';
+    resultBox.innerHTML = '<div class="result-box show error">' + esc(e.message) + '</div>';
   }
 }
 
@@ -3882,7 +3854,7 @@ window.runJsScript = async function(id) {
     const resultBox = $('jsTmpResult');
     if (resultBox) resultBox.innerHTML = formatJsResult(r);
     if (r.error) toast('执行出错：' + r.error.message, 'error');
-    else toast('执行完成（' + r.duration_ms + 'ms）', 'success');
+    else toast('执行完成', 'success');
     loadJsScripts();
   } catch (e) {
     toast('运行失败：' + e.message, 'error');
@@ -4005,7 +3977,7 @@ function formatJsResult(r) {
     html += '<div class="section-title" style="color:#ef4444">错误</div>';
     html += '<pre class="sql-output" style="color:#ef4444">' + esc(r.error.message) + (r.error.stack ? '\\n' + esc(r.error.stack) : '') + '</pre>';
   }
-  html += '<p class="subtitle">耗时：' + r.duration_ms + 'ms' + (r.truncated ? '（输出已截断）' : '') + '</p>';
+  if (r.truncated) html += '<p class="subtitle">输出已截断</p>';
   return html;
 }
 
@@ -4053,12 +4025,12 @@ function mountScriptRunView(scriptId) {
   btn.onclick = async () => {
     const resultBox = $('scriptResult-' + scriptId);
     if (!resultBox) return;
-    resultBox.innerHTML = '<p class="subtitle">运行中...</p>';
+    resultBox.innerHTML = '<div class="empty">运行中…</div>';
     try {
       const r = await api('/api/tools/js/scripts/' + scriptId + '/run', { method: 'POST', body: JSON.stringify({}), headers: {'Content-Type':'application/json'} });
       resultBox.innerHTML = formatJsResult(r);
     } catch (e) {
-      resultBox.innerHTML = '<p class="subtitle">运行失败：' + esc(e.message) + '</p>';
+      resultBox.innerHTML = '<div class="result-box show error">' + esc(e.message) + '</div>';
     }
   };
 }
