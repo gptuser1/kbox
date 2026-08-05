@@ -194,7 +194,7 @@ input, select, button, textarea { font-family: inherit; }
   background: var(--primary); color: #fff; cursor: pointer;
   display: none; align-items: center; justify-content: center;
   box-shadow: 0 6px 20px rgba(99, 102, 241, 0.4);
-  transition: background 0.2s, box-shadow 0.2s;
+  transition: background 0.2s, box-shadow 0.2s, top 0.2s ease;
 }
 .float-back:hover { background: var(--primary-hover); box-shadow: 0 8px 24px rgba(99, 102, 241, 0.5); }
 .float-back.show { display: inline-flex; }
