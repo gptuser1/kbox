@@ -104,12 +104,12 @@ input, select, button, textarea { font-family: inherit; }
 .tool-grid.view-list { display: flex; flex-direction: column; gap: 8px; }
 
 /* ─── 首页加载动画（读取布局偏好期间掩盖布局突变）─── */
-.home-grid-wrap { position: relative; min-height: 200px; }
+.home-grid-wrap { position: relative; }
 .home-loader {
-  position: absolute; inset: 0; z-index: 5;
+  position: fixed; inset: 0; z-index: 1500;
   display: flex; flex-direction: column; align-items: center; justify-content: center;
   gap: 12px; color: var(--text-muted); font-size: 13px;
-  background: var(--bg); border-radius: 12px;
+  background: var(--bg);
   transition: opacity 0.25s ease;
 }
 .home-loader.hide { opacity: 0; pointer-events: none; }
@@ -906,6 +906,9 @@ function initTools() {
 
 window.showTool = function(id) {
   toolGrid.style.display = 'none';
+  // 隐藏 homeGridWrap（避免其 min-height 残留撑开空白）
+  const hgw = $('homeGridWrap');
+  if (hgw) hgw.style.display = 'none';
   // 隐藏工具栏（进入子页时不显示视图切换/编辑按钮）
   const tb = document.querySelector('.home-toolbar');
   if (tb) tb.style.display = 'none';
@@ -922,6 +925,9 @@ window.backToGrid = function() {
   const allViews = document.querySelectorAll('.tool-view');
   allViews.forEach(v => v.classList.remove('active'));
   toolGrid.style.display = 'grid';
+  // 恢复 homeGridWrap 显示
+  const hgw = $('homeGridWrap');
+  if (hgw) hgw.style.display = '';
   // 显示工具栏
   const tb = document.querySelector('.home-toolbar');
   if (tb) tb.style.display = 'flex';
