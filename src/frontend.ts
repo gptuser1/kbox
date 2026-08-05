@@ -100,15 +100,66 @@ input, select, button, textarea { font-family: inherit; }
 
 /* ─── 工具网格 ─── */
 .tool-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 16px; }
+.tool-grid.view-compact { grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 12px; }
+.tool-grid.view-list { display: flex; flex-direction: column; gap: 8px; }
 .tool-card {
   background: var(--card); border-radius: 12px; padding: 24px; cursor: pointer;
   box-shadow: var(--shadow); transition: box-shadow 0.2s, transform 0.2s, background 0.3s;
-  border: 1px solid transparent;
+  border: 1px solid transparent; position: relative;
 }
 .tool-card:hover { box-shadow: var(--shadow-lg); transform: translateY(-2px); border-color: var(--primary); }
 .tool-card .tool-icon { font-size: 32px; margin-bottom: 12px; }
 .tool-card .tool-name { font-size: 16px; font-weight: 600; margin-bottom: 4px; }
 .tool-card .tool-desc { font-size: 13px; color: var(--text-muted); line-height: 1.5; }
+
+/* 紧凑视图 */
+.tool-grid.view-compact .tool-card { padding: 16px; text-align: center; }
+.tool-grid.view-compact .tool-card .tool-icon { font-size: 26px; margin-bottom: 8px; }
+.tool-grid.view-compact .tool-card .tool-name { font-size: 14px; margin-bottom: 0; }
+.tool-grid.view-compact .tool-card .tool-desc { display: none; }
+
+/* 列表视图 */
+.tool-grid.view-list .tool-card { display: flex; align-items: center; gap: 16px; padding: 14px 18px; }
+.tool-grid.view-list .tool-card .tool-icon { font-size: 22px; margin-bottom: 0; flex-shrink: 0; }
+.tool-grid.view-list .tool-card .tool-name { font-size: 15px; margin-bottom: 0; flex-shrink: 0; min-width: 140px; }
+.tool-grid.view-list .tool-card .tool-desc { flex: 1; font-size: 13px; }
+
+/* 编辑模式 */
+.tool-card.editing { cursor: move; }
+.tool-card.editing::before {
+  content: '⋮⋮'; position: absolute; top: 8px; left: 8px;
+  font-size: 14px; color: var(--text-muted); opacity: 0.5; cursor: grab;
+}
+.tool-card.dragging { opacity: 0.4; }
+.tool-card.drag-over { border-color: var(--primary); border-style: dashed; }
+.tool-card-actions {
+  position: absolute; top: 8px; right: 8px; display: none; gap: 4px;
+}
+.tool-card.editing .tool-card-actions { display: flex; }
+.tool-card-actions button {
+  background: var(--bg); border: 1px solid var(--border); border-radius: 6px;
+  width: 28px; height: 28px; cursor: pointer; font-size: 13px; color: var(--text-secondary);
+  display: inline-flex; align-items: center; justify-content: center; padding: 0;
+}
+.tool-card-actions button:hover { background: var(--primary); color: #fff; border-color: var(--primary); }
+.tool-card.hidden-tool { opacity: 0.45; }
+.tool-card.hidden-tool .tool-name::after { content: ' (已隐藏)'; font-size: 11px; color: var(--text-muted); font-weight: 400; }
+
+/* 首页工具栏 */
+.home-toolbar {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-bottom: 16px; gap: 12px; flex-wrap: wrap;
+}
+.view-switcher {
+  display: inline-flex; background: var(--card); border: 1px solid var(--border);
+  border-radius: 8px; padding: 3px; gap: 2px;
+}
+.view-switcher button {
+  background: none; border: none; padding: 6px 10px; border-radius: 6px;
+  cursor: pointer; font-size: 13px; color: var(--text-secondary);
+}
+.view-switcher button.active { background: var(--primary); color: #fff; }
+.home-toolbar .right-group { display: flex; gap: 8px; align-items: center; }
 
 /* ─── 工具视图 ─── */
 .tool-view { display: none; }
@@ -407,8 +458,50 @@ body:has(.disk-modal-overlay.show) .float-back { display: none !important; }
 
 <!-- 主页：工具网格 -->
 <div class="container" id="mainContent">
+  <div class="home-toolbar">
+    <div class="view-switcher" id="viewSwitcher">
+      <button data-mode="grid" title="大图标">▦</button>
+      <button data-mode="compact" title="小图标">≡</button>
+      <button data-mode="list" title="详细信息">☰</button>
+    </div>
+    <div class="right-group">
+      <button class="btn btn-outline btn-sm" id="editLayoutBtn">✎ 自定义</button>
+      <button class="btn btn-primary btn-sm" id="exitEditBtn" style="display:none">完成</button>
+    </div>
+  </div>
   <div class="tool-grid" id="toolGrid"></div>
   <div id="toolViews"></div>
+</div>
+
+<!-- 工具卡片编辑弹层（改名/改图标/隐藏）-->
+<div class="disk-modal-overlay" id="toolEditOverlay">
+  <div class="disk-modal" style="max-width:420px">
+    <div class="disk-modal-header">
+      <h3>编辑工具</h3>
+      <button class="disk-modal-close" onclick="closeToolEdit()">✕</button>
+    </div>
+    <div class="disk-modal-body">
+      <div class="form-group">
+        <label>名称</label>
+        <input type="text" id="toolEditName" autocomplete="off" spellcheck="false">
+      </div>
+      <div class="form-group">
+        <label>图标（选择一个 emoji 或粘贴 SVG 代码）</label>
+        <div id="toolEditIconPicker" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px"></div>
+        <input type="text" id="toolEditIconInput" placeholder="emoji 或 <svg>...</svg>" autocomplete="off" spellcheck="false">
+      </div>
+      <div class="form-group">
+        <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
+          <input type="checkbox" id="toolEditHidden" style="width:auto">
+          <span>在首页隐藏此工具（仍可通过 URL 访问）</span>
+        </label>
+      </div>
+    </div>
+    <div class="disk-modal-footer">
+      <button class="btn btn-outline" onclick="closeToolEdit()">取消</button>
+      <button class="btn btn-primary" id="toolEditSave">保存</button>
+    </div>
+  </div>
 </div>
 
 <script>
@@ -502,6 +595,7 @@ function parseRepo(input) {
 }
 
 // ─── 工具注册表（模块化：新增工具只需在此注册 + 实现 render/mount） ───
+// 注意：name/icon 是默认值，用户偏好（preferences/home_layout）会覆盖
 const TOOLS = [
   { id: 'dispatch', name: 'GitHub Actions 触发', icon: '⚡', desc: '通过 API 触发 GitHub workflow dispatch', render: renderDispatchTool, mount: mountDispatchTool },
   { id: 'disk', name: '微型云盘', icon: '☁️', desc: '基于 D1 的轻量文件存储，支持分片上传', render: renderDiskTool, mount: mountDiskTool },
@@ -511,22 +605,238 @@ const TOOLS = [
   { id: 'config', name: '配置管理', icon: '⚙️', desc: '集中管理 API 密钥与工具配置，敏感字段加密存储', render: renderConfigTool, mount: mountConfigTool },
 ];
 
-function initTools() {
-  let grid = '';
-  for (const t of TOOLS) {
-    grid += '<div class="tool-card" onclick="showTool(\\'' + t.id + '\\')"><div class="tool-icon">' + t.icon + '</div><div class="tool-name">' + t.name + '</div><div class="tool-desc">' + t.desc + '</div></div>';
+// ─── 首页布局偏好 ───
+// 结构：{ viewMode: 'grid'|'compact'|'list', order: [toolId...], overrides: { toolId: { name?, icon?, hidden? } } }
+let homeLayout = { viewMode: 'grid', order: [] as string[], overrides: {} as Record<string, { name?: string; icon?: string; hidden?: boolean }> };
+let editMode = false;
+let dragSrcId = null;
+
+// 取工具的显示名/图标（应用用户覆盖）
+function toolName(id) { return (homeLayout.overrides[id]?.name) || (TOOLS.find(t => t.id === id)?.name) || id; }
+function toolIcon(id) { return (homeLayout.overrides[id]?.icon) || (TOOLS.find(t => t.id === id)?.icon) || '□'; }
+function toolHidden(id) { return !!homeLayout.overrides[id]?.hidden; }
+
+// 按偏好顺序排列工具，未在 order 里的补到末尾
+function orderedTools() {
+  const ordered: string[] = [];
+  for (const id of homeLayout.order) {
+    if (TOOLS.find(t => t.id === id)) ordered.push(id);
   }
-  toolGrid.innerHTML = grid;
+  for (const t of TOOLS) {
+    if (!ordered.includes(t.id)) ordered.push(t.id);
+  }
+  return ordered;
+}
+
+function renderToolGrid() {
+  // 设置视图模式 class
+  toolGrid.className = 'tool-grid view-' + homeLayout.viewMode;
+  const ids = orderedTools();
+  let html = '';
+  for (const id of ids) {
+    const t = TOOLS.find(x => x.id === id);
+    if (!t) continue;
+    const name = esc(toolName(id));
+    const icon = toolIcon(id);
+    const desc = esc(t.desc);
+    const hiddenCls = toolHidden(id) ? ' hidden-tool' : '';
+    const editCls = editMode ? ' editing' : '';
+    const clickAttr = editMode ? '' : ' onclick="showTool(\\'' + id + '\\')"';
+    const draggable = editMode ? ' draggable="true"' : '';
+    const actions = editMode
+      ? '<div class="tool-card-actions">' +
+        '<button title="编辑" onclick="event.stopPropagation();openToolEdit(\\'' + id + '\\')">✎</button>' +
+        '<button title="上移" onclick="event.stopPropagation();moveTool(\\'' + id + '\\',-1)">↑</button>' +
+        '<button title="下移" onclick="event.stopPropagation();moveTool(\\'' + id + '\\',1)">↓</button>' +
+        '</div>'
+      : '';
+    html += '<div class="tool-card' + hiddenCls + editCls + '" data-id="' + id + '"' + clickAttr + draggable + '>' +
+      '<div class="tool-icon">' + icon + '</div>' +
+      '<div class="tool-name">' + name + '</div>' +
+      '<div class="tool-desc">' + desc + '</div>' +
+      actions +
+      '</div>';
+  }
+  toolGrid.innerHTML = html;
+  if (editMode) bindDragEvents();
+}
+
+function bindDragEvents() {
+  const cards = toolGrid.querySelectorAll('.tool-card');
+  cards.forEach(card => {
+    card.addEventListener('dragstart', (e) => {
+      dragSrcId = card.getAttribute('data-id');
+      card.classList.add('dragging');
+      e.dataTransfer.effectAllowed = 'move';
+    });
+    card.addEventListener('dragend', () => {
+      card.classList.remove('dragging');
+      toolGrid.querySelectorAll('.drag-over').forEach(c => c.classList.remove('drag-over'));
+    });
+    card.addEventListener('dragover', (e) => {
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'move';
+      if (card.getAttribute('data-id') !== dragSrcId) card.classList.add('drag-over');
+    });
+    card.addEventListener('dragleave', () => { card.classList.remove('drag-over'); });
+    card.addEventListener('drop', (e) => {
+      e.preventDefault();
+      card.classList.remove('drag-over');
+      const targetId = card.getAttribute('data-id');
+      if (!dragSrcId || !targetId || dragSrcId === targetId) return;
+      const order = orderedTools();
+      const from = order.indexOf(dragSrcId);
+      const to = order.indexOf(targetId);
+      if (from < 0 || to < 0) return;
+      order.splice(to, 0, order.splice(from, 1)[0]);
+      homeLayout.order = order;
+      saveHomeLayout();
+      renderToolGrid();
+    });
+  });
+}
+
+// 上移/下移
+window.moveTool = function(id, dir) {
+  const order = orderedTools();
+  const i = order.indexOf(id);
+  const j = i + dir;
+  if (j < 0 || j >= order.length) return;
+  [order[i], order[j]] = [order[j], order[i]];
+  homeLayout.order = order;
+  saveHomeLayout();
+  renderToolGrid();
+};
+
+// 保存首页布局到偏好
+async function saveHomeLayout() {
+  try {
+    await api('/api/preferences/home_layout', {
+      method: 'PUT',
+      body: JSON.stringify({ value: homeLayout }),
+      headers: { 'Content-Type': 'application/json' },
+    });
+  } catch (e) {
+    if (e.message !== 'UNAUTHORIZED') toast('布局保存失败：' + e.message, 'error');
+  }
+}
+
+// 加载首页布局
+async function loadHomeLayout() {
+  try {
+    const data = await api('/api/preferences/home_layout');
+    if (data.value && typeof data.value === 'object') {
+      homeLayout = {
+        viewMode: data.value.viewMode === 'compact' || data.value.viewMode === 'list' ? data.value.viewMode : 'grid',
+        order: Array.isArray(data.value.order) ? data.value.order : [],
+        overrides: data.value.overrides && typeof data.value.overrides === 'object' ? data.value.overrides : {},
+      };
+    }
+  } catch (e) {
+    if (e.message !== 'UNAUTHORIZED') console.error('load home layout failed', e);
+  }
+  // 应用视图模式按钮高亮
+  document.querySelectorAll('#viewSwitcher button').forEach(b => {
+    b.classList.toggle('active', b.getAttribute('data-mode') === homeLayout.viewMode);
+  });
+  renderToolGrid();
+}
+
+// 视图切换与编辑模式按钮绑定
+function bindHomeToolbar() {
+  document.querySelectorAll('#viewSwitcher button').forEach(btn => {
+    btn.addEventListener('click', () => {
+      homeLayout.viewMode = btn.getAttribute('data-mode');
+      document.querySelectorAll('#viewSwitcher button').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      saveHomeLayout();
+      renderToolGrid();
+    });
+  });
+  const editBtn = $('editLayoutBtn');
+  const exitBtn = $('exitEditBtn');
+  if (editBtn) editBtn.addEventListener('click', () => {
+    editMode = true;
+    editBtn.style.display = 'none';
+    exitBtn.style.display = 'inline-flex';
+    toast('拖拽卡片排序，点 ✎ 编辑名称/图标', 'info');
+    renderToolGrid();
+  });
+  if (exitBtn) exitBtn.addEventListener('click', () => {
+    editMode = false;
+    editBtn.style.display = 'inline-flex';
+    exitBtn.style.display = 'none';
+    renderToolGrid();
+  });
+}
+
+// ─── 工具卡片编辑弹层 ───
+const EMOJI_CHOICES = ['⚡','☁️','💰','📰','🗄️','⚙️','🔧','📊','📅','🎯','🚀','📦','🔍','📈','💡','🛠️','🌐','📝','🔔','📁'];
+let editingToolId = null;
+
+window.openToolEdit = function(id) {
+  editingToolId = id;
+  $('toolEditName').value = toolName(id) === TOOLS.find(t => t.id === id)?.name ? '' : toolName(id);
+  $('toolEditIconInput').value = (homeLayout.overrides[id]?.icon) || '';
+  $('toolEditHidden').checked = toolHidden(id);
+  // 渲染 emoji 选择器
+  $('toolEditIconPicker').innerHTML = EMOJI_CHOICES.map(e =>
+    '<span style="font-size:22px;cursor:pointer;padding:4px 6px;border-radius:6px" onmouseover="this.style.background=\\'var(--bg)\\'" onmouseout="this.style.background=\\'none\\'" onclick="pickEmoji(\\'' + e + '\\')">' + e + '</span>'
+  ).join('');
+  $('toolEditOverlay').classList.add('show');
+};
+
+window.pickEmoji = function(e) {
+  $('toolEditIconInput').value = e;
+};
+
+window.closeToolEdit = function() {
+  $('toolEditOverlay').classList.remove('show');
+  editingToolId = null;
+};
+
+$('toolEditOverlay')?.addEventListener('click', (e) => { if (e.target === $('toolEditOverlay')) closeToolEdit(); });
+
+$('toolEditSave')?.addEventListener('click', async () => {
+  if (!editingToolId) return;
+  const id = editingToolId;
+  const name = $('toolEditName').value.trim();
+  const icon = $('toolEditIconInput').value.trim();
+  const hidden = $('toolEditHidden').checked;
+  // 清理：与默认值相同的覆盖删除（避免存冗余）
+  const def = TOOLS.find(t => t.id === id);
+  const ov = {};
+  if (name && name !== def?.name) ov.name = name;
+  if (icon && icon !== def?.icon) ov.icon = icon;
+  if (hidden) ov.hidden = true;
+  if (Object.keys(ov).length === 0) {
+    delete homeLayout.overrides[id];
+  } else {
+    homeLayout.overrides[id] = ov;
+  }
+  await saveHomeLayout();
+  closeToolEdit();
+  renderToolGrid();
+  toast('已保存', 'success');
+});
+
+function initTools() {
+  renderToolGrid();
   let views = '';
   for (const t of TOOLS) {
     views += '<div class="tool-view" id="view-' + t.id + '">' + t.render() + '</div>';
   }
   toolViews.innerHTML = views;
   for (const t of TOOLS) { t.mount(); }
+  bindHomeToolbar();
+  loadHomeLayout();
 }
 
 window.showTool = function(id) {
   toolGrid.style.display = 'none';
+  // 隐藏工具栏（进入子页时不显示视图切换/编辑按钮）
+  const tb = document.querySelector('.home-toolbar');
+  if (tb) tb.style.display = 'none';
   for (const t of TOOLS) {
     const v = $('view-' + t.id);
     if (t.id === id) { v.classList.add('active'); }
@@ -539,6 +849,9 @@ window.showTool = function(id) {
 window.backToGrid = function() {
   for (const t of TOOLS) { $('view-' + t.id).classList.remove('active'); }
   toolGrid.style.display = 'grid';
+  // 显示工具栏
+  const tb = document.querySelector('.home-toolbar');
+  if (tb) tb.style.display = 'flex';
   // 隐藏常驻浮动返回按钮，回到顶部
   $('floatBack').classList.remove('show');
   window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -1866,6 +2179,9 @@ function mountConfigTool() {
   let globalConfigs = [];   // [{ key, desc, sensitive, placeholder, default, hasValue, value }]
   let toolOverrides = {};   // { toolId: [{ key, desc, sensitive, hasValue, value }] }
   let editing = null;       // { scope: 'app'|'tool', tool?, key, field }
+  let configOrder = [];     // 全局配置项顺序 [key...]，来自 preferences/config_order.app
+  let configSortMode = false;
+  let configDragKey = null;
 
   function valueDisplay(cfg) {
     if (cfg.sensitive) {
@@ -1882,23 +2198,111 @@ function mountConfigTool() {
     return '<span style="color:var(--text-muted)">未设置</span>';
   }
 
+  // 按用户偏好排序全局配置项；未记录的按 schema 默认顺序补到末尾
+  function orderedGlobalConfigs() {
+    if (!configOrder.length) return globalConfigs;
+    const byKey = {};
+    for (const c of globalConfigs) byKey[c.key] = c;
+    const ordered = [];
+    for (const k of configOrder) {
+      if (byKey[k]) { ordered.push(byKey[k]); delete byKey[k]; }
+    }
+    for (const c of globalConfigs) {
+      if (byKey[c.key]) ordered.push(c);
+    }
+    return ordered;
+  }
+
   function renderGlobal() {
     if (!globalConfigs.length) {
       globalList.innerHTML = '<div class="empty">无配置项</div>';
       return;
     }
-    globalList.innerHTML = globalConfigs.map(cfg => {
+    const list = orderedGlobalConfigs();
+    const headerExtra = '<div style="margin-bottom:8px;display:flex;justify-content:flex-end;gap:6px">' +
+      (configSortMode
+        ? '<button class="btn btn-primary btn-sm" id="exitConfigSortBtn">完成排序</button>'
+        : '<button class="btn btn-outline btn-sm" id="enterConfigSortBtn">↕ 调整顺序</button>') +
+      '</div>';
+    globalList.innerHTML = headerExtra + list.map(cfg => {
       const icon = cfg.sensitive ? '🔐' : '⚙️';
       const tag = cfg.sensitive ? ' <span style="font-size:10px;background:rgba(239,68,68,0.15);color:var(--danger);padding:1px 6px;border-radius:3px">敏感</span>' : '';
-      return '<div class="file-item">' +
+      const dragAttr = configSortMode ? ' draggable="true" data-key="' + esc(cfg.key) + '"' : '';
+      const itemCls = configSortMode ? 'file-item editing' : 'file-item';
+      const actions = configSortMode
+        ? '<div class="file-actions"><span style="color:var(--text-muted);font-size:16px;cursor:grab">⋮⋮</span></div>'
+        : '<div class="file-actions">' +
+          '<button class="btn btn-outline btn-sm" onclick="editConfig(\\'app\\',null,\\'' + esc(cfg.key) + '\\')">编辑</button>' +
+          (cfg.hasValue ? '<button class="btn btn-outline btn-sm" style="color:var(--danger)" onclick="clearConfig(\\'app\\',null,\\'' + esc(cfg.key) + '\\')">清除</button>' : '') +
+          '</div>';
+      return '<div class="' + itemCls + '"' + dragAttr + '>' +
         '<div class="file-icon">' + icon + '</div>' +
         '<div class="file-info"><div class="file-name">' + esc(cfg.key) + tag + '</div>' +
         '<div class="file-meta">' + esc(cfg.desc) + ' · ' + valueDisplay(cfg) + '</div></div>' +
-        '<div class="file-actions">' +
-        '<button class="btn btn-outline btn-sm" onclick="editConfig(\\'app\\',null,\\'' + esc(cfg.key) + '\\')">编辑</button>' +
-        (cfg.hasValue ? '<button class="btn btn-outline btn-sm" style="color:var(--danger)" onclick="clearConfig(\\'app\\',null,\\'' + esc(cfg.key) + '\\')">清除</button>' : '') +
-        '</div></div>';
+        actions +
+        '</div>';
     }).join('');
+    if (configSortMode) bindConfigDrag();
+    const enterBtn = $('enterConfigSortBtn');
+    const exitBtn = $('exitConfigSortBtn');
+    if (enterBtn) enterBtn.onclick = () => { configSortMode = true; renderGlobal(); };
+    if (exitBtn) exitBtn.onclick = async () => {
+      configSortMode = false;
+      // 保存当前顺序
+      configOrder = orderedGlobalConfigs().map(c => c.key);
+      try {
+        await api('/api/preferences/config_order', {
+          method: 'PUT',
+          body: JSON.stringify({ value: { app: configOrder } }),
+          headers: { 'Content-Type': 'application/json' },
+        });
+        toast('顺序已保存', 'success');
+      } catch (e) { if (e.message !== 'UNAUTHORIZED') toast('保存失败：' + e.message, 'error'); }
+      renderGlobal();
+    };
+  }
+
+  function bindConfigDrag() {
+    const items = globalList.querySelectorAll('.file-item[draggable="true"]');
+    items.forEach(item => {
+      item.addEventListener('dragstart', (e) => {
+        configDragKey = item.getAttribute('data-key');
+        item.style.opacity = '0.4';
+        e.dataTransfer.effectAllowed = 'move';
+      });
+      item.addEventListener('dragend', () => {
+        item.style.opacity = '';
+        items.forEach(i => i.style.borderColor = '');
+      });
+      item.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        e.dataTransfer.dropEffect = 'move';
+        if (item.getAttribute('data-key') !== configDragKey) {
+          item.style.borderColor = 'var(--primary)';
+          item.style.borderStyle = 'dashed';
+        }
+      });
+      item.addEventListener('dragleave', () => {
+        item.style.borderColor = '';
+        item.style.borderStyle = '';
+      });
+      item.addEventListener('drop', (e) => {
+        e.preventDefault();
+        item.style.borderColor = '';
+        item.style.borderStyle = '';
+        const targetKey = item.getAttribute('data-key');
+        if (!configDragKey || !targetKey || configDragKey === targetKey) return;
+        const list = orderedGlobalConfigs();
+        const from = list.findIndex(c => c.key === configDragKey);
+        const to = list.findIndex(c => c.key === targetKey);
+        if (from < 0 || to < 0) return;
+        // 同步调整 configOrder（以 key 数组形式）
+        const orderKeys = list.map(c => c.key);
+        orderKeys.splice(to, 0, orderKeys.splice(from, 1)[0]);
+        configOrder = orderKeys;
+        renderGlobal();
+      });
+    });
   }
 
   function renderTools() {
@@ -1951,6 +2355,14 @@ function mountConfigTool() {
       tools.forEach((t, i) => {
         toolOverrides[t.id] = results[i].overrides || [];
       });
+
+      // 加载配置项排序偏好
+      try {
+        const orderData = await api('/api/preferences/config_order');
+        if (orderData.value && orderData.value.app && Array.isArray(orderData.value.app)) {
+          configOrder = orderData.value.app;
+        }
+      } catch { /* 无偏好则用默认顺序 */ }
 
       renderGlobal();
       renderTools();

@@ -257,6 +257,76 @@ app.delete('/api/config/tools/:tool/:key', async (c) => {
   }
 });
 
+// ─── 用户偏好设置（通用 KV，不限定结构）───
+// KV namespace: preferences
+// 任意 key → 任意 JSON value。供前端存放各类用户偏好，例如：
+//   home_layout   -> { viewMode, order, overrides }
+//   config_order  -> { [scope]: [keys...] }
+//   theme         -> 'dark' | 'light'
+// 未来新增任何偏好都复用这套端点，无需后端改代码。
+
+const NS_PREFS = 'preferences';
+
+// GET /api/preferences — 列出所有偏好
+app.get('/api/preferences', async (c) => {
+  const kv = createKv(c.env.D1_API_TOKEN, c.env.D1_API_BASE);
+  try {
+    const items = await kv.list<any>(NS_PREFS);
+    const prefs: Record<string, any> = {};
+    for (const item of items) prefs[item.key] = item.value;
+    return c.json({ preferences: prefs });
+  } catch (e) {
+    if (kv.error()) return c.json({ error: kv.error() }, 503);
+    return c.json({ error: e instanceof Error ? e.message : '读取偏好失败' }, 500);
+  }
+});
+
+// GET /api/preferences/:key — 读取单条偏好
+app.get('/api/preferences/:key', async (c) => {
+  const key = c.req.param('key');
+  const kv = createKv(c.env.D1_API_TOKEN, c.env.D1_API_BASE);
+  try {
+    const value = await kv.get<any>(NS_PREFS, key);
+    return c.json({ key, value: value === null ? null : value });
+  } catch (e) {
+    if (kv.error()) return c.json({ error: kv.error() }, 503);
+    return c.json({ error: e instanceof Error ? e.message : '读取偏好失败' }, 500);
+  }
+});
+
+// PUT /api/preferences/:key — 写入单条偏好（任意 JSON value）
+app.put('/api/preferences/:key', async (c) => {
+  const key = c.req.param('key');
+  let body: any;
+  try { body = await c.req.json(); } catch {
+    return c.json({ error: '请求体必须是有效的JSON' }, 400);
+  }
+  if (!('value' in body)) {
+    return c.json({ error: '请求体需为 { value: any }' }, 400);
+  }
+  const kv = createKv(c.env.D1_API_TOKEN, c.env.D1_API_BASE);
+  try {
+    await kv.set(NS_PREFS, key, body.value);
+    return c.json({ ok: true });
+  } catch (e) {
+    if (kv.error()) return c.json({ error: kv.error() }, 503);
+    return c.json({ error: e instanceof Error ? e.message : '保存偏好失败' }, 500);
+  }
+});
+
+// DELETE /api/preferences/:key — 删除单条偏好
+app.delete('/api/preferences/:key', async (c) => {
+  const key = c.req.param('key');
+  const kv = createKv(c.env.D1_API_TOKEN, c.env.D1_API_BASE);
+  try {
+    await kv.delete(NS_PREFS, key);
+    return c.json({ ok: true });
+  } catch (e) {
+    if (kv.error()) return c.json({ error: kv.error() }, 503);
+    return c.json({ error: e instanceof Error ? e.message : '删除偏好失败' }, 500);
+  }
+});
+
 // ─── GitHub Workflow Dispatch 工具 ───
 
 // 列出仓库的 workflows
