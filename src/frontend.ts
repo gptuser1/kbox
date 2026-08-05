@@ -379,6 +379,23 @@ body:has(.disk-modal-overlay.show) .float-back { display: none !important; }
 .db-editor:focus { border-color: var(--primary); }
 .sql-editor { width: 100%; padding: 12px; border-radius: 10px; border: 1px solid var(--border); background: var(--input-bg); color: var(--text); font-family: var(--font-mono, monospace); font-size: 13px; line-height: 1.5; resize: vertical; outline: none; tab-size: 2; box-sizing: border-box; }
 .sql-editor:focus { border-color: var(--primary); }
+.sql-output { background: var(--input-bg); color: var(--text); border: 1px solid var(--border); border-radius: 8px; padding: 12px; font-family: var(--font-mono, monospace); font-size: 12px; line-height: 1.5; white-space: pre-wrap; word-break: break-all; overflow-x: auto; margin: 8px 0; }
+/* 通用数据表格（cron/js 等管理页） */
+.data-table { width: 100%; border-collapse: collapse; font-size: 13px; background: var(--card); border-radius: 10px; overflow: hidden; box-shadow: var(--shadow); }
+.data-table th, .data-table td { padding: 8px 12px; text-align: left; border-bottom: 1px solid var(--border); vertical-align: middle; }
+.data-table th { background: var(--bg); color: var(--text-secondary); font-weight: 600; font-size: 12px; }
+.data-table tr:last-child td { border-bottom: none; }
+.data-table tr:hover td { background: var(--bg); }
+.data-table .row-actions { display: flex; gap: 6px; flex-wrap: wrap; }
+.data-table .row-actions .btn { font-size: 12px; padding: 4px 10px; }
+/* 徽标 */
+.badge { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 11px; font-weight: 600; background: var(--input-bg); color: var(--text-muted); }
+.badge-ok { background: rgba(34,197,94,0.15); color: var(--success); }
+.badge-err { background: rgba(239,68,68,0.15); color: var(--danger); }
+/* 复选框：主题色 + 水平对齐 */
+input[type="checkbox"] { accent-color: var(--primary); width: 16px; height: 16px; cursor: pointer; vertical-align: middle; margin: 0; }
+.check-row { display: inline-flex; align-items: center; gap: 8px; cursor: pointer; user-select: none; }
+.check-row input { margin: 0; }
 .db-results-wrap { background: var(--card); border-radius: 10px; box-shadow: var(--shadow); overflow: hidden; }
 .db-results-head { padding: 10px 14px; font-size: 12px; color: var(--text-muted); border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap; }
 .db-results-scroll { max-height: 56vh; overflow: auto; }
@@ -3689,13 +3706,25 @@ if (token) {
 function renderCronTool() {
   return \`
     <h2>⏰ Cron 任务</h2>
-    <p class="subtitle">软定时任务管理。每小时由 cron 触发，按 everyMinutes 判断是否执行。</p>
+    <p class="subtitle">定时执行 JS 脚本。每小时由 cron 触发，按执行间隔判断是否到期。</p>
     <div style="margin:12px 0">
       <button class="btn btn-primary" id="cronNewBtn">+ 新建任务</button>
       <button class="btn btn-outline" id="cronRefreshBtn">刷新</button>
     </div>
     <div id="cronList"></div>
-    <div id="cronEditor" style="display:none"></div>
+    <div class="disk-modal-overlay" id="cronModalOverlay">
+      <div class="disk-modal" style="max-width:480px">
+        <div class="disk-modal-header">
+          <h3 id="cronModalTitle">新建任务</h3>
+          <button class="disk-modal-close" onclick="closeCronModal()">✕</button>
+        </div>
+        <div class="disk-modal-body" id="cronModalBody"></div>
+        <div class="disk-modal-footer">
+          <button class="btn btn-primary" id="cronSaveBtn">保存</button>
+          <button class="btn btn-outline" onclick="closeCronModal()">取消</button>
+        </div>
+      </div>
+    </div>
   \`;
 }
 
@@ -3714,17 +3743,17 @@ async function loadCronTasks() {
   try {
     const data = await api('/api/cron-tasks');
     if (!data.tasks || data.tasks.length === 0) {
-      list.innerHTML = '<p class="subtitle">暂无任务</p>';
+      list.innerHTML = '<p class="subtitle">暂无任务，点击「新建任务」创建</p>';
       return;
     }
-    let html = '<table class="data-table"><thead><tr><th>名称</th><th>类型</th><th>间隔(分)</th><th>启用</th><th>上次执行</th><th>状态</th><th>操作</th></tr></thead><tbody>';
+    let html = '<table class="data-table"><thead><tr><th>名称</th><th>间隔</th><th>启用</th><th>上次执行</th><th>状态</th><th>操作</th></tr></thead><tbody>';
     for (const t of data.tasks) {
       const statusBadge = t.lastStatus === 'ok' ? '<span class="badge badge-ok">OK</span>'
         : t.lastStatus === 'error' ? '<span class="badge badge-err">ERR</span>'
         : '<span class="badge">-</span>';
       const lastRun = t.lastRunAt ? new Date(t.lastRunAt).toLocaleString('zh-CN') : '从未';
       const errTip = t.lastError ? ' title="' + esc(t.lastError) + '"' : '';
-      html += '<tr' + errTip + '><td>' + esc(t.name) + '</td><td>' + esc(t.type) + (t.scriptId ? ' (' + esc(t.scriptId).slice(0,8) + ')' : '') + '</td><td>' + t.everyMinutes + '</td><td>' + (t.enabled ? '✓' : '✗') + '</td><td>' + esc(lastRun) + '</td><td>' + statusBadge + '</td><td><button class="btn btn-sm" onclick="triggerCronTask(\\'' + t.id + '\\')">运行</button> <button class="btn btn-sm" onclick="renderCronEditor(\\'' + t.id + '\\')">编辑</button> <button class="btn btn-sm btn-danger" onclick="deleteCronTask(\\'' + t.id + '\\')">删除</button></td></tr>';
+      html += '<tr' + errTip + '><td>' + esc(t.name) + '</td><td>' + t.everyMinutes + '分</td><td>' + (t.enabled ? '✓' : '✗') + '</td><td>' + esc(lastRun) + '</td><td>' + statusBadge + '</td><td class="row-actions"><button class="btn btn-sm" onclick="triggerCronTask(\\'' + t.id + '\\')">运行</button><button class="btn btn-sm" onclick="renderCronEditor(\\'' + t.id + '\\')">编辑</button><button class="btn btn-sm btn-danger" onclick="deleteCronTask(\\'' + t.id + '\\')">删除</button></td></tr>';
     }
     html += '</tbody></table>';
     list.innerHTML = html;
@@ -3756,9 +3785,16 @@ window.deleteCronTask = async function(id) {
   }
 }
 
+window.closeCronModal = function() {
+  const ov = $('cronModalOverlay');
+  if (ov) ov.classList.remove('show');
+};
+
 window.renderCronEditor = async function(id) {
-  const ed = $('cronEditor');
-  if (!ed) return;
+  const ov = $('cronModalOverlay');
+  const body = $('cronModalBody');
+  const title = $('cronModalTitle');
+  if (!ov || !body) return;
   let task = null;
   if (id) {
     try {
@@ -3766,56 +3802,38 @@ window.renderCronEditor = async function(id) {
       task = data.tasks.find(t => t.id === id);
     } catch (e) { toast('加载失败：' + e.message, 'error'); return; }
   }
-  // 拉脚本列表供 script 类型选择
+  title.textContent = task ? '编辑任务' : '新建任务';
   let scriptOptions = '<option value="">-- 选择脚本 --</option>';
   try {
     const sd = await api('/api/tools/js/scripts');
     for (const s of (sd.scripts || [])) {
-      scriptOptions += '<option value="' + s.id + '"' + (task && task.scriptId === s.id ? ' selected' : '') + '>' + esc(s.name) + ' (' + s.id.slice(0,8) + ')</option>';
+      scriptOptions += '<option value="' + s.id + '"' + (task && task.scriptId === s.id ? ' selected' : '') + '>' + esc(s.name) + '</option>';
     }
   } catch {}
-  ed.style.display = 'block';
-  ed.innerHTML = \`
-    <div class="modal-overlay" style="position:relative;background:transparent;padding:0">
-      <div class="modal" style="position:relative;transform:none;margin:0;max-width:500px">
-        <h3>\${task ? '编辑任务' : '新建任务'}</h3>
-        <div class="form-group">
-          <label>名称</label>
-          <input type="text" id="cronName" value="\${task ? esc(task.name) : ''}" placeholder="任务名">
-        </div>
-        <div class="form-group">
-          <label>类型</label>
-          <select id="cronType">
-            <option value="news"\${task && task.type === 'news' ? ' selected' : ''}>新闻抓取</option>
-            <option value="script"\${task && task.type === 'script' ? ' selected' : ''}>脚本执行</option>
-          </select>
-        </div>
-        <div class="form-group" id="cronScriptGroup" style="\${(!task || task.type === 'news') ? 'display:none' : ''}">
-          <label>关联脚本</label>
-          <select id="cronScriptId">\${scriptOptions}</select>
-        </div>
-        <div class="form-group">
-          <label>执行间隔（分钟，最小 5）</label>
-          <input type="number" id="cronEvery" min="5" value="\${task ? task.everyMinutes : 60}">
-        </div>
-        <div class="form-group">
-          <label><input type="checkbox" id="cronEnabled" \${(!task || task.enabled) ? 'checked' : ''}> 启用</label>
-        </div>
-        <div style="margin-top:16px">
-          <button class="btn btn-primary" id="cronSaveBtn">保存</button>
-          <button class="btn btn-outline" id="cronCancelBtn">取消</button>
-        </div>
-      </div>
+  body.innerHTML = \`
+    <div class="form-group">
+      <label>名称</label>
+      <input type="text" id="cronName" value="\${task ? esc(task.name) : ''}" placeholder="任务名">
+    </div>
+    <div class="form-group">
+      <label>关联脚本</label>
+      <select id="cronScriptId">\${scriptOptions}</select>
+    </div>
+    <div class="form-group">
+      <label>执行间隔（分钟，最小 5）</label>
+      <input type="number" id="cronEvery" min="5" value="\${task ? task.everyMinutes : 60}">
+    </div>
+    <div class="form-group">
+      <label class="check-row"><input type="checkbox" id="cronEnabled" \${(!task || task.enabled) ? 'checked' : ''}> 启用</label>
     </div>
   \`;
-  $('cronType').onchange = function() {
-    $('cronScriptGroup').style.display = this.value === 'script' ? 'block' : 'none';
-  };
+  ov.classList.add('show');
   $('cronSaveBtn').onclick = async () => {
+    const scriptId = $('cronScriptId').value;
+    if (!scriptId) { toast('请选择关联脚本', 'error'); return; }
     const body = {
       name: $('cronName').value.trim() || '未命名任务',
-      type: $('cronType').value,
-      scriptId: $('cronScriptId').value || undefined,
+      scriptId,
       everyMinutes: Number($('cronEvery').value) || 60,
       enabled: $('cronEnabled').checked,
     };
@@ -3826,13 +3844,12 @@ window.renderCronEditor = async function(id) {
         await api('/api/cron-tasks', { method: 'POST', body: JSON.stringify(body), headers: {'Content-Type':'application/json'} });
       }
       toast('已保存', 'success');
-      ed.style.display = 'none';
+      closeCronModal();
       loadCronTasks();
     } catch (e) {
       toast('保存失败：' + e.message, 'error');
     }
   };
-  $('cronCancelBtn').onclick = () => { ed.style.display = 'none'; };
 }
 
 // ═══ 工具：JS 运行工具 ═══
@@ -3855,7 +3872,19 @@ kbox.log(JSON.stringify(top, null, 2));"></textarea>
       <button class="btn btn-outline" id="jsSaveAsBtn">存为脚本</button>
     </div>
     <div class="result-box" id="jsTmpResult"></div>
-    <div id="jsEditor" style="display:none"></div>
+    <div class="disk-modal-overlay" id="jsModalOverlay">
+      <div class="disk-modal" style="max-width:680px">
+        <div class="disk-modal-header">
+          <h3 id="jsModalTitle">新建脚本</h3>
+          <button class="disk-modal-close" onclick="closeJsModal()">✕</button>
+        </div>
+        <div class="disk-modal-body" id="jsModalBody"></div>
+        <div class="disk-modal-footer">
+          <button class="btn btn-primary" id="jsSaveBtn">保存</button>
+          <button class="btn btn-outline" onclick="closeJsModal()">取消</button>
+        </div>
+      </div>
+    </div>
   \`;
 }
 
@@ -3878,13 +3907,13 @@ async function loadJsScripts() {
   try {
     const data = await api('/api/tools/js/scripts');
     if (!data.scripts || data.scripts.length === 0) {
-      list.innerHTML = '<p class="subtitle">暂无脚本</p>';
+      list.innerHTML = '<p class="subtitle">暂无脚本，点击「新建脚本」创建</p>';
       return;
     }
     let html = '<table class="data-table"><thead><tr><th>名称</th><th>已发布</th><th>上次运行</th><th>操作</th></tr></thead><tbody>';
     for (const s of data.scripts) {
       const lastRun = s.last_run ? new Date(s.last_run.at).toLocaleString('zh-CN') + ' (' + (s.last_run.status === 'ok' ? 'OK' : 'ERR') + ', ' + s.last_run.duration_ms + 'ms)' : '从未';
-      html += '<tr><td>' + esc(s.name) + ' <span class="subtitle">' + esc(s.icon) + '</span></td><td>' + (s.published ? '✓' : '✗') + '</td><td>' + esc(lastRun) + '</td><td><button class="btn btn-sm" onclick="runJsScript(\\'' + s.id + '\\')">运行</button> <button class="btn btn-sm" onclick="toggleJsPublish(\\'' + s.id + '\\', ' + !s.published + ')">' + (s.published ? '取消发布' : '发布') + '</button> <button class="btn btn-sm" onclick="renderJsEditor(\\'' + s.id + '\\')">编辑</button> <button class="btn btn-sm btn-danger" onclick="deleteJsScript(\\'' + s.id + '\\')">删除</button></td></tr>';
+      html += '<tr><td>' + esc(s.icon) + ' ' + esc(s.name) + '</td><td>' + (s.published ? '✓' : '✗') + '</td><td>' + esc(lastRun) + '</td><td class="row-actions"><button class="btn btn-sm" onclick="runJsScript(\\'' + s.id + '\\')">运行</button><button class="btn btn-sm" onclick="toggleJsPublish(\\'' + s.id + '\\', ' + !s.published + ')">' + (s.published ? '取消发布' : '发布') + '</button><button class="btn btn-sm" onclick="renderJsEditor(\\'' + s.id + '\\')">编辑</button><button class="btn btn-sm btn-danger" onclick="deleteJsScript(\\'' + s.id + '\\')">删除</button></td></tr>';
     }
     html += '</tbody></table>';
     list.innerHTML = html;
@@ -3958,9 +3987,16 @@ async function saveAsScript() {
   }
 }
 
+window.closeJsModal = function() {
+  const ov = $('jsModalOverlay');
+  if (ov) ov.classList.remove('show');
+};
+
 window.renderJsEditor = async function(id) {
-  const ed = $('jsEditor');
-  if (!ed) return;
+  const ov = $('jsModalOverlay');
+  const body = $('jsModalBody');
+  const title = $('jsModalTitle');
+  if (!ov || !body) return;
   let script = null;
   if (id) {
     try {
@@ -3968,39 +4004,31 @@ window.renderJsEditor = async function(id) {
       script = data.script;
     } catch (e) { toast('加载失败：' + e.message, 'error'); return; }
   }
-  ed.style.display = 'block';
-  ed.innerHTML = \`
-    <div class="modal-overlay" style="position:relative;background:transparent;padding:0">
-      <div class="modal" style="position:relative;transform:none;margin:0;max-width:700px">
-        <h3>\${script ? '编辑脚本' : '新建脚本'}</h3>
-        <div class="form-group">
-          <label>名称</label>
-          <input type="text" id="jsName" value="\${script ? esc(script.name) : ''}" placeholder="脚本名">
-        </div>
-        <div class="form-group">
-          <label>描述</label>
-          <input type="text" id="jsDesc" value="\${script ? esc(script.desc) : ''}" placeholder="简短描述">
-        </div>
-        <div class="form-group">
-          <label>图标（emoji）</label>
-          <input type="text" id="jsIcon" value="\${script ? esc(script.icon) : '📝'}" maxlength="4">
-        </div>
-        <div class="form-group">
-          <label>代码</label>
-          <textarea id="jsCode" class="sql-editor" rows="12" placeholder="// 输入代码">\${script ? esc(script.code) : ''}</textarea>
-        </div>
-        <div class="form-group">
-          <label><input type="checkbox" id="jsPublished" \${script && script.published ? 'checked' : ''}> 发布到首页</label>
-        </div>
-        <div style="margin-top:16px">
-          <button class="btn btn-primary" id="jsSaveBtn">保存</button>
-          <button class="btn btn-outline" id="jsCancelBtn">取消</button>
-        </div>
-      </div>
+  title.textContent = script ? '编辑脚本' : '新建脚本';
+  body.innerHTML = \`
+    <div class="form-group">
+      <label>名称</label>
+      <input type="text" id="jsName" value="\${script ? esc(script.name) : ''}" placeholder="脚本名">
+    </div>
+    <div class="form-group">
+      <label>描述</label>
+      <input type="text" id="jsDesc" value="\${script ? esc(script.desc) : ''}" placeholder="简短描述">
+    </div>
+    <div class="form-group">
+      <label>图标（emoji）</label>
+      <input type="text" id="jsIcon" value="\${script ? esc(script.icon) : '📝'}" maxlength="4">
+    </div>
+    <div class="form-group">
+      <label>代码</label>
+      <textarea id="jsCode" class="sql-editor" rows="12" placeholder="// 输入代码">\${script ? esc(script.code) : ''}</textarea>
+    </div>
+    <div class="form-group">
+      <label class="check-row"><input type="checkbox" id="jsPublished" \${script && script.published ? 'checked' : ''}> 发布到首页</label>
     </div>
   \`;
+  ov.classList.add('show');
   $('jsSaveBtn').onclick = async () => {
-    const body = {
+    const payload = {
       name: $('jsName').value.trim() || '未命名脚本',
       desc: $('jsDesc').value.trim(),
       icon: $('jsIcon').value.trim() || '📝',
@@ -4009,19 +4037,18 @@ window.renderJsEditor = async function(id) {
     };
     try {
       if (script) {
-        await api('/api/tools/js/scripts/' + script.id, { method: 'PUT', body: JSON.stringify(body), headers: {'Content-Type':'application/json'} });
+        await api('/api/tools/js/scripts/' + script.id, { method: 'PUT', body: JSON.stringify(payload), headers: {'Content-Type':'application/json'} });
       } else {
-        await api('/api/tools/js/scripts', { method: 'POST', body: JSON.stringify(body), headers: {'Content-Type':'application/json'} });
+        await api('/api/tools/js/scripts', { method: 'POST', body: JSON.stringify(payload), headers: {'Content-Type':'application/json'} });
       }
       toast('已保存', 'success');
-      ed.style.display = 'none';
+      closeJsModal();
       loadJsScripts();
       loadPublishedScripts();
     } catch (e) {
       toast('保存失败：' + e.message, 'error');
     }
   };
-  $('jsCancelBtn').onclick = () => { ed.style.display = 'none'; };
 }
 
 function formatJsResult(r) {

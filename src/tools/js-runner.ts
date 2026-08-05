@@ -133,6 +133,35 @@ export async function getScriptById(env: any, id: string): Promise<JsScript | nu
   } catch { return null; }
 }
 
+// 供 cron-tasks 调用：列出所有脚本
+export async function listScripts(env: any): Promise<(JsScript & { id: string })[]> {
+  const kv = createKv(env.D1_API_TOKEN, env.D1_API_BASE);
+  try {
+    const items = await kv.list<JsScript>(NS_SCRIPTS);
+    return items.map(i => ({ ...i.value, id: i.key }))
+      .sort((a, b) => (a.created_at > b.created_at ? -1 : 1));
+  } catch { return []; }
+}
+
+// 供 cron-tasks 调用：保存脚本（新建或更新）。无 id 时新建。
+export async function saveScript(env: any, data: Partial<JsScript> & { name: string; code: string }): Promise<JsScript & { id: string }> {
+  const kv = createKv(env.D1_API_TOKEN, env.D1_API_BASE);
+  const id = data.id || genId();
+  const now = nowISO();
+  const script: JsScript = {
+    id,
+    name: (data.name || '').trim() || '未命名脚本',
+    desc: (data.desc || '').trim(),
+    code: data.code || '',
+    icon: data.icon || '📝',
+    published: !!data.published,
+    created_at: now,
+    updated_at: now,
+  };
+  await kv.set(NS_SCRIPTS, id, script);
+  return { ...script, id };
+}
+
 export async function executeScript(env: any, code: string, params: Record<string, any> = {}): Promise<RunResult> {
   const logs: string[] = [];
   const started = Date.now();
