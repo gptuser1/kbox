@@ -782,7 +782,6 @@ function bindHomeToolbar() {
     editMode = true;
     editBtn.style.display = 'none';
     exitBtn.style.display = 'inline-flex';
-    toast('点 ↑↓ 排序，点 ✎ 编辑名称/图标', 'info');
     renderToolGrid();
   });
   if (exitBtn) exitBtn.addEventListener('click', () => {
