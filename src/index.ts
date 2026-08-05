@@ -6,7 +6,7 @@ import news from './tools/news';
 import dbAdmin from './tools/db-admin';
 import jsRunner from './tools/js-runner';
 import { createKv } from './kv';
-import { ensureDefaultTasks, runCronTasks, listTasks, createTask, updateTask, deleteTask, triggerTask } from './tools/cron-tasks';
+import { runCronTasks, listTasks, createTask, updateTask, deleteTask, triggerTask } from './tools/cron-tasks';
 import { getConfig, getAppConfig, getToolConfig, setAppConfig, deleteAppConfig, getConfigSchema, listToolOverrides, setToolConfig, deleteToolConfig, ConfigField } from './config';
 
 type Bindings = {
@@ -108,7 +108,6 @@ app.route('/api/tools/js', jsRunner);
 // ─── Cron 任务管理（软定时） ───
 app.get('/api/cron-tasks', async (c) => {
   try {
-    await ensureDefaultTasks(c.env);
     const tasks = await listTasks(c.env);
     return c.json({ tasks });
   } catch (e) {
@@ -771,9 +770,6 @@ export default {
   async scheduled(controller: ScheduledController, env: Bindings, ctx: ExecutionContext) {
     ctx.waitUntil((async () => {
       try {
-        // 首次部署迁移：确保有默认 news 任务
-        await ensureDefaultTasks(env);
-        // 软定时分发
         const result = await runCronTasks(env);
         console.log(`[cron] ran=${result.ran} skipped=${result.skipped} errors=${result.errors}`);
       } catch (e) {

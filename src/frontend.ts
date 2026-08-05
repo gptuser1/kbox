@@ -399,6 +399,14 @@ body:has(.disk-modal-overlay.show) .float-back { display: none !important; }
 /* 复选框：主题色 + 水平对齐 */
 input[type="checkbox"] { accent-color: var(--primary); width: 16px; height: 16px; cursor: pointer; vertical-align: middle; margin: 0; }
 .check-row { display: inline-flex; align-items: center; gap: 8px; cursor: pointer; user-select: none; }
+
+/* cron 触发小时选择网格 */
+.hour-grid { display: grid; grid-template-columns: repeat(12, 1fr); gap: 4px; margin-top: 4px; }
+.hour-chip { position: relative; cursor: pointer; }
+.hour-chip input { position: absolute; opacity: 0; pointer-events: none; }
+.hour-chip span { display: block; text-align: center; padding: 4px 0; font-size: 12px; border: 1px solid var(--border); border-radius: 4px; color: var(--text-secondary); background: var(--bg); transition: all .12s; }
+.hour-chip input:checked + span { background: var(--primary); color: #fff; border-color: var(--primary); }
+.hour-chip:hover span { border-color: var(--primary); }
 .check-row input { margin: 0; }
 .db-results-wrap { background: var(--card); border-radius: 10px; box-shadow: var(--shadow); overflow: hidden; }
 .db-results-head { padding: 10px 14px; font-size: 12px; color: var(--text-muted); border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap; }
@@ -626,7 +634,7 @@ const TOOLS = [
   { id: 'news', name: 'AI 新闻锐评', icon: '📰', desc: '抓取科技新闻并由 AI 写锐评', render: renderNewsTool, mount: mountNewsTool },
   { id: 'db-admin', name: 'DB 管理', icon: '🗄️', desc: '浏览与编辑数据库', render: renderDbAdminTool, mount: mountDbAdminTool },
   { id: 'js', name: 'JS 运行工具', icon: '📜', desc: '运行自定义 JS 脚本', render: renderJsTool, mount: mountJsTool },
-  { id: 'cron', name: '定时任务', icon: '⏰', desc: '定时执行脚本', render: renderCronTool, mount: mountCronTool },
+  { id: 'cron', name: '定时任务', icon: '⏰', desc: '定时执行任务', render: renderCronTool, mount: mountCronTool },
   { id: 'config', name: '配置管理', icon: '⚙️', desc: '管理 API 密钥与工具配置', render: renderConfigTool, mount: mountConfigTool },
 ];
 
@@ -3697,6 +3705,8 @@ function mountCronTool() {
   loadCronTasks();
 }
 
+const CRON_ACTIONS = { news_crawl: '新闻抓取' };
+
 async function loadCronTasks() {
   const list = $('cronList');
   if (!list) return;
@@ -3707,14 +3717,17 @@ async function loadCronTasks() {
       list.innerHTML = '<div class="empty">暂无任务</div>';
       return;
     }
-    let html = '<table class="data-table"><thead><tr><th>名称</th><th>间隔</th><th>启用</th><th>上次执行</th><th>状态</th><th>操作</th></tr></thead><tbody>';
+    let html = '<table class="data-table"><thead><tr><th>名称</th><th>类型</th><th>触发小时</th><th>启用</th><th>上次执行</th><th>状态</th><th>操作</th></tr></thead><tbody>';
     for (const t of data.tasks) {
       const statusBadge = t.lastStatus === 'ok' ? '<span class="badge badge-ok">OK</span>'
         : t.lastStatus === 'error' ? '<span class="badge badge-err">ERR</span>'
         : '<span class="badge">-</span>';
       const lastRun = t.lastRunAt ? new Date(t.lastRunAt).toLocaleString('zh-CN') : '从未';
       const errTip = t.lastError ? ' title="' + esc(t.lastError) + '"' : '';
-      html += '<tr' + errTip + '><td>' + esc(t.name) + '</td><td>' + t.everyMinutes + '分</td><td>' + (t.enabled ? '✓' : '✗') + '</td><td>' + esc(lastRun) + '</td><td>' + statusBadge + '</td><td class="row-actions"><button class="btn btn-outline btn-sm" onclick="triggerCronTask(\\'' + t.id + '\\')">运行</button><button class="btn btn-outline btn-sm" onclick="renderCronEditor(\\'' + t.id + '\\')">编辑</button><button class="btn btn-sm btn-danger" onclick="deleteCronTask(\\'' + t.id + '\\')">删除</button></td></tr>';
+      const actionLabel = CRON_ACTIONS[t.action] || t.action || '-';
+      const hours = Array.isArray(t.hours) ? t.hours : [];
+      const hoursText = hours.length === 0 ? '每小时' : hours.map(h => String(h).padStart(2, '0')).join(',');
+      html += '<tr' + errTip + '><td>' + esc(t.name) + '</td><td>' + esc(actionLabel) + '</td><td>' + esc(hoursText) + '</td><td>' + (t.enabled ? '✓' : '✗') + '</td><td>' + esc(lastRun) + '</td><td>' + statusBadge + '</td><td class="row-actions"><button class="btn btn-outline btn-sm" onclick="triggerCronTask(\\'' + t.id + '\\')">运行</button><button class="btn btn-outline btn-sm" onclick="renderCronEditor(\\'' + t.id + '\\')">编辑</button><button class="btn btn-sm btn-danger" onclick="deleteCronTask(\\'' + t.id + '\\')">删除</button></td></tr>';
     }
     html += '</tbody></table>';
     list.innerHTML = html;
@@ -3764,25 +3777,28 @@ window.renderCronEditor = async function(id) {
     } catch (e) { toast('加载失败：' + e.message, 'error'); return; }
   }
   title.textContent = task ? '编辑任务' : '新建任务';
-  let scriptOptions = '<option value="">-- 选择脚本 --</option>';
-  try {
-    const sd = await api('/api/tools/js/scripts');
-    for (const s of (sd.scripts || [])) {
-      scriptOptions += '<option value="' + s.id + '"' + (task && task.scriptId === s.id ? ' selected' : '') + '>' + esc(s.name) + '</option>';
-    }
-  } catch {}
+  let actionOptions = '';
+  for (const k in CRON_ACTIONS) {
+    actionOptions += '<option value="' + k + '"' + (task && task.action === k ? ' selected' : '') + '>' + esc(CRON_ACTIONS[k]) + '</option>';
+  }
+  const curHours = (task && Array.isArray(task.hours)) ? task.hours : [];
+  let hoursCheckboxes = '';
+  for (let h = 0; h < 24; h++) {
+    const checked = curHours.includes(h) ? ' checked' : '';
+    hoursCheckboxes += '<label class="hour-chip"><input type="checkbox" value="' + h + '"' + checked + '><span>' + String(h).padStart(2, '0') + '</span></label>';
+  }
   body.innerHTML = \`
     <div class="form-group">
       <label>名称</label>
       <input type="text" id="cronName" value="\${task ? esc(task.name) : ''}" placeholder="任务名">
     </div>
     <div class="form-group">
-      <label>关联脚本</label>
-      <select id="cronScriptId">\${scriptOptions}</select>
+      <label>类型</label>
+      <select id="cronAction">\${actionOptions}</select>
     </div>
     <div class="form-group">
-      <label>执行间隔（分钟，最小 5）</label>
-      <input type="number" id="cronEvery" min="5" value="\${task ? task.everyMinutes : 60}">
+      <label>触发小时（北京时间，不选则每小时）</label>
+      <div class="hour-grid" id="cronHours">\${hoursCheckboxes}</div>
     </div>
     <div class="form-group">
       <label class="check-row"><input type="checkbox" id="cronEnabled" \${(!task || task.enabled) ? 'checked' : ''}> 启用</label>
@@ -3790,12 +3806,11 @@ window.renderCronEditor = async function(id) {
   \`;
   ov.classList.add('show');
   $('cronSaveBtn').onclick = async () => {
-    const scriptId = $('cronScriptId').value;
-    if (!scriptId) { toast('请选择关联脚本', 'error'); return; }
+    const hours = Array.from(document.querySelectorAll('#cronHours input:checked')).map(el => Number(el.value));
     const body = {
       name: $('cronName').value.trim() || '未命名任务',
-      scriptId,
-      everyMinutes: Number($('cronEvery').value) || 60,
+      action: $('cronAction').value,
+      hours,
       enabled: $('cronEnabled').checked,
     };
     try {

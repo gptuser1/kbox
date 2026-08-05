@@ -1,13 +1,18 @@
 import { createKv } from '../kv';
-import { executeScript, getScriptById, saveScript, listScripts } from './js-runner';
+import { runCron as runNewsCrawl } from './news';
 
 export const NS_CRON_TASKS = 'cron_tasks';
+
+// 可设为定时任务的 action 清单：只有仓库里已有的原生动作才能被定时触发
+export const CRON_ACTIONS: Record<string, string> = {
+  news_crawl: '新闻抓取',
+};
 
 export interface CronTask {
   id: string;
   name: string;
-  scriptId: string;          // 关联的 JS 脚本 id（必填）
-  everyMinutes: number;
+  action: string;            // 原生任务类型，见 CRON_ACTIONS
+  hours: number[];           // 触发小时（0-23，北京时间），空数组表示每小时都触发
   enabled: boolean;
   lastRunAt: string | null;
   lastStatus?: 'ok' | 'error';
@@ -23,69 +28,29 @@ function nowISO(): string {
   return new Date(Date.now() + 8 * 60 * 60 * 1000).toISOString();
 }
 
+// 当前北京时间的小时（0-23）
+function currentHourCN(): number {
+  const d = new Date(Date.now() + 8 * 60 * 60 * 1000);
+  return d.getUTCHours();
+}
+
 function parseISO(ts: string | null): number {
   if (!ts) return 0;
   const t = Date.parse(ts);
   return isNaN(t) ? 0 : t;
 }
 
-// 默认新闻抓取脚本（首次部署时作为示例脚本 + 关联任务一起创建）
-const DEFAULT_NEWS_SCRIPT = `// 默认新闻抓取脚本（可自由编辑）
-// kbox 注入：log/fetch/kv/news/stock/disk/now/sleep
-const articles = await kbox.news.list(30);
-kbox.log('最新新闻 ' + articles.length + ' 条');
-for (const a of articles.slice(0, 5)) {
-  kbox.log('• ' + a.title);
-}
-const top = await kbox.news.top();
-kbox.log('Top 关键词：' + top.keywords.map(k => k.word).join(', '));
-return { count: articles.length, top };
-`;
-
-// 首次部署迁移：若无任务，创建一个默认"新闻抓取"脚本 + 关联任务
-export async function ensureDefaultTasks(env: any): Promise<void> {
-  const kv = createKv(env.D1_API_TOKEN, env.D1_API_BASE);
-  try {
-    const items = await kv.list<CronTask>(NS_CRON_TASKS);
-    if (items.length > 0) return;
-
-    // 1. 创建默认脚本（若已存在同名则复用）
-    let scriptId: string | null = null;
-    try {
-      const scripts = await listScripts(env);
-      const existing = scripts.find(s => s.name === '新闻抓取（默认）');
-      if (existing) scriptId = existing.id;
-    } catch { /* ignore */ }
-
-    if (!scriptId) {
-      const script = await saveScript(env, {
-        name: '新闻抓取（默认）',
-        desc: '抓取最新新闻并输出 Top 关键词',
-        code: DEFAULT_NEWS_SCRIPT,
-        icon: '📰',
-        published: false,
-      });
-      scriptId = script.id;
-    }
-
-    // 2. 创建关联任务
-    const defaultTask: CronTask = {
-      id: genId(),
-      name: '新闻抓取（默认）',
-      scriptId,
-      everyMinutes: 360,   // 6 小时
-      enabled: true,
-      lastRunAt: null,
-      createdAt: nowISO(),
-    };
-    await kv.set(NS_CRON_TASKS, defaultTask.id, defaultTask);
-    console.log('[cron] 默认任务已创建，关联脚本 ' + scriptId);
-  } catch (e) {
-    console.error('[cron] ensureDefaultTasks failed:', e instanceof Error ? e.message : e);
+function normalizeHours(input: any): number[] {
+  if (!Array.isArray(input)) return [];
+  const seen = new Set<number>();
+  for (const h of input) {
+    const n = Number(h);
+    if (Number.isInteger(n) && n >= 0 && n <= 23) seen.add(n);
   }
+  return Array.from(seen).sort((a, b) => a - b);
 }
 
-// cron 调度入口
+// cron 调度入口：每小时触发一次，按当前小时匹配任务的 hours 字段
 export async function runCronTasks(env: any): Promise<{ ran: number; skipped: number; errors: number }> {
   const kv = createKv(env.D1_API_TOKEN, env.D1_API_BASE);
   const result = { ran: 0, skipped: 0, errors: 0 };
@@ -98,14 +63,22 @@ export async function runCronTasks(env: any): Promise<{ ran: number; skipped: nu
     return result;
   }
 
+  const hour = currentHourCN();
   const now = Date.now();
   for (const item of items) {
     const task = item.value;
     if (!task.enabled) { result.skipped++; continue; }
 
+    // 小时槽位匹配：hours 为空表示每小时都触发；否则需命中当前小时
+    const hours = Array.isArray(task.hours) ? task.hours : [];
+    if (hours.length > 0 && !hours.includes(hour)) {
+      result.skipped++;
+      continue;
+    }
+
+    // 防同一小时内重复执行（cron 每小时一次，理论上不会重复，保险起见）
     const lastMs = parseISO(task.lastRunAt);
-    const elapsedMin = (now - lastMs) / 60000;
-    if (lastMs > 0 && elapsedMin < task.everyMinutes) {
+    if (lastMs > 0 && (now - lastMs) < 55 * 60 * 1000) {
       result.skipped++;
       continue;
     }
@@ -131,15 +104,15 @@ export async function runCronTasks(env: any): Promise<{ ran: number; skipped: nu
 
 async function runTask(env: any, task: CronTask): Promise<{ ok: boolean; error?: string }> {
   try {
-    if (!task.scriptId) return { ok: false, error: '任务缺少 scriptId' };
-    const script = await getScriptById(env, task.scriptId);
-    if (!script) return { ok: false, error: '关联脚本不存在' };
-    const r = await executeScript(env, script.code, {});
-    // Workers 运行时禁止 eval/new Function，定时执行无法在服务端运行用户代码
-    if (r.error && /Code generation from strings disallowed/.test(r.error.message)) {
-      return { ok: false, error: '服务端不支持执行 JS，请打开页面手动运行脚本' };
+    if (!task.action) return { ok: false, error: '任务缺少 action' };
+    switch (task.action) {
+      case 'news_crawl': {
+        const r = await runNewsCrawl(env);
+        return { ok: r.success, error: r.error };
+      }
+      default:
+        return { ok: false, error: '未知任务类型：' + task.action };
     }
-    return { ok: !r.error, error: r.error?.message };
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : String(e) };
   }
@@ -156,14 +129,14 @@ export async function listTasks(env: any): Promise<CronTask[]> {
 
 export async function createTask(env: any, data: Partial<CronTask>): Promise<CronTask> {
   const kv = createKv(env.D1_API_TOKEN, env.D1_API_BASE);
-  if (!data.scriptId) {
-    throw new Error('必须指定 scriptId');
+  if (!data.action || !CRON_ACTIONS[data.action]) {
+    throw new Error('action 必须是 ' + Object.keys(CRON_ACTIONS).join('/'));
   }
   const task: CronTask = {
     id: genId(),
-    name: (data.name || '').trim() || '未命名任务',
-    scriptId: data.scriptId,
-    everyMinutes: Math.max(5, Number(data.everyMinutes) || 60),
+    name: (data.name || '').trim() || CRON_ACTIONS[data.action],
+    action: data.action,
+    hours: normalizeHours(data.hours),
     enabled: data.enabled !== false,
     lastRunAt: null,
     createdAt: nowISO(),
@@ -177,8 +150,8 @@ export async function updateTask(env: any, id: string, data: Partial<CronTask>):
   const existing = await kv.get<CronTask>(NS_CRON_TASKS, id);
   if (!existing) return null;
   if (data.name !== undefined) existing.name = (data.name || '').trim() || existing.name;
-  if (data.scriptId !== undefined) existing.scriptId = data.scriptId;
-  if (data.everyMinutes !== undefined) existing.everyMinutes = Math.max(5, Number(data.everyMinutes) || 60);
+  if (data.action !== undefined && CRON_ACTIONS[data.action]) existing.action = data.action;
+  if (data.hours !== undefined) existing.hours = normalizeHours(data.hours);
   if (data.enabled !== undefined) existing.enabled = !!data.enabled;
   await kv.set(NS_CRON_TASKS, id, existing);
   return existing;

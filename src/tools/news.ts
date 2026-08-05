@@ -68,15 +68,15 @@ function nowISO(): string {
 }
 
 // ─── 抓取 + AI 锐评 + 入库 ───
-export async function runCron(c: any): Promise<{ success: boolean; articles_count: number; error?: string }> {
-  if (!await ensureTable(c.env.D1_API_TOKEN, c.env.D1_API_BASE)) {
+export async function runCron(env: any): Promise<{ success: boolean; articles_count: number; error?: string }> {
+  if (!await ensureTable(env.D1_API_TOKEN, env.D1_API_BASE)) {
     return { success: false, articles_count: 0, error: tableInitError || '建表失败' };
   }
-  const db = getDb(c);
+  const db = createDb(env.D1_API_TOKEN, env.D1_API_BASE);
 
   try {
     const now = nowISO();
-    const articles = await crawlAll(c.env);
+    const articles = await crawlAll(env);
 
     if (articles.length === 0) {
       return { success: true, articles_count: 0, error: 'No articles crawled' };
@@ -103,14 +103,14 @@ export async function runCron(c: any): Promise<{ success: boolean; articles_coun
       return { success: true, articles_count: 0, error: 'All articles already exist' };
     }
 
-    const deduped = await dedupeArticlesByLLM(c.env, unique);
+    const deduped = await dedupeArticlesByLLM(env, unique);
 
     if (deduped.length === 0) {
       return { success: true, articles_count: 0, error: 'All articles deduped' };
     }
 
     const summaries = await summarizeArticles(
-      c.env,
+      env,
       deduped.map((a) => ({ title: a.title, source: a.source })),
     );
 
@@ -148,12 +148,12 @@ export async function runCron(c: any): Promise<{ success: boolean; articles_coun
 }
 
 // ─── 生成 Top 10 关键词快照 ───
-async function generateTopKeywords(c: any): Promise<{ success: boolean; generated_at: string | null; count: number; error?: string }> {
-  if (!await ensureTable(c.env.D1_API_TOKEN, c.env.D1_API_BASE)) {
+export async function generateTopKeywords(env: any): Promise<{ success: boolean; generated_at: string | null; count: number; error?: string }> {
+  if (!await ensureTable(env.D1_API_TOKEN, env.D1_API_BASE)) {
     return { success: false, generated_at: null, count: 0, error: tableInitError || '建表失败' };
   }
-  const db = getDb(c);
-  const kv = getKv(c);
+  const db = createDb(env.D1_API_TOKEN, env.D1_API_BASE);
+  const kv = createKv(env.D1_API_TOKEN, env.D1_API_BASE);
 
   try {
     const allRows = await db.queryAll<{ title: string; source: string; url: string; summary: string; category: string; crawled_at: string }>(
@@ -164,7 +164,7 @@ async function generateTopKeywords(c: any): Promise<{ success: boolean; generate
       return { success: false, generated_at: null, count: 0, error: '暂无新闻数据，请先抓取' };
     }
 
-    const topKeywords = await extractKeywordsViaLLM(c.env, allRows, 10);
+    const topKeywords = await extractKeywordsViaLLM(env, allRows, 10);
     if (topKeywords.length === 0) {
       return { success: false, generated_at: null, count: 0, error: 'LLM 提取失败，请检查 OPENAI 配置后重试' };
     }
@@ -204,13 +204,13 @@ app.get('/list', async (c) => {
 
 // 手动触发抓取
 app.post('/trigger', async (c) => {
-  const result = await runCron(c);
+  const result = await runCron(c.env);
   return c.json(result, result.success ? 200 : 500);
 });
 
 // 手动触发 Top 10 关键词生成
 app.post('/top/refresh', async (c) => {
-  const result = await generateTopKeywords(c);
+  const result = await generateTopKeywords(c.env);
   return c.json(result, result.success ? 200 : 500);
 });
 
