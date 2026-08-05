@@ -170,17 +170,16 @@ input, select, button, textarea { font-family: inherit; }
 .tool-view.active { display: block; }
 
 /* ─── 常驻浮动返回按钮 ─── */
-/* 仅在工具子页可见，固定右下角，z-index 高于 toast(999) 和 modal(200) */
+/* 仅在工具子页可见，钉在可视区域左下角，z-index 高于 toast(999) 和 modal(200) */
 .float-back {
-  position: fixed; left: 24px; bottom: 24px; z-index: 1500;
+  position: fixed; left: 24px; z-index: 1500;
   width: 48px; height: 48px; border-radius: 50%; border: none;
   background: var(--primary); color: #fff; cursor: pointer;
   display: none; align-items: center; justify-content: center;
   box-shadow: 0 6px 20px rgba(99, 102, 241, 0.4);
-  transition: background 0.2s, transform 0.15s, box-shadow 0.2s;
+  transition: background 0.2s, box-shadow 0.2s;
 }
-.float-back:hover { background: var(--primary-hover); transform: translateY(-2px); box-shadow: 0 8px 24px rgba(99, 102, 241, 0.5); }
-.float-back:active { transform: translateY(0); }
+.float-back:hover { background: var(--primary-hover); box-shadow: 0 8px 24px rgba(99, 102, 241, 0.5); }
 .float-back.show { display: inline-flex; }
 /* 任何弹窗打开时隐藏浮动按钮（弹窗自身有关闭/取消，避免重叠） */
 body:has(.disk-modal-overlay.show) .float-back { display: none !important; }
@@ -900,6 +899,25 @@ window.backToGrid = function() {
   $('floatBack').classList.remove('show');
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }
+
+// 浮动返回按钮：监听滚动/缩放，用 JS 实时定位到可视区域左下角
+// 规避 position:fixed 在某些场景下（祖先 transform/filter）相对页面而非视口的问题
+(function() {
+  const fb = document.getElementById('floatBack');
+  if (!fb) return;
+  function pinFloatBack() {
+    if (!fb.classList.contains('show')) return;
+    // fixed 相对视口：top = 视口高度 - 按钮高度 - 间距
+    const top = window.innerHeight - fb.offsetHeight - 24;
+    fb.style.top = Math.max(24, top) + 'px';
+  }
+  window.addEventListener('scroll', pinFloatBack, { passive: true });
+  window.addEventListener('resize', pinFloatBack);
+  // 显示/隐藏时也要更新
+  const obs = new MutationObserver(pinFloatBack);
+  obs.observe(fb, { attributes: true, attributeFilter: ['class'] });
+  pinFloatBack();
+})();
 
 // ═══ 工具 1：GitHub Workflow Dispatch ═══
 function renderDispatchTool() {
