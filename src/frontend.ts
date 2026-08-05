@@ -125,13 +125,7 @@ input, select, button, textarea { font-family: inherit; }
 .tool-grid.view-list .tool-card .tool-desc { flex: 1; font-size: 13px; }
 
 /* 编辑模式 */
-.tool-card.editing { cursor: move; }
-.tool-card.editing::before {
-  content: '⋮⋮'; position: absolute; top: 8px; left: 8px;
-  font-size: 14px; color: var(--text-muted); opacity: 0.5; cursor: grab;
-}
-.tool-card.dragging { opacity: 0.4; }
-.tool-card.drag-over { border-color: var(--primary); border-style: dashed; }
+.tool-card.editing { cursor: default; }
 .tool-card-actions {
   position: absolute; top: 8px; right: 8px; display: none; gap: 4px;
 }
@@ -630,7 +624,6 @@ const TOOLS = [
 // 结构：{ viewMode: 'grid'|'compact'|'list', order: [toolId...], overrides: { toolId: { name?, icon?, hidden? } } }
 let homeLayout = { viewMode: 'grid', order: [], overrides: {} };
 let editMode = false;
-let dragSrcId = null;
 // 已发布 JS 脚本（动态注入首页卡片）
 let publishedScripts = [];
 
@@ -699,7 +692,6 @@ function renderToolGrid() {
     const hiddenCls = toolHidden(id) ? ' hidden-tool' : '';
     const editCls = editMode ? ' editing' : '';
     const clickAttr = editMode ? '' : ' onclick="showTool(\\'' + id + '\\')"';
-    const draggable = editMode ? ' draggable="true"' : '';
     const actions = editMode
       ? '<div class="tool-card-actions">' +
         '<button title="编辑" onclick="event.stopPropagation();openToolEdit(\\'' + id + '\\')">✎</button>' +
@@ -707,7 +699,7 @@ function renderToolGrid() {
         '<button title="下移" onclick="event.stopPropagation();moveTool(\\'' + id + '\\',1)">↓</button>' +
         '</div>'
       : '';
-    html += '<div class="tool-card' + hiddenCls + editCls + '" data-id="' + id + '"' + clickAttr + draggable + '>' +
+    html += '<div class="tool-card' + hiddenCls + editCls + '" data-id="' + id + '"' + clickAttr + '>' +
       '<div class="tool-icon">' + icon + '</div>' +
       '<div class="tool-name">' + name + '</div>' +
       '<div class="tool-desc">' + desc + '</div>' +
@@ -715,43 +707,6 @@ function renderToolGrid() {
       '</div>';
   }
   toolGrid.innerHTML = html;
-  if (editMode) bindDragEvents();
-}
-
-function bindDragEvents() {
-  const cards = toolGrid.querySelectorAll('.tool-card');
-  cards.forEach(card => {
-    card.addEventListener('dragstart', (e) => {
-      dragSrcId = card.getAttribute('data-id');
-      card.classList.add('dragging');
-      e.dataTransfer.effectAllowed = 'move';
-      e.dataTransfer.setData('text/plain', dragSrcId);
-    });
-    card.addEventListener('dragend', () => {
-      card.classList.remove('dragging');
-      toolGrid.querySelectorAll('.drag-over').forEach(c => c.classList.remove('drag-over'));
-    });
-    card.addEventListener('dragover', (e) => {
-      e.preventDefault();
-      e.dataTransfer.dropEffect = 'move';
-      if (card.getAttribute('data-id') !== dragSrcId) card.classList.add('drag-over');
-    });
-    card.addEventListener('dragleave', () => { card.classList.remove('drag-over'); });
-    card.addEventListener('drop', (e) => {
-      e.preventDefault();
-      card.classList.remove('drag-over');
-      const targetId = card.getAttribute('data-id');
-      if (!dragSrcId || !targetId || dragSrcId === targetId) return;
-      const order = orderedTools();
-      const from = order.indexOf(dragSrcId);
-      const to = order.indexOf(targetId);
-      if (from < 0 || to < 0) return;
-      order.splice(to, 0, order.splice(from, 1)[0]);
-      homeLayout.order = order;
-      saveHomeLayout();
-      renderToolGrid();
-    });
-  });
 }
 
 // 上移/下移
@@ -2180,18 +2135,10 @@ function mountNewsTool() {
 function renderConfigTool() {
   return \`
 <h2>⚙️ 配置管理</h2>
-<p class="subtitle">集中管理 API 密钥与工具配置 · 敏感字段 AES-GCM 加密存储</p>
-
-<div style="background:var(--card);border-radius:10px;padding:12px 16px;margin-bottom:16px;font-size:13px;color:var(--text-secondary);box-shadow:var(--shadow)">
-  <b>三级降级读取</b>：工具级覆盖 → 全局默认 → env 兼容期 → 代码默认值。
-  敏感字段（密钥/Token）写入时加密存储，读取时只返回"已设置/未设置"标记。
-</div>
-
-<div class="result-box" id="configResult"></div>
 
 <div class="db-tabs" id="configTabs">
-  <button class="db-tab active" data-ctab="global">全局默认配置</button>
-  <button class="db-tab" data-ctab="tools">工具级覆盖</button>
+  <button class="db-tab active" data-ctab="global">全局配置</button>
+  <button class="db-tab" data-ctab="tools">工具级</button>
 </div>
 
 <div id="configGlobalPane">
@@ -2206,9 +2153,8 @@ function renderConfigTool() {
   </div>
 </div>
 
-<!-- 编辑弹层 -->
 <div class="disk-modal-overlay" id="configModalOverlay">
-  <div class="disk-modal">
+  <div class="disk-modal" style="max-width:520px">
     <div class="disk-modal-header">
       <h3 id="configModalTitle">编辑配置</h3>
       <button class="disk-modal-close" onclick="closeConfigModal()">✕</button>
@@ -2227,11 +2173,10 @@ function renderConfigTool() {
   </div>
 </div>
 
-<!-- 选择覆盖配置项弹层 -->
 <div class="disk-modal-overlay" id="configPickOverlay">
-  <div class="disk-modal" style="max-width:480px">
+  <div class="disk-modal" style="max-width:440px">
     <div class="disk-modal-header">
-      <h3>选择要覆盖的配置项</h3>
+      <h3>选择配置项</h3>
       <button class="disk-modal-close" onclick="closeConfigPick()">✕</button>
     </div>
     <div class="disk-modal-body" id="configPickBody"></div>
@@ -2243,7 +2188,6 @@ function renderConfigTool() {
 function mountConfigTool() {
   const globalList = $('configGlobalList');
   const toolList = $('configToolList');
-  const resultBox = $('configResult');
   const tabsEl = $('configTabs');
   const globalPane = $('configGlobalPane');
   const toolsPane = $('configToolsPane');
@@ -2258,14 +2202,12 @@ function mountConfigTool() {
 
   let schema = [];
   let tools = [];
-  let globalConfigs = [];   // [{ key, desc, sensitive, placeholder, default, hasValue, value }]
-  let toolOverrides = {};   // { toolId: [{ key, desc, sensitive, hasValue, value }] }
-  let editing = null;       // { scope: 'app'|'tool', tool?, key, field }
-  let configOrder = [];     // 全局配置项顺序 [key...]，来自 preferences/config_order.app
-  let configSortMode = false;
-  let configDragKey = null;
+  let globalConfigs = [];
+  let toolOverrides = {};
+  let editing = null;
+  let globalOrder = [];   // 全局配置项顺序 [key...]
+  let toolOrder = [];     // 工具条目顺序 [toolId...]
 
-  // tab 切换：全局 / 工具级
   if (tabsEl) {
     tabsEl.querySelectorAll('.db-tab').forEach(btn => {
       btn.onclick = () => {
@@ -2281,29 +2223,42 @@ function mountConfigTool() {
   function valueDisplay(cfg) {
     if (cfg.sensitive) {
       return cfg.hasValue
-        ? '<span class="num" style="color:var(--success)">******</span>'
-        : '<span style="color:var(--text-muted)">○ 未设置</span>';
+        ? '<span class="num" style="color:var(--success)">●</span>'
+        : '<span style="color:var(--text-muted)">○</span>';
     }
     if (cfg.hasValue && cfg.value) {
       return '<span class="num">' + esc(cfg.value) + '</span>';
     }
     if (cfg.default) {
-      return '<span style="color:var(--text-muted)">默认: ' + esc(cfg.default) + '</span>';
+      return '<span style="color:var(--text-muted)">' + esc(cfg.default) + '</span>';
     }
-    return '<span style="color:var(--text-muted)">未设置</span>';
+    return '<span style="color:var(--text-muted)">—</span>';
   }
 
-  // 按用户偏好排序全局配置项；未记录的按 schema 默认顺序补到末尾
   function orderedGlobalConfigs() {
-    if (!configOrder.length) return globalConfigs;
+    if (!globalOrder.length) return globalConfigs;
     const byKey = {};
     for (const c of globalConfigs) byKey[c.key] = c;
     const ordered = [];
-    for (const k of configOrder) {
+    for (const k of globalOrder) {
       if (byKey[k]) { ordered.push(byKey[k]); delete byKey[k]; }
     }
     for (const c of globalConfigs) {
       if (byKey[c.key]) ordered.push(c);
+    }
+    return ordered;
+  }
+
+  function orderedTools() {
+    if (!toolOrder.length) return tools;
+    const byId = {};
+    for (const t of tools) byId[t.id] = t;
+    const ordered = [];
+    for (const id of toolOrder) {
+      if (byId[id]) { ordered.push(byId[id]); delete byId[id]; }
+    }
+    for (const t of tools) {
+      if (byId[t.id]) ordered.push(t);
     }
     return ordered;
   }
@@ -2314,90 +2269,21 @@ function mountConfigTool() {
       return;
     }
     const list = orderedGlobalConfigs();
-    const headerExtra = '<div style="margin-bottom:8px;display:flex;justify-content:flex-end;gap:6px">' +
-      (configSortMode
-        ? '<button class="btn btn-primary btn-sm" id="exitConfigSortBtn">完成排序</button>'
-        : '<button class="btn btn-outline btn-sm" id="enterConfigSortBtn">↕ 调整顺序</button>') +
-      '</div>';
-    globalList.innerHTML = headerExtra + list.map(cfg => {
-      const icon = cfg.sensitive ? '🔐' : '⚙️';
-      const tag = cfg.sensitive ? ' <span style="font-size:10px;background:rgba(239,68,68,0.15);color:var(--danger);padding:1px 6px;border-radius:3px">敏感</span>' : '';
-      const dragAttr = configSortMode ? ' draggable="true" data-key="' + esc(cfg.key) + '"' : '';
-      const itemCls = configSortMode ? 'file-item editing' : 'file-item';
-      const actions = configSortMode
-        ? '<div class="file-actions"><span style="color:var(--text-muted);font-size:16px;cursor:grab">⋮⋮</span></div>'
-        : '<div class="file-actions">' +
-          '<button class="btn btn-outline btn-sm" onclick="editConfig(\\'app\\',null,\\'' + esc(cfg.key) + '\\')">编辑</button>' +
-          (cfg.hasValue ? '<button class="btn btn-outline btn-sm" style="color:var(--danger)" onclick="clearConfig(\\'app\\',null,\\'' + esc(cfg.key) + '\\')">清除</button>' : '') +
-          '</div>';
-      return '<div class="' + itemCls + '"' + dragAttr + '>' +
-        '<div class="file-icon">' + icon + '</div>' +
+    globalList.innerHTML = list.map((cfg, i) => {
+      const tag = cfg.sensitive ? ' <span class="badge badge-err">密</span>' : '';
+      const upDisabled = i === 0 ? ' disabled' : '';
+      const downDisabled = i === list.length - 1 ? ' disabled' : '';
+      return '<div class="file-item">' +
+        '<button class="btn btn-outline btn-sm" style="width:28px;padding:0"' + upDisabled + ' onclick="moveConfigItem(\\'global\\',-1,\\'' + esc(cfg.key) + '\\')">↑</button>' +
+        '<button class="btn btn-outline btn-sm" style="width:28px;padding:0"' + downDisabled + ' onclick="moveConfigItem(\\'global\\',1,\\'' + esc(cfg.key) + '\\')">↓</button>' +
         '<div class="file-info"><div class="file-name">' + esc(cfg.key) + tag + '</div>' +
-        '<div class="file-meta">' + esc(cfg.desc) + ' · ' + valueDisplay(cfg) + '</div></div>' +
-        actions +
-        '</div>';
+        '<div class="file-meta">' + esc(cfg.desc) + '</div></div>' +
+        '<div style="margin-right:12px;font-size:13px">' + valueDisplay(cfg) + '</div>' +
+        '<div class="file-actions">' +
+        '<button class="btn btn-outline btn-sm" onclick="editConfig(\\'app\\',null,\\'' + esc(cfg.key) + '\\')">编辑</button>' +
+        (cfg.hasValue ? '<button class="btn btn-outline btn-sm" style="color:var(--danger)" onclick="clearConfig(\\'app\\',null,\\'' + esc(cfg.key) + '\\')">清除</button>' : '') +
+        '</div></div>';
     }).join('');
-    if (configSortMode) bindConfigDrag();
-    const enterBtn = $('enterConfigSortBtn');
-    const exitBtn = $('exitConfigSortBtn');
-    if (enterBtn) enterBtn.onclick = () => { configSortMode = true; renderGlobal(); };
-    if (exitBtn) exitBtn.onclick = async () => {
-      configSortMode = false;
-      // 保存当前顺序
-      configOrder = orderedGlobalConfigs().map(c => c.key);
-      try {
-        await api('/api/preferences/config_order', {
-          method: 'PUT',
-          body: JSON.stringify({ value: { app: configOrder } }),
-          headers: { 'Content-Type': 'application/json' },
-        });
-        toast('顺序已保存', 'success');
-      } catch (e) { if (e.message !== 'UNAUTHORIZED') toast('保存失败：' + e.message, 'error'); }
-      renderGlobal();
-    };
-  }
-
-  function bindConfigDrag() {
-    const items = globalList.querySelectorAll('.file-item[draggable="true"]');
-    items.forEach(item => {
-      item.addEventListener('dragstart', (e) => {
-        configDragKey = item.getAttribute('data-key');
-        item.style.opacity = '0.4';
-        e.dataTransfer.effectAllowed = 'move';
-      });
-      item.addEventListener('dragend', () => {
-        item.style.opacity = '';
-        items.forEach(i => i.style.borderColor = '');
-      });
-      item.addEventListener('dragover', (e) => {
-        e.preventDefault();
-        e.dataTransfer.dropEffect = 'move';
-        if (item.getAttribute('data-key') !== configDragKey) {
-          item.style.borderColor = 'var(--primary)';
-          item.style.borderStyle = 'dashed';
-        }
-      });
-      item.addEventListener('dragleave', () => {
-        item.style.borderColor = '';
-        item.style.borderStyle = '';
-      });
-      item.addEventListener('drop', (e) => {
-        e.preventDefault();
-        item.style.borderColor = '';
-        item.style.borderStyle = '';
-        const targetKey = item.getAttribute('data-key');
-        if (!configDragKey || !targetKey || configDragKey === targetKey) return;
-        const list = orderedGlobalConfigs();
-        const from = list.findIndex(c => c.key === configDragKey);
-        const to = list.findIndex(c => c.key === targetKey);
-        if (from < 0 || to < 0) return;
-        // 同步调整 configOrder（以 key 数组形式）
-        const orderKeys = list.map(c => c.key);
-        orderKeys.splice(to, 0, orderKeys.splice(from, 1)[0]);
-        configOrder = orderKeys;
-        renderGlobal();
-      });
-    });
   }
 
   function renderTools() {
@@ -2405,32 +2291,67 @@ function mountConfigTool() {
       toolList.innerHTML = '<div class="empty">无工具</div>';
       return;
     }
-    toolList.innerHTML = tools.map(t => {
+    const list = orderedTools();
+    toolList.innerHTML = list.map((t, i) => {
       const overrides = toolOverrides[t.id] || [];
-      let body = '';
-      if (!overrides.length) {
-        body = '<span style="font-size:12px;color:var(--text-muted)">无覆盖（使用全局默认）</span>';
-      } else {
-        body = '<div style="display:flex;flex-wrap:wrap;gap:6px">' + overrides.map(o => {
-          const valText = o.sensitive ? '******' : (o.value ? esc(o.value) : '已设置');
+      let chips = '';
+      if (overrides.length) {
+        chips = overrides.map(o => {
+          const valText = o.sensitive ? '●' : (o.value ? esc(o.value) : '●');
           return '<span class="saved-config" onclick="editConfig(\\'tool\\',\\'' + t.id + '\\',\\'' + esc(o.key) + '\\')">' + esc(o.key) + ': ' + valText +
             '<span class="del" onclick="event.stopPropagation();clearConfig(\\'tool\\',\\'' + t.id + '\\',\\'' + esc(o.key) + '\\')">✕</span></span>';
-        }).join('') + '</div>';
+        }).join('');
       }
-      // 工具可覆盖的配置项：工具专用项仅对限定工具可见，通用项所有工具可见
       const existing = new Set(overrides.map(o => o.key));
       const available = schema.filter(f => !existing.has(f.key) && (!f.tools || f.tools.includes(t.id)));
       const addBtn = available.length
-        ? '<button class="btn btn-outline btn-sm" style="margin-left:8px" onclick="addToolOverride(\\'' + t.id + '\\')">+ 添加覆盖</button>'
+        ? '<button class="btn btn-outline btn-sm" onclick="addToolOverride(\\'' + t.id + '\\')">+ 添加</button>'
         : '';
-      return '<div class="file-item" style="display:block;padding:14px 16px">' +
-        '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">' +
-        '<div style="font-weight:600;font-size:14px">' + esc(t.name) + ' <span style="color:var(--text-muted);font-weight:400;font-size:12px">tool:' + esc(t.id) + '</span></div>' +
+      const upDisabled = i === 0 ? ' disabled' : '';
+      const downDisabled = i === list.length - 1 ? ' disabled' : '';
+      return '<div class="file-item" style="display:block;padding:10px 14px">' +
+        '<div style="display:flex;align-items:center;gap:8px">' +
+        '<button class="btn btn-outline btn-sm" style="width:28px;padding:0"' + upDisabled + ' onclick="moveConfigItem(\\'tool\\',-1,\\'' + esc(t.id) + '\\')">↑</button>' +
+        '<button class="btn btn-outline btn-sm" style="width:28px;padding:0"' + downDisabled + ' onclick="moveConfigItem(\\'tool\\',1,\\'' + esc(t.id) + '\\')">↓</button>' +
+        '<div style="font-weight:600;font-size:14px;flex:1">' + esc(t.name) + '</div>' +
+        addBtn +
         '</div>' +
-        '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">' + body + addBtn + '</div>' +
+        (chips ? '<div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:8px;margin-left:44px">' + chips + '</div>' : '') +
         '</div>';
     }).join('');
   }
+
+  async function saveOrder() {
+    try {
+      await api('/api/preferences/config_order', {
+        method: 'PUT',
+        body: JSON.stringify({ value: { app: globalOrder, tools: toolOrder } }),
+        headers: { 'Content-Type': 'application/json' },
+      });
+    } catch (e) { if (e.message !== 'UNAUTHORIZED') toast('顺序保存失败', 'error'); }
+  }
+
+  window.moveConfigItem = function(scope, dir, id) {
+    if (scope === 'global') {
+      const order = orderedGlobalConfigs().map(c => c.key);
+      const i = order.indexOf(id);
+      const j = i + dir;
+      if (j < 0 || j >= order.length) return;
+      [order[i], order[j]] = [order[j], order[i]];
+      globalOrder = order;
+      renderGlobal();
+      saveOrder();
+    } else {
+      const order = orderedTools().map(t => t.id);
+      const i = order.indexOf(id);
+      const j = i + dir;
+      if (j < 0 || j >= order.length) return;
+      [order[i], order[j]] = [order[j], order[i]];
+      toolOrder = order;
+      renderTools();
+      saveOrder();
+    }
+  };
 
   async function loadAll() {
     try {
@@ -2442,7 +2363,6 @@ function mountConfigTool() {
       tools = schemaData.tools || [];
       globalConfigs = globalData.configs || [];
 
-      // 并行加载所有工具的覆盖
       const results = await Promise.all(
         tools.map(t => api('/api/config/tools/' + t.id).catch(() => ({ overrides: [] })))
       );
@@ -2451,11 +2371,11 @@ function mountConfigTool() {
         toolOverrides[t.id] = results[i].overrides || [];
       });
 
-      // 加载配置项排序偏好
       try {
         const orderData = await api('/api/preferences/config_order');
-        if (orderData.value && orderData.value.app && Array.isArray(orderData.value.app)) {
-          configOrder = orderData.value.app;
+        if (orderData.value) {
+          if (Array.isArray(orderData.value.app)) globalOrder = orderData.value.app;
+          if (Array.isArray(orderData.value.tools)) toolOrder = orderData.value.tools;
         }
       } catch { /* 无偏好则用默认顺序 */ }
 
@@ -2473,16 +2393,15 @@ function mountConfigTool() {
     if (!field) return;
     editing = { scope, tool, key, field };
 
-    modalTitle.textContent = scope === 'app' ? '编辑全局配置' : '编辑工具级覆盖';
+    modalTitle.textContent = scope === 'app' ? '编辑全局配置' : '编辑工具配置';
     modalLabel.textContent = field.key + ' — ' + field.desc + (field.sensitive ? ' （敏感）' : '');
     modalInput.placeholder = field.placeholder || (field.default ? '默认: ' + field.default : '');
     modalInput.value = '';
     modalInput.type = field.sensitive ? 'password' : 'text';
     let hint = '';
-    if (field.sensitive) hint = '敏感字段，已加密存储。留空保存将清除该配置。';
-    else if (field.default) hint = '留空保存将回退到默认值：' + field.default;
-    else hint = '留空保存将清除该配置。';
-    if (scope === 'tool') hint += ' （工具级覆盖优先于全局默认）';
+    if (field.sensitive) hint = '敏感字段已加密存储，留空保存将清除。';
+    else if (field.default) hint = '留空将回退到默认值：' + field.default;
+    else hint = '留空将清除该配置。';
     modalHint.textContent = hint;
 
     modalOverlay.classList.add('show');
@@ -2500,18 +2419,16 @@ function mountConfigTool() {
   };
 
   window.addToolOverride = function(tool) {
-    // 列出该工具未覆盖的所有配置项，让用户选择
-    // 工具专用配置（tools 非空）仅对限定工具可见；通用配置所有工具可见
     const overrides = toolOverrides[tool] || [];
     const existing = new Set(overrides.map(o => o.key));
     const available = schema.filter(f => !existing.has(f.key) && (!f.tools || f.tools.includes(tool)));
-    if (!available.length) { toast('该工具已覆盖所有配置项', 'info'); return; }
+    if (!available.length) { toast('已无可添加的配置项', 'info'); return; }
     pickBody.innerHTML = available.map(f => {
-      const sensitiveTag = f.sensitive ? ' <span style="color:var(--text-muted);font-size:11px">（敏感）</span>' : '';
-      const defaultTag = f.default ? ' <span style="color:var(--text-muted);font-size:11px">默认: ' + esc(f.default) + '</span>' : '';
+      const sensitiveTag = f.sensitive ? ' <span class="badge badge-err">密</span>' : '';
+      const defaultTag = f.default ? ' <span style="color:var(--text-muted);font-size:11px">默认 ' + esc(f.default) + '</span>' : '';
       return '<div class="file-item" style="padding:10px 14px;cursor:pointer" onclick="pickOverride(\\'' + esc(tool) + '\\',\\'' + esc(f.key) + '\\')">' +
         '<div class="file-info"><div class="file-name">' + esc(f.key) + sensitiveTag + '</div>' +
-        '<div class="file-meta">' + esc(f.desc) + defaultTag + '</div></div></div>';
+        '<div class="file-meta">' + esc(f.desc) + ' ' + defaultTag + '</div></div></div>';
     }).join('');
     pickOverlay.classList.add('show');
   };
@@ -2527,8 +2444,7 @@ function mountConfigTool() {
   };
 
   window.clearConfig = async function(scope, tool, key) {
-    const scopeText = scope === 'app' ? '全局配置' : '工具 ' + tool + ' 覆盖';
-    if (!confirm('确认清除 ' + scopeText + ' 的 ' + key + '？')) return;
+    if (!confirm('确认清除 ' + key + '？')) return;
     try {
       const url = scope === 'app'
         ? '/api/config/' + encodeURIComponent(key)
