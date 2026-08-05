@@ -178,6 +178,7 @@ export async function executeScript(env: any, code: string, params: Record<strin
   const paramNames = Object.keys(params);
   const wrapped = `
     const { log, fetch, kv, news, stock, disk, now, sleep } = kbox;
+    const console = { log, info: log, warn: log, error: log, debug: log };
     const { ${paramNames.join(', ')} } = params;
     return (async () => {
       ${code}

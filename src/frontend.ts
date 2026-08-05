@@ -166,6 +166,7 @@ input, select, button, textarea { font-family: inherit; }
 
 /* ─── 工具视图 ─── */
 .tool-view { display: none; }
+.tool-view > h2 { padding-bottom: 12px; border-bottom: 1px solid var(--border); margin-bottom: 16px; }
 .tool-view.active { display: block; }
 
 /* ─── 常驻浮动返回按钮 ─── */
@@ -1311,6 +1312,23 @@ function renderDiskTool() {
     </div>
     <div class="section-title">文件列表</div>
     <div class="file-list" id="diskFileList"></div>
+    <details class="disk-api-docs" style="margin-top:24px">
+      <summary style="cursor:pointer;font-size:14px;font-weight:600;color:var(--text-secondary);padding:12px;background:var(--card);border-radius:8px;box-shadow:var(--shadow)">📋 API 接口文档</summary>
+      <div style="padding:16px;background:var(--card);border-radius:8px;margin-top:8px;box-shadow:var(--shadow);font-size:13px;line-height:1.8;color:var(--text-secondary);overflow-x:auto">
+        <p style="color:var(--text);font-weight:600">所有接口需鉴权，支持两种方式：</p>
+        <p>① Header: <code>Authorization: Bearer &lt;token&gt;</code></p>
+        <p>② Query: <code>?token=&lt;token&gt;</code>（仅下载链接推荐）</p>
+        <hr style="border:none;border-top:1px solid var(--border);margin:12px 0">
+        <p><b>GET</b> <code>/api/tools/disk/stats</code> — 容量统计</p>
+        <p><b>GET</b> <code>/api/tools/disk/files</code> — 文件列表</p>
+        <p><b>POST</b> <code>/api/tools/disk/files</code> — 创建文件记录<br>
+        <span style="color:var(--text-muted)">body: { name, size, mime_type }</span></p>
+        <p><b>POST</b> <code>/api/tools/disk/files/:id/chunks</code> — 上传分片<br>
+        <span style="color:var(--text-muted)">body: { chunk_index, content(base64), chunk_size }</span></p>
+        <p><b>GET</b> <code>/api/tools/disk/files/:id/download?token=xxx</code> — 下载文件</p>
+        <p><b>DELETE</b> <code>/api/tools/disk/files/:id</code> — 删除文件</p>
+      </div>
+    </details>
   \`;
 }
 
@@ -3805,15 +3823,32 @@ function renderJsTool() {
     </div>
     <div class="section-title">脚本列表</div>
     <div id="jsScriptsList"></div>
-    <details style="margin-top:24px">
-      <summary style="cursor:pointer;font-size:14px;font-weight:600;color:var(--text-secondary);padding:8px 0">临时运行</summary>
-      <textarea id="jsCodeInput" class="sql-editor" rows="10" placeholder="// 输入代码" style="margin-top:8px"></textarea>
-      <div style="display:flex;gap:8px;margin:8px 0;flex-wrap:wrap">
-        <button class="btn btn-primary" id="jsRunTmpBtn">▶ 运行</button>
-        <button class="btn btn-outline" id="jsSaveAsBtn">存为脚本</button>
+    <div class="section-title" style="margin-top:24px">临时运行</div>
+    <details style="margin-bottom:12px">
+      <summary style="cursor:pointer;font-size:13px;color:var(--text-muted);padding:4px 0">使用说明 / kbox API</summary>
+      <div style="padding:12px 14px;background:var(--card);border-radius:8px;margin-top:8px;font-size:13px;line-height:1.7;color:var(--text-secondary)">
+        <p style="color:var(--text);font-weight:600;margin-bottom:6px">可直接使用</p>
+        <p><code>console.log(...)</code> — 输出到下方结果区</p>
+        <p><code>await kbox.log(...)</code> — 同上</p>
+        <p><code>await kbox.fetch(url, opts)</code> — 发起 HTTP 请求</p>
+        <p><code>await kbox.sleep(ms)</code> — 等待</p>
+        <p><code>kbox.now()</code> — 当前时间</p>
+        <p style="color:var(--text);font-weight:600;margin:10px 0 6px">数据读写</p>
+        <p><code>await kbox.kv.get(ns, key)</code> / <code>kbox.kv.set(ns, key, val)</code> / <code>kbox.kv.list(ns)</code></p>
+        <p style="color:var(--text-muted);font-size:12px">系统 namespace 不可写入</p>
+        <p style="color:var(--text);font-weight:600;margin:10px 0 6px">内置数据源</p>
+        <p><code>await kbox.news.list(10)</code> · <code>kbox.news.top()</code></p>
+        <p><code>await kbox.stock.funds()</code></p>
+        <p><code>await kbox.disk.files()</code> · <code>kbox.disk.stats()</code></p>
+        <p style="color:var(--text-muted);font-size:12px;margin-top:10px">执行超时 5s，可用 return 返回值</p>
       </div>
-      <div class="result-box" id="jsTmpResult"></div>
     </details>
+    <textarea id="jsCodeInput" class="sql-editor" rows="10" placeholder="// 试试：console.log('hello world')" style="margin-top:8px"></textarea>
+    <div style="display:flex;gap:8px;margin:8px 0;flex-wrap:wrap">
+      <button class="btn btn-primary" id="jsRunTmpBtn">▶ 运行</button>
+      <button class="btn btn-outline" id="jsSaveAsBtn">存为脚本</button>
+    </div>
+    <div class="result-box" id="jsTmpResult"></div>
     <div class="disk-modal-overlay" id="jsModalOverlay">
       <div class="disk-modal" style="max-width:680px">
         <div class="disk-modal-header">
