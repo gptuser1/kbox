@@ -28,13 +28,18 @@ async function diskD1Creds(c: any): Promise<{ token: string; base?: string }> {
   };
 }
 
-// ─── 自动建表 ───
-let tableReady = false;
-let tableInitError: string | null = null;
+// ─── 自动建表（按连接分缓存，避免多 D1 实例互相污染）───
+const tableReady = new Map<string, boolean>();
+const tableInitError = new Map<string, string | null>();
+
+function connKey(token: string, base?: string): string {
+  return token + '|' + (base || '');
+}
 
 async function ensureTable(token: string, base?: string): Promise<boolean> {
-  if (tableReady) return true;
-  if (tableInitError) return false;
+  const ck = connKey(token, base);
+  if (tableReady.get(ck)) return true;
+  if (tableInitError.has(ck)) return false;
 
   const db = createDb(token, base);
   try {
@@ -54,11 +59,11 @@ async function ensureTable(token: string, base?: string): Promise<boolean> {
       chunk_size INTEGER NOT NULL DEFAULT 0
     )`);
     await db.query(`CREATE INDEX IF NOT EXISTS idx_disk_chunks_file_id ON kbox_disk_chunks(file_id)`);
-    tableReady = true;
+    tableReady.set(ck, true);
     return true;
   } catch (e) {
     const msg = e instanceof DbError ? e.message : '建表失败';
-    tableInitError = msg;
+    tableInitError.set(ck, msg);
     console.error('Disk table init error:', msg);
     return false;
   }
@@ -74,9 +79,10 @@ function getDb(c: any, creds: { token: string; base?: string }) {
   return createDb(creds.token, creds.base);
 }
 
-// ensureTable 失败时返回明确错误
-function tableError(c: any) {
-  return c.json({ error: tableInitError || '数据库初始化失败，请检查 D1_API_TOKEN' }, 503);
+// ensureTable 失败时返回该连接对应的错误
+function tableError(c: any, creds: { token: string; base?: string }) {
+  const ck = connKey(creds.token, creds.base);
+  return c.json({ error: tableInitError.get(ck) || '数据库初始化失败，请检查 D1_API_TOKEN' }, 503);
 }
 
 // ─── 全库占用统计 ───
@@ -118,7 +124,7 @@ async function getDbUsage(db: ReturnType<typeof createDb>): Promise<number> {
 // ─── 容量统计 ───
 app.get('/stats', async (c) => {
   const creds = await diskD1Creds(c);
-  if (!await ensureTable(creds.token, creds.base)) return tableError(c);
+  if (!await ensureTable(creds.token, creds.base)) return tableError(c, creds);
   const db = getDb(c, creds);
   try {
     // 文件数量和总大小
@@ -141,7 +147,7 @@ app.get('/stats', async (c) => {
 // ─── 文件列表 ───
 app.get('/files', async (c) => {
   const creds = await diskD1Creds(c);
-  if (!await ensureTable(creds.token, creds.base)) return tableError(c);
+  if (!await ensureTable(creds.token, creds.base)) return tableError(c, creds);
   const db = getDb(c, creds);
   try {
     const files = await db.queryAll(
@@ -156,7 +162,7 @@ app.get('/files', async (c) => {
 // ─── 创建文件记录 ───
 app.post('/files', async (c) => {
   const creds = await diskD1Creds(c);
-  if (!await ensureTable(creds.token, creds.base)) return tableError(c);
+  if (!await ensureTable(creds.token, creds.base)) return tableError(c, creds);
   const db = getDb(c, creds);
 
   let body: any;
@@ -197,7 +203,7 @@ app.post('/files', async (c) => {
 // ─── 上传分片 ───
 app.post('/files/:id/chunks', async (c) => {
   const creds = await diskD1Creds(c);
-  if (!await ensureTable(creds.token, creds.base)) return tableError(c);
+  if (!await ensureTable(creds.token, creds.base)) return tableError(c, creds);
   const db = getDb(c, creds);
   const fileId = Number(c.req.param('id'));
 
@@ -230,7 +236,7 @@ app.post('/files/:id/chunks', async (c) => {
 // ─── 生成一次性下载令牌 ───
 app.post('/files/:id/download-token', async (c) => {
   const creds = await diskD1Creds(c);
-  if (!await ensureTable(creds.token, creds.base)) return tableError(c);
+  if (!await ensureTable(creds.token, creds.base)) return tableError(c, creds);
   const db = getDb(c, creds);
   const kv = createKv(creds.token, creds.base);
   const fileId = Number(c.req.param('id'));
@@ -274,7 +280,7 @@ app.post('/files/:id/download-token', async (c) => {
 // ─── 下载文件 ───
 app.get('/files/:id/download', async (c) => {
   const creds = await diskD1Creds(c);
-  if (!await ensureTable(creds.token, creds.base)) return tableError(c);
+  if (!await ensureTable(creds.token, creds.base)) return tableError(c, creds);
   const db = getDb(c, creds);
   const kv = createKv(creds.token, creds.base);
   const fileId = Number(c.req.param('id'));
@@ -334,7 +340,7 @@ app.get('/files/:id/download', async (c) => {
 // ─── 删除文件 ───
 app.delete('/files/:id', async (c) => {
   const creds = await diskD1Creds(c);
-  if (!await ensureTable(creds.token, creds.base)) return tableError(c);
+  if (!await ensureTable(creds.token, creds.base)) return tableError(c, creds);
   const db = getDb(c, creds);
   const fileId = Number(c.req.param('id'));
 

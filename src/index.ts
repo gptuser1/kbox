@@ -2,7 +2,7 @@ import { Hono } from 'hono';
 import { renderFrontend } from './frontend';
 import disk from './tools/cloud-disk';
 import stock from './tools/stock';
-import news from './tools/news';
+import news, { runCron as runNewsCron } from './tools/news';
 import dbAdmin from './tools/db-admin';
 import { createKv } from './kv';
 import { getConfig, getAppConfig, getToolConfig, setAppConfig, deleteAppConfig, getConfigSchema, listToolOverrides, setToolConfig, deleteToolConfig, ConfigField } from './config';
@@ -640,93 +640,17 @@ app.get('/api/tools/workflow-inputs', async (c) => {
 export default {
   ...app,
   async scheduled(controller: ScheduledController, env: Bindings, ctx: ExecutionContext) {
-    ctx.waitUntil(handleNewsCron(env));
+    ctx.waitUntil((async () => {
+      try {
+        const result = await runNewsCron({ env });
+        if (result.success) {
+          console.log(`[news-cron] Inserted ${result.articles_count} articles`);
+        } else {
+          console.error('[news-cron] failed:', result.error || 'unknown');
+        }
+      } catch (e) {
+        console.error('[news-cron] threw:', e instanceof Error ? e.message : String(e));
+      }
+    })());
   },
 };
-
-async function handleNewsCron(env: Bindings) {
-  try {
-    const { createDb } = await import('./db');
-    const { crawlAll } = await import('./tools/news-crawler');
-    const { summarizeArticles } = await import('./tools/news-llm');
-
-    const db = createDb(env.D1_API_TOKEN, env.D1_API_BASE);
-    await db.query(`CREATE TABLE IF NOT EXISTS newsfeed (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      crawled_at TEXT NOT NULL,
-      source TEXT NOT NULL DEFAULT '',
-      title TEXT NOT NULL DEFAULT '',
-      url TEXT NOT NULL DEFAULT '',
-      summary TEXT NOT NULL DEFAULT '',
-      category TEXT NOT NULL DEFAULT 'general'
-    )`);
-
-    const now = new Date(Date.now() + 8 * 60 * 60 * 1000).toISOString();
-    const articles = await crawlAll(env);
-    if (articles.length === 0) {
-      console.log('[news-cron] No articles crawled');
-      return;
-    }
-
-    const existingRows = await db.queryAll<{ source: string; title: string }>(
-      `SELECT DISTINCT source, title FROM newsfeed`
-    );
-    const existing = new Set<string>();
-    for (const row of existingRows) {
-      existing.add(`${row.source}||${row.title}`);
-    }
-
-    const seen = new Set<string>();
-    const unique = articles.filter((a: any) => {
-      const key = `${a.source}||${a.title}`;
-      if (existing.has(key) || seen.has(key)) return false;
-      seen.add(key);
-      return true;
-    });
-
-    if (unique.length === 0) {
-      console.log('[news-cron] All articles already exist');
-      return;
-    }
-
-    const { dedupeArticlesByLLM } = await import('./tools/news-llm');
-    const deduped = await dedupeArticlesByLLM(env, unique);
-
-    if (deduped.length === 0) {
-      console.log('[news-cron] All articles deduped');
-      return;
-    }
-
-    const summaries = await summarizeArticles(
-      env,
-      deduped.map((a: any) => ({ title: a.title, source: a.source })),
-    );
-
-    const CHUNK_SIZE = 15;
-    for (let i = 0; i < deduped.length; i += CHUNK_SIZE) {
-      const chunkEnd = Math.min(i + CHUNK_SIZE, deduped.length);
-      const placeholders: string[] = [];
-      const values: any[] = [];
-      for (let j = i; j < chunkEnd; j++) {
-        placeholders.push('(?, ?, ?, ?, ?, ?)');
-        const a = deduped[j];
-        values.push(now, a.source, a.title, a.url, summaries[j] || '', a.category);
-      }
-      await db.execute(
-        `INSERT INTO newsfeed (crawled_at, source, title, url, summary, category) VALUES ${placeholders.join(', ')}`,
-        values,
-      );
-    }
-
-    await db.execute(
-      `DELETE FROM newsfeed WHERE id NOT IN (
-        SELECT id FROM newsfeed ORDER BY id DESC LIMIT ?
-      )`,
-      [60],
-    );
-
-    console.log(`[news-cron] Inserted ${deduped.length} articles`);
-  } catch (e) {
-    console.error('[news-cron] failed:', e instanceof Error ? e.message : String(e));
-  }
-}

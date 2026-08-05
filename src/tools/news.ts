@@ -68,7 +68,7 @@ function nowISO(): string {
 }
 
 // ─── 抓取 + AI 锐评 + 入库 ───
-async function runCron(c: any): Promise<{ success: boolean; articles_count: number; error?: string }> {
+export async function runCron(c: any): Promise<{ success: boolean; articles_count: number; error?: string }> {
   if (!await ensureTable(c.env.D1_API_TOKEN, c.env.D1_API_BASE)) {
     return { success: false, articles_count: 0, error: tableInitError || '建表失败' };
   }
