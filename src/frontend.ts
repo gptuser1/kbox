@@ -898,7 +898,7 @@ window.backToGrid = function() {
   // 隐藏常驻浮动返回按钮，回到顶部
   $('floatBack').classList.remove('show');
   window.scrollTo({ top: 0, behavior: 'smooth' });
-}
+};
 
 // 浮动返回按钮：监听滚动/缩放，用 JS 实时定位到可视区域左下角
 // 规避 position:fixed 在某些场景下（祖先 transform/filter）相对页面而非视口的问题
