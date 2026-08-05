@@ -602,6 +602,8 @@ const TOOLS = [
   { id: 'stock', name: '基金估值', icon: '💰', desc: '多市场基金持仓估值刷新，A股/港股/美股/韩台日', render: renderStockTool, mount: mountStockTool },
   { id: 'news', name: 'AI 新闻锐评', icon: '📰', desc: '抓取科技新闻并由 AI 写贴吧风格锐评', render: renderNewsTool, mount: mountNewsTool },
   { id: 'db-admin', name: 'DB 管理', icon: '🗄️', desc: '通过 d1-rest 执行 SQL，多连接管理', render: renderDbAdminTool, mount: mountDbAdminTool },
+  { id: 'js', name: 'JS 运行工具', icon: '📜', desc: '运行自定义 JS 脚本，可发布为工具、可定时', render: renderJsTool, mount: mountJsTool },
+  { id: 'cron', name: 'Cron 任务', icon: '⏰', desc: '软定时任务管理，新闻抓取/脚本定时执行', render: renderCronTool, mount: mountCronTool },
   { id: 'config', name: '配置管理', icon: '⚙️', desc: '集中管理 API 密钥与工具配置，敏感字段加密存储', render: renderConfigTool, mount: mountConfigTool },
 ];
 
@@ -610,20 +612,58 @@ const TOOLS = [
 let homeLayout = { viewMode: 'grid', order: [] as string[], overrides: {} as Record<string, { name?: string; icon?: string; hidden?: boolean }> };
 let editMode = false;
 let dragSrcId = null;
+// 已发布 JS 脚本（动态注入首页卡片）
+let publishedScripts: any[] = [];
 
 // 取工具的显示名/图标（应用用户覆盖）
-function toolName(id) { return (homeLayout.overrides[id]?.name) || (TOOLS.find(t => t.id === id)?.name) || id; }
-function toolIcon(id) { return (homeLayout.overrides[id]?.icon) || (TOOLS.find(t => t.id === id)?.icon) || '□'; }
+function findScriptById(id: string) {
+  const m = id.match(/^script:(.+)$/);
+  if (!m) return null;
+  return publishedScripts.find(s => s.id === m[1]) || null;
+}
+function toolName(id) {
+  if (homeLayout.overrides[id]?.name) return homeLayout.overrides[id].name;
+  const t = TOOLS.find(t => t.id === id);
+  if (t) return t.name;
+  const s = findScriptById(id);
+  if (s) return s.name;
+  return id;
+}
+function toolIcon(id) {
+  if (homeLayout.overrides[id]?.icon) return homeLayout.overrides[id].icon;
+  const t = TOOLS.find(t => t.id === id);
+  if (t) return t.icon;
+  const s = findScriptById(id);
+  if (s) return s.icon;
+  return '□';
+}
 function toolHidden(id) { return !!homeLayout.overrides[id]?.hidden; }
+function toolDesc(id) {
+  const t = TOOLS.find(t => t.id === id);
+  if (t) return t.desc;
+  const s = findScriptById(id);
+  if (s) return s.desc || '用户脚本';
+  return '';
+}
+
+// 所有可用工具 id（静态 TOOLS + 已发布脚本）
+function allToolIds(): string[] {
+  const ids = TOOLS.map(t => t.id);
+  for (const s of publishedScripts) {
+    ids.push('script:' + s.id);
+  }
+  return ids;
+}
 
 // 按偏好顺序排列工具，未在 order 里的补到末尾
 function orderedTools() {
+  const ids = allToolIds();
   const ordered: string[] = [];
   for (const id of homeLayout.order) {
-    if (TOOLS.find(t => t.id === id)) ordered.push(id);
+    if (ids.includes(id)) ordered.push(id);
   }
-  for (const t of TOOLS) {
-    if (!ordered.includes(t.id)) ordered.push(t.id);
+  for (const id of ids) {
+    if (!ordered.includes(id)) ordered.push(id);
   }
   return ordered;
 }
@@ -634,11 +674,9 @@ function renderToolGrid() {
   const ids = orderedTools();
   let html = '';
   for (const id of ids) {
-    const t = TOOLS.find(x => x.id === id);
-    if (!t) continue;
     const name = esc(toolName(id));
     const icon = toolIcon(id);
-    const desc = esc(t.desc);
+    const desc = esc(toolDesc(id));
     const hiddenCls = toolHidden(id) ? ' hidden-tool' : '';
     const editCls = editMode ? ' editing' : '';
     const clickAttr = editMode ? '' : ' onclick="showTool(\\'' + id + '\\')"';
@@ -739,7 +777,8 @@ async function loadHomeLayout() {
   document.querySelectorAll('#viewSwitcher button').forEach(b => {
     b.classList.toggle('active', b.getAttribute('data-mode') === homeLayout.viewMode);
   });
-  renderToolGrid();
+  // 加载已发布脚本（会触发 renderToolGrid）
+  await loadPublishedScripts();
 }
 
 // 视图切换与编辑模式按钮绑定
@@ -776,7 +815,10 @@ let editingToolId = null;
 
 window.openToolEdit = function(id) {
   editingToolId = id;
-  $('toolEditName').value = toolName(id) === TOOLS.find(t => t.id === id)?.name ? '' : toolName(id);
+  const defaultName = toolName(id);
+  const hasOverride = !!homeLayout.overrides[id]?.name;
+  $('toolEditName').value = hasOverride ? defaultName : '';
+  $('toolEditName').placeholder = defaultName;
   $('toolEditIconInput').value = (homeLayout.overrides[id]?.icon) || '';
   $('toolEditHidden').checked = toolHidden(id);
   // 渲染 emoji 选择器
@@ -804,10 +846,19 @@ $('toolEditSave')?.addEventListener('click', async () => {
   const icon = $('toolEditIconInput').value.trim();
   const hidden = $('toolEditHidden').checked;
   // 清理：与默认值相同的覆盖删除（避免存冗余）
-  const def = TOOLS.find(t => t.id === id);
+  const defaultName = toolName(id);
+  const defaultIcon = toolIcon(id);
+  // 取未覆盖时的默认值：用 findScriptById 或 TOOLS 还原原始默认
+  let origName = defaultName, origIcon = defaultIcon;
+  const t = TOOLS.find(t => t.id === id);
+  if (t) { origName = t.name; origIcon = t.icon; }
+  else {
+    const s = findScriptById(id);
+    if (s) { origName = s.name; origIcon = s.icon; }
+  }
   const ov = {};
-  if (name && name !== def?.name) ov.name = name;
-  if (icon && icon !== def?.icon) ov.icon = icon;
+  if (name && name !== origName) ov.name = name;
+  if (icon && icon !== origIcon) ov.icon = icon;
   if (hidden) ov.hidden = true;
   if (Object.keys(ov).length === 0) {
     delete homeLayout.overrides[id];
@@ -837,17 +888,18 @@ window.showTool = function(id) {
   // 隐藏工具栏（进入子页时不显示视图切换/编辑按钮）
   const tb = document.querySelector('.home-toolbar');
   if (tb) tb.style.display = 'none';
-  for (const t of TOOLS) {
-    const v = $('view-' + t.id);
-    if (t.id === id) { v.classList.add('active'); }
-    else { v.classList.remove('active'); }
-  }
+  // 隐藏所有 view，再激活目标
+  const allViews = document.querySelectorAll('.tool-view');
+  allViews.forEach(v => v.classList.remove('active'));
+  const target = $('view-' + id);
+  if (target) target.classList.add('active');
   // 显示常驻浮动返回按钮
   $('floatBack').classList.add('show');
 }
 
 window.backToGrid = function() {
-  for (const t of TOOLS) { $('view-' + t.id).classList.remove('active'); }
+  const allViews = document.querySelectorAll('.tool-view');
+  allViews.forEach(v => v.classList.remove('active'));
   toolGrid.style.display = 'grid';
   // 显示工具栏
   const tb = document.querySelector('.home-toolbar');
@@ -3628,6 +3680,418 @@ if (token) {
     .catch(() => setBtnStatus('验证', ''));
 } else {
   setBtnStatus('验证', '');
+}
+
+// ═══ 工具：Cron 任务管理 ═══
+function renderCronTool() {
+  return \`
+    <h2>⏰ Cron 任务</h2>
+    <p class="subtitle">软定时任务管理。每小时由 cron 触发，按 everyMinutes 判断是否执行。</p>
+    <div style="margin:12px 0">
+      <button class="btn btn-primary" id="cronNewBtn">+ 新建任务</button>
+      <button class="btn btn-outline" id="cronRefreshBtn">刷新</button>
+    </div>
+    <div id="cronList"></div>
+    <div id="cronEditor" style="display:none"></div>
+  \`;
+}
+
+function mountCronTool() {
+  const newBtn = $('cronNewBtn');
+  const refreshBtn = $('cronRefreshBtn');
+  if (newBtn) newBtn.onclick = () => renderCronEditor(null);
+  if (refreshBtn) refreshBtn.onclick = () => loadCronTasks();
+  loadCronTasks();
+}
+
+async function loadCronTasks() {
+  const list = $('cronList');
+  if (!list) return;
+  list.innerHTML = '<p class="subtitle">加载中...</p>';
+  try {
+    const data = await api('/api/cron-tasks');
+    if (!data.tasks || data.tasks.length === 0) {
+      list.innerHTML = '<p class="subtitle">暂无任务</p>';
+      return;
+    }
+    let html = '<table class="data-table"><thead><tr><th>名称</th><th>类型</th><th>间隔(分)</th><th>启用</th><th>上次执行</th><th>状态</th><th>操作</th></tr></thead><tbody>';
+    for (const t of data.tasks) {
+      const statusBadge = t.lastStatus === 'ok' ? '<span class="badge badge-ok">OK</span>'
+        : t.lastStatus === 'error' ? '<span class="badge badge-err">ERR</span>'
+        : '<span class="badge">-</span>';
+      const lastRun = t.lastRunAt ? new Date(t.lastRunAt).toLocaleString('zh-CN') : '从未';
+      const errTip = t.lastError ? ' title="' + esc(t.lastError) + '"' : '';
+      html += '<tr' + errTip + '><td>' + esc(t.name) + '</td><td>' + esc(t.type) + (t.scriptId ? ' (' + esc(t.scriptId).slice(0,8) + ')' : '') + '</td><td>' + t.everyMinutes + '</td><td>' + (t.enabled ? '✓' : '✗') + '</td><td>' + esc(lastRun) + '</td><td>' + statusBadge + '</td><td><button class="btn btn-sm" onclick="triggerCronTask(\\'' + t.id + '\\')">运行</button> <button class="btn btn-sm" onclick="renderCronEditor(\\'' + t.id + '\\')">编辑</button> <button class="btn btn-sm btn-danger" onclick="deleteCronTask(\\'' + t.id + '\\')">删除</button></td></tr>';
+    }
+    html += '</tbody></table>';
+    list.innerHTML = html;
+  } catch (e) {
+    list.innerHTML = '<p class="subtitle">加载失败：' + esc(e.message) + '</p>';
+  }
+}
+
+window.triggerCronTask = async function(id) {
+  toast('执行中...', 'info');
+  try {
+    const r = await api('/api/cron-tasks/' + id + '/trigger', { method: 'POST' });
+    if (r.ok) toast('执行成功', 'success');
+    else toast('执行失败：' + (r.error || '未知错误'), 'error');
+  } catch (e) {
+    toast('执行失败：' + e.message, 'error');
+  }
+  loadCronTasks();
+}
+
+window.deleteCronTask = async function(id) {
+  if (!confirm('确认删除该任务？')) return;
+  try {
+    await api('/api/cron-tasks/' + id, { method: 'DELETE' });
+    toast('已删除', 'success');
+    loadCronTasks();
+  } catch (e) {
+    toast('删除失败：' + e.message, 'error');
+  }
+}
+
+window.renderCronEditor = async function(id) {
+  const ed = $('cronEditor');
+  if (!ed) return;
+  let task = null;
+  if (id) {
+    try {
+      const data = await api('/api/cron-tasks');
+      task = data.tasks.find(t => t.id === id);
+    } catch (e) { toast('加载失败：' + e.message, 'error'); return; }
+  }
+  // 拉脚本列表供 script 类型选择
+  let scriptOptions = '<option value="">-- 选择脚本 --</option>';
+  try {
+    const sd = await api('/api/tools/js/scripts');
+    for (const s of (sd.scripts || [])) {
+      scriptOptions += '<option value="' + s.id + '"' + (task && task.scriptId === s.id ? ' selected' : '') + '>' + esc(s.name) + ' (' + s.id.slice(0,8) + ')</option>';
+    }
+  } catch {}
+  ed.style.display = 'block';
+  ed.innerHTML = \`
+    <div class="modal-overlay" style="position:relative;background:transparent;padding:0">
+      <div class="modal" style="position:relative;transform:none;margin:0;max-width:500px">
+        <h3>\${task ? '编辑任务' : '新建任务'}</h3>
+        <div class="form-group">
+          <label>名称</label>
+          <input type="text" id="cronName" value="\${task ? esc(task.name) : ''}" placeholder="任务名">
+        </div>
+        <div class="form-group">
+          <label>类型</label>
+          <select id="cronType">
+            <option value="news"\${task && task.type === 'news' ? ' selected' : ''}>新闻抓取</option>
+            <option value="script"\${task && task.type === 'script' ? ' selected' : ''}>脚本执行</option>
+          </select>
+        </div>
+        <div class="form-group" id="cronScriptGroup" style="\${(!task || task.type === 'news') ? 'display:none' : ''}">
+          <label>关联脚本</label>
+          <select id="cronScriptId">\${scriptOptions}</select>
+        </div>
+        <div class="form-group">
+          <label>执行间隔（分钟，最小 5）</label>
+          <input type="number" id="cronEvery" min="5" value="\${task ? task.everyMinutes : 60}">
+        </div>
+        <div class="form-group">
+          <label><input type="checkbox" id="cronEnabled" \${(!task || task.enabled) ? 'checked' : ''}> 启用</label>
+        </div>
+        <div style="margin-top:16px">
+          <button class="btn btn-primary" id="cronSaveBtn">保存</button>
+          <button class="btn btn-outline" id="cronCancelBtn">取消</button>
+        </div>
+      </div>
+    </div>
+  \`;
+  $('cronType').onchange = function() {
+    $('cronScriptGroup').style.display = this.value === 'script' ? 'block' : 'none';
+  };
+  $('cronSaveBtn').onclick = async () => {
+    const body = {
+      name: $('cronName').value.trim() || '未命名任务',
+      type: $('cronType').value,
+      scriptId: $('cronScriptId').value || undefined,
+      everyMinutes: Number($('cronEvery').value) || 60,
+      enabled: $('cronEnabled').checked,
+    };
+    try {
+      if (task) {
+        await api('/api/cron-tasks/' + task.id, { method: 'PUT', body: JSON.stringify(body), headers: {'Content-Type':'application/json'} });
+      } else {
+        await api('/api/cron-tasks', { method: 'POST', body: JSON.stringify(body), headers: {'Content-Type':'application/json'} });
+      }
+      toast('已保存', 'success');
+      ed.style.display = 'none';
+      loadCronTasks();
+    } catch (e) {
+      toast('保存失败：' + e.message, 'error');
+    }
+  };
+  $('cronCancelBtn').onclick = () => { ed.style.display = 'none'; };
+}
+
+// ═══ 工具：JS 运行工具 ═══
+function renderJsTool() {
+  return \`
+    <h2>📜 JS 运行工具</h2>
+    <p class="subtitle">运行自定义 JS 脚本，可发布为首页工具、可定时执行。注入对象 <code>kbox</code> 提供 log/fetch/kv/news/stock/disk 等能力。</p>
+    <div style="margin:12px 0">
+      <button class="btn btn-primary" id="jsNewBtn">+ 新建脚本</button>
+      <button class="btn btn-outline" id="jsRefreshBtn">刷新</button>
+    </div>
+    <div class="section-title">脚本列表</div>
+    <div id="jsScriptsList"></div>
+    <div class="section-title" style="margin-top:24px">临时运行</div>
+    <textarea id="jsCodeInput" class="sql-editor" rows="10" placeholder="// 输入代码，可用 kbox.log / kbox.news.top() / kbox.fetch(...) 等
+const top = await kbox.news.top();
+kbox.log(JSON.stringify(top, null, 2));"></textarea>
+    <div style="margin:8px 0">
+      <button class="btn btn-primary" id="jsRunTmpBtn">▶ 运行</button>
+      <button class="btn btn-outline" id="jsSaveAsBtn">存为脚本</button>
+    </div>
+    <div class="result-box" id="jsTmpResult"></div>
+    <div id="jsEditor" style="display:none"></div>
+  \`;
+}
+
+function mountJsTool() {
+  const newBtn = $('jsNewBtn');
+  const refreshBtn = $('jsRefreshBtn');
+  if (newBtn) newBtn.onclick = () => renderJsEditor(null);
+  if (refreshBtn) refreshBtn.onclick = () => loadJsScripts();
+  const runBtn = $('jsRunTmpBtn');
+  if (runBtn) runBtn.onclick = () => runJsTmp();
+  const saveAsBtn = $('jsSaveAsBtn');
+  if (saveAsBtn) saveAsBtn.onclick = () => saveAsScript();
+  loadJsScripts();
+}
+
+async function loadJsScripts() {
+  const list = $('jsScriptsList');
+  if (!list) return;
+  list.innerHTML = '<p class="subtitle">加载中...</p>';
+  try {
+    const data = await api('/api/tools/js/scripts');
+    if (!data.scripts || data.scripts.length === 0) {
+      list.innerHTML = '<p class="subtitle">暂无脚本</p>';
+      return;
+    }
+    let html = '<table class="data-table"><thead><tr><th>名称</th><th>已发布</th><th>上次运行</th><th>操作</th></tr></thead><tbody>';
+    for (const s of data.scripts) {
+      const lastRun = s.last_run ? new Date(s.last_run.at).toLocaleString('zh-CN') + ' (' + (s.last_run.status === 'ok' ? 'OK' : 'ERR') + ', ' + s.last_run.duration_ms + 'ms)' : '从未';
+      html += '<tr><td>' + esc(s.name) + ' <span class="subtitle">' + esc(s.icon) + '</span></td><td>' + (s.published ? '✓' : '✗') + '</td><td>' + esc(lastRun) + '</td><td><button class="btn btn-sm" onclick="runJsScript(\\'' + s.id + '\\')">运行</button> <button class="btn btn-sm" onclick="toggleJsPublish(\\'' + s.id + '\\', ' + !s.published + ')">' + (s.published ? '取消发布' : '发布') + '</button> <button class="btn btn-sm" onclick="renderJsEditor(\\'' + s.id + '\\')">编辑</button> <button class="btn btn-sm btn-danger" onclick="deleteJsScript(\\'' + s.id + '\\')">删除</button></td></tr>';
+    }
+    html += '</tbody></table>';
+    list.innerHTML = html;
+  } catch (e) {
+    list.innerHTML = '<p class="subtitle">加载失败：' + esc(e.message) + '</p>';
+  }
+}
+
+async function runJsTmp() {
+  const code = ($('jsCodeInput')?.value) || '';
+  const resultBox = $('jsTmpResult');
+  if (!resultBox) return;
+  resultBox.innerHTML = '<p class="subtitle">运行中...</p>';
+  try {
+    const r = await api('/api/tools/js/run', { method: 'POST', body: JSON.stringify({ code }), headers: {'Content-Type':'application/json'} });
+    resultBox.innerHTML = formatJsResult(r);
+  } catch (e) {
+    resultBox.innerHTML = '<p class="subtitle">运行失败：' + esc(e.message) + '</p>';
+  }
+}
+
+window.runJsScript = async function(id) {
+  toast('运行中...', 'info');
+  try {
+    const r = await api('/api/tools/js/scripts/' + id + '/run', { method: 'POST', body: JSON.stringify({}), headers: {'Content-Type':'application/json'} });
+    // 在临时结果区显示
+    const resultBox = $('jsTmpResult');
+    if (resultBox) resultBox.innerHTML = formatJsResult(r);
+    if (r.error) toast('执行出错：' + r.error.message, 'error');
+    else toast('执行完成（' + r.duration_ms + 'ms）', 'success');
+    loadJsScripts();
+  } catch (e) {
+    toast('运行失败：' + e.message, 'error');
+  }
+}
+
+window.toggleJsPublish = async function(id, publish) {
+  try {
+    await api('/api/tools/js/scripts/' + id + '/publish', { method: 'POST', body: JSON.stringify({ published: publish }), headers: {'Content-Type':'application/json'} });
+    toast(publish ? '已发布到首页' : '已取消发布', 'success');
+    loadJsScripts();
+    loadPublishedScripts();
+  } catch (e) {
+    toast('操作失败：' + e.message, 'error');
+  }
+}
+
+window.deleteJsScript = async function(id) {
+  if (!confirm('确认删除该脚本？')) return;
+  try {
+    await api('/api/tools/js/scripts/' + id, { method: 'DELETE' });
+    toast('已删除', 'success');
+    loadJsScripts();
+    loadPublishedScripts();
+  } catch (e) {
+    toast('删除失败：' + e.message, 'error');
+  }
+}
+
+async function saveAsScript() {
+  const code = ($('jsCodeInput')?.value) || '';
+  if (!code.trim()) { toast('代码不能为空', 'error'); return; }
+  const name = prompt('脚本名称：', '未命名脚本');
+  if (name === null) return;
+  try {
+    await api('/api/tools/js/scripts', { method: 'POST', body: JSON.stringify({ name: name || '未命名脚本', code, icon: '📝', published: false }), headers: {'Content-Type':'application/json'} });
+    toast('已保存', 'success');
+    loadJsScripts();
+  } catch (e) {
+    toast('保存失败：' + e.message, 'error');
+  }
+}
+
+window.renderJsEditor = async function(id) {
+  const ed = $('jsEditor');
+  if (!ed) return;
+  let script = null;
+  if (id) {
+    try {
+      const data = await api('/api/tools/js/scripts/' + id);
+      script = data.script;
+    } catch (e) { toast('加载失败：' + e.message, 'error'); return; }
+  }
+  ed.style.display = 'block';
+  ed.innerHTML = \`
+    <div class="modal-overlay" style="position:relative;background:transparent;padding:0">
+      <div class="modal" style="position:relative;transform:none;margin:0;max-width:700px">
+        <h3>\${script ? '编辑脚本' : '新建脚本'}</h3>
+        <div class="form-group">
+          <label>名称</label>
+          <input type="text" id="jsName" value="\${script ? esc(script.name) : ''}" placeholder="脚本名">
+        </div>
+        <div class="form-group">
+          <label>描述</label>
+          <input type="text" id="jsDesc" value="\${script ? esc(script.desc) : ''}" placeholder="简短描述">
+        </div>
+        <div class="form-group">
+          <label>图标（emoji）</label>
+          <input type="text" id="jsIcon" value="\${script ? esc(script.icon) : '📝'}" maxlength="4">
+        </div>
+        <div class="form-group">
+          <label>代码</label>
+          <textarea id="jsCode" class="sql-editor" rows="12" placeholder="// 输入代码">\${script ? esc(script.code) : ''}</textarea>
+        </div>
+        <div class="form-group">
+          <label><input type="checkbox" id="jsPublished" \${script && script.published ? 'checked' : ''}> 发布到首页</label>
+        </div>
+        <div style="margin-top:16px">
+          <button class="btn btn-primary" id="jsSaveBtn">保存</button>
+          <button class="btn btn-outline" id="jsCancelBtn">取消</button>
+        </div>
+      </div>
+    </div>
+  \`;
+  $('jsSaveBtn').onclick = async () => {
+    const body = {
+      name: $('jsName').value.trim() || '未命名脚本',
+      desc: $('jsDesc').value.trim(),
+      icon: $('jsIcon').value.trim() || '📝',
+      code: $('jsCode').value,
+      published: $('jsPublished').checked,
+    };
+    try {
+      if (script) {
+        await api('/api/tools/js/scripts/' + script.id, { method: 'PUT', body: JSON.stringify(body), headers: {'Content-Type':'application/json'} });
+      } else {
+        await api('/api/tools/js/scripts', { method: 'POST', body: JSON.stringify(body), headers: {'Content-Type':'application/json'} });
+      }
+      toast('已保存', 'success');
+      ed.style.display = 'none';
+      loadJsScripts();
+      loadPublishedScripts();
+    } catch (e) {
+      toast('保存失败：' + e.message, 'error');
+    }
+  };
+  $('jsCancelBtn').onclick = () => { ed.style.display = 'none'; };
+}
+
+function formatJsResult(r) {
+  let html = '<div class="section-title">输出</div>';
+  if (r.logs && r.logs.length > 0) {
+    html += '<pre class="sql-output">' + r.logs.map(l => esc(l)).join('\\n') + '</pre>';
+  } else {
+    html += '<p class="subtitle">（无日志输出）</p>';
+  }
+  if (r.result !== null && r.result !== undefined) {
+    html += '<div class="section-title">返回值</div>';
+    html += '<pre class="sql-output">' + esc(JSON.stringify(r.result, null, 2)) + '</pre>';
+  }
+  if (r.error) {
+    html += '<div class="section-title" style="color:#ef4444">错误</div>';
+    html += '<pre class="sql-output" style="color:#ef4444">' + esc(r.error.message) + (r.error.stack ? '\\n' + esc(r.error.stack) : '') + '</pre>';
+  }
+  html += '<p class="subtitle">耗时：' + r.duration_ms + 'ms' + (r.truncated ? '（输出已截断）' : '') + '</p>';
+  return html;
+}
+
+// ─── 已发布脚本动态注入首页 ───
+async function loadPublishedScripts() {
+  try {
+    const data = await api('/api/tools/js/published');
+    publishedScripts = data.scripts || [];
+  } catch {
+    publishedScripts = [];
+  }
+  // 重新渲染首页（合并静态 TOOLS + 动态脚本）
+  renderToolGrid();
+  // 为每个已发布脚本挂载 view
+  ensureScriptViews();
+}
+
+function ensureScriptViews() {
+  for (const s of publishedScripts) {
+    const viewId = 'view-script:' + s.id;
+    if ($(viewId)) continue;
+    const div = document.createElement('div');
+    div.className = 'tool-view';
+    div.id = viewId;
+    div.innerHTML = renderScriptRunView(s);
+    toolViews.appendChild(div);
+    mountScriptRunView(s.id);
+  }
+}
+
+function renderScriptRunView(s) {
+  return \`
+    <h2>\${esc(s.icon)} \${esc(s.name)}</h2>
+    <p class="subtitle">\${esc(s.desc || '用户脚本')}</p>
+    <div style="margin:12px 0">
+      <button class="btn btn-primary" id="scriptRunBtn-\${s.id}">▶ 运行</button>
+    </div>
+    <div class="result-box" id="scriptResult-\${s.id}"></div>
+  \`;
+}
+
+function mountScriptRunView(scriptId) {
+  const btn = $('scriptRunBtn-' + scriptId);
+  if (!btn) return;
+  btn.onclick = async () => {
+    const resultBox = $('scriptResult-' + scriptId);
+    if (!resultBox) return;
+    resultBox.innerHTML = '<p class="subtitle">运行中...</p>';
+    try {
+      const r = await api('/api/tools/js/scripts/' + scriptId + '/run', { method: 'POST', body: JSON.stringify({}), headers: {'Content-Type':'application/json'} });
+      resultBox.innerHTML = formatJsResult(r);
+    } catch (e) {
+      resultBox.innerHTML = '<p class="subtitle">运行失败：' + esc(e.message) + '</p>';
+    }
+  };
 }
 </script>
 </body>

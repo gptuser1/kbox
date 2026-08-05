@@ -4,4 +4,5 @@ compatibility_date = "2024-12-01"
 workers_dev = false
 
 [triggers]
-crons = ["0 0,4,10,14 * * *"]
+# 每小时第 5 分钟触发，由 KV 任务表（cron_tasks）软定时分发具体任务
+crons = ["5 * * * *"]

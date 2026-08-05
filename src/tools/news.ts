@@ -245,4 +245,26 @@ app.delete('/items/:id', async (c) => {
   }
 });
 
+// ─── 供 JS Runner / kbox 对象内部直调的读函数 ───
+// 这些函数不走 HTTP，直接复用内部逻辑，避免 token 透传与子请求消耗
+
+export async function listNews(env: any, limit = 30): Promise<any[]> {
+  if (!await ensureTable(env.D1_API_TOKEN, env.D1_API_BASE)) return [];
+  const db = createDb(env.D1_API_TOKEN, env.D1_API_BASE);
+  try {
+    return await db.queryAll(
+      `SELECT * FROM newsfeed ORDER BY id DESC LIMIT ?`,
+      [Math.min(limit, 100)]
+    );
+  } catch { return []; }
+}
+
+export async function getTopKeywords(env: any): Promise<{ generated_at: string | null; keywords: any[] }> {
+  const kv = createKv(env.D1_API_TOKEN, env.D1_API_BASE);
+  try {
+    const latest = await kv.get<{ generated_at: string; keywords: any[] }>(NS_KEYWORDS, KEYWORDS_KEY);
+    return latest || { generated_at: null, keywords: [] };
+  } catch { return { generated_at: null, keywords: [] }; }
+}
+
 export default app;

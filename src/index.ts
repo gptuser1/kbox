@@ -2,9 +2,11 @@ import { Hono } from 'hono';
 import { renderFrontend } from './frontend';
 import disk from './tools/cloud-disk';
 import stock from './tools/stock';
-import news, { runCron as runNewsCron } from './tools/news';
+import news from './tools/news';
 import dbAdmin from './tools/db-admin';
+import jsRunner from './tools/js-runner';
 import { createKv } from './kv';
+import { ensureDefaultTasks, runCronTasks, listTasks, createTask, updateTask, deleteTask, triggerTask } from './tools/cron-tasks';
 import { getConfig, getAppConfig, getToolConfig, setAppConfig, deleteAppConfig, getConfigSchema, listToolOverrides, setToolConfig, deleteToolConfig, ConfigField } from './config';
 
 type Bindings = {
@@ -100,6 +102,60 @@ app.route('/api/tools/news', news);
 // ─── DB 管理工具 ───
 app.route('/api/tools/db-admin', dbAdmin);
 
+// ─── JS 运行工具 ───
+app.route('/api/tools/js', jsRunner);
+
+// ─── Cron 任务管理（软定时） ───
+app.get('/api/cron-tasks', async (c) => {
+  try {
+    const tasks = await listTasks(c.env);
+    return c.json({ tasks });
+  } catch (e) {
+    return c.json({ error: e instanceof Error ? e.message : '获取任务失败' }, 500);
+  }
+});
+app.post('/api/cron-tasks', async (c) => {
+  let body: any;
+  try { body = await c.req.json(); } catch {
+    return c.json({ error: '请求体必须是有效的JSON' }, 400);
+  }
+  try {
+    const task = await createTask(c.env, body);
+    return c.json({ task });
+  } catch (e) {
+    return c.json({ error: e instanceof Error ? e.message : '创建任务失败' }, 500);
+  }
+});
+app.put('/api/cron-tasks/:id', async (c) => {
+  let body: any;
+  try { body = await c.req.json(); } catch {
+    return c.json({ error: '请求体必须是有效的JSON' }, 400);
+  }
+  try {
+    const task = await updateTask(c.env, c.req.param('id'), body);
+    if (!task) return c.json({ error: '任务不存在' }, 404);
+    return c.json({ task });
+  } catch (e) {
+    return c.json({ error: e instanceof Error ? e.message : '更新任务失败' }, 500);
+  }
+});
+app.delete('/api/cron-tasks/:id', async (c) => {
+  try {
+    await deleteTask(c.env, c.req.param('id'));
+    return c.json({ ok: true });
+  } catch (e) {
+    return c.json({ error: e instanceof Error ? e.message : '删除任务失败' }, 500);
+  }
+});
+app.post('/api/cron-tasks/:id/trigger', async (c) => {
+  try {
+    const result = await triggerTask(c.env, c.req.param('id'));
+    return c.json(result, result.ok ? 200 : 500);
+  } catch (e) {
+    return c.json({ error: e instanceof Error ? e.message : '触发失败' }, 500);
+  }
+});
+
 // 健康检查
 app.get('/api/health', (c) => {
   return c.json({ status: 'ok', d1_token: !!c.env.D1_API_TOKEN });
@@ -114,6 +170,8 @@ const TOOL_LIST = [
   { id: 'stock',     name: '基金估值' },
   { id: 'news',      name: 'AI 新闻锐评' },
   { id: 'db-admin',  name: 'DB 管理' },
+  { id: 'js',        name: 'JS 运行工具' },
+  { id: 'cron',      name: 'Cron 任务' },
 ];
 
 // 敏感值脱敏：用多个 * 号代替明文
@@ -712,14 +770,13 @@ export default {
   async scheduled(controller: ScheduledController, env: Bindings, ctx: ExecutionContext) {
     ctx.waitUntil((async () => {
       try {
-        const result = await runNewsCron({ env });
-        if (result.success) {
-          console.log(`[news-cron] Inserted ${result.articles_count} articles`);
-        } else {
-          console.error('[news-cron] failed:', result.error || 'unknown');
-        }
+        // 首次部署迁移：确保有默认 news 任务
+        await ensureDefaultTasks(env);
+        // 软定时分发
+        const result = await runCronTasks(env);
+        console.log(`[cron] ran=${result.ran} skipped=${result.skipped} errors=${result.errors}`);
       } catch (e) {
-        console.error('[news-cron] threw:', e instanceof Error ? e.message : String(e));
+        console.error('[cron] threw:', e instanceof Error ? e.message : String(e));
       }
     })());
   },

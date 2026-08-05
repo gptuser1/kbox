@@ -353,5 +353,37 @@ app.delete('/files/:id', async (c) => {
   }
 });
 
+// ─── 供 JS Runner / kbox 对象内部直调的读函数 ───
+// 注意：云盘支持工具级 D1 覆盖，这里读全局凭据（与 kbox 注入语义一致）
+export async function listDiskFiles(env: any): Promise<any[]> {
+  const base = env.D1_API_BASE;
+  const token = env.D1_API_TOKEN;
+  if (!await ensureTable(token, base)) return [];
+  const db = createDb(token, base);
+  try {
+    return await db.queryAll(
+      `SELECT id, name, mime_type, size, chunks, created_at FROM kbox_disk_files ORDER BY created_at DESC`
+    );
+  } catch { return []; }
+}
+
+export async function getDiskStats(env: any): Promise<any> {
+  const base = env.D1_API_BASE;
+  const token = env.D1_API_TOKEN;
+  if (!await ensureTable(token, base)) return { file_count: 0, total_size: 0, db_size: 0 };
+  const db = createDb(token, base);
+  try {
+    const stats = await db.queryOne<{ count: number; total_size: number }>(
+      `SELECT COUNT(*) as count, COALESCE(SUM(size), 0) as total_size FROM kbox_disk_files`
+    );
+    const dbSize = await getDbUsage(db);
+    return {
+      file_count: stats?.count || 0,
+      total_size: stats?.total_size || 0,
+      db_size: dbSize,
+    };
+  } catch { return { file_count: 0, total_size: 0, db_size: 0 }; }
+}
+
 export default app;
 export { MAX_FILE_SIZE, CHUNK_SIZE };
