@@ -2189,14 +2189,21 @@ function renderConfigTool() {
 
 <div class="result-box" id="configResult"></div>
 
-<div class="section-title">全局默认配置（namespace=app）</div>
-<div class="file-list" id="configGlobalList">
-  <div class="empty">加载中…</div>
+<div class="db-tabs" id="configTabs">
+  <button class="db-tab active" data-ctab="global">全局默认配置</button>
+  <button class="db-tab" data-ctab="tools">工具级覆盖</button>
 </div>
 
-<div class="section-title">工具级覆盖（namespace=tool:&lt;工具名&gt;）</div>
-<div class="file-list" id="configToolList">
-  <div class="empty">加载中…</div>
+<div id="configGlobalPane">
+  <div class="file-list" id="configGlobalList">
+    <div class="empty">加载中…</div>
+  </div>
+</div>
+
+<div id="configToolsPane" style="display:none">
+  <div class="file-list" id="configToolList">
+    <div class="empty">加载中…</div>
+  </div>
 </div>
 
 <!-- 编辑弹层 -->
@@ -2237,6 +2244,9 @@ function mountConfigTool() {
   const globalList = $('configGlobalList');
   const toolList = $('configToolList');
   const resultBox = $('configResult');
+  const tabsEl = $('configTabs');
+  const globalPane = $('configGlobalPane');
+  const toolsPane = $('configToolsPane');
   const modalOverlay = $('configModalOverlay');
   const modalSave = $('configModalSave');
   const modalInput = $('configModalInput');
@@ -2254,6 +2264,19 @@ function mountConfigTool() {
   let configOrder = [];     // 全局配置项顺序 [key...]，来自 preferences/config_order.app
   let configSortMode = false;
   let configDragKey = null;
+
+  // tab 切换：全局 / 工具级
+  if (tabsEl) {
+    tabsEl.querySelectorAll('.db-tab').forEach(btn => {
+      btn.onclick = () => {
+        const tab = btn.getAttribute('data-ctab');
+        tabsEl.querySelectorAll('.db-tab').forEach(b => b.classList.toggle('active', b === btn));
+        const isGlobal = tab === 'global';
+        if (globalPane) globalPane.style.display = isGlobal ? '' : 'none';
+        if (toolsPane) toolsPane.style.display = isGlobal ? 'none' : '';
+      };
+    });
+  }
 
   function valueDisplay(cfg) {
     if (cfg.sensitive) {
