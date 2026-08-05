@@ -4082,6 +4082,7 @@ async function runJsTmp() {
   const code = ($('jsCodeInput')?.value) || '';
   const resultBox = $('jsTmpResult');
   if (!resultBox) return;
+  resultBox.classList.add('show');
   resultBox.innerHTML = '<div class="empty">运行中…</div>';
   const r = await executeJsCode(code, {});
   resultBox.innerHTML = formatJsResult(r);
@@ -4089,7 +4090,10 @@ async function runJsTmp() {
 
 window.runJsScript = async function(id) {
   const resultBox = $('jsTmpResult');
-  if (resultBox) resultBox.innerHTML = '<div class="empty">运行中…</div>';
+  if (resultBox) {
+    resultBox.classList.add('show');
+    resultBox.innerHTML = '<div class="empty">运行中…</div>';
+  }
   try {
     const data = await api('/api/tools/js/scripts/' + id);
     const script = data.script;
@@ -4213,20 +4217,23 @@ window.renderJsEditor = async function(id) {
 }
 
 function formatJsResult(r) {
-  let html = '<div class="section-title">输出</div>';
+  // 输出区：使用和输入框一样的 sql-editor 风格，只读显示
+  const lines = [];
   if (r.logs && r.logs.length > 0) {
-    html += '<pre class="sql-output">' + r.logs.map(l => esc(l)).join('\\n') + '</pre>';
-  } else {
-    html += '<p class="subtitle">（无日志输出）</p>';
+    lines.push(...r.logs);
   }
   if (r.result !== null && r.result !== undefined) {
-    html += '<div class="section-title">返回值</div>';
-    html += '<pre class="sql-output">' + esc(JSON.stringify(r.result, null, 2)) + '</pre>';
+    lines.push('▶ 返回值: ' + JSON.stringify(r.result, null, 2));
   }
   if (r.error) {
-    html += '<div class="section-title" style="color:#ef4444">错误</div>';
-    html += '<pre class="sql-output" style="color:#ef4444">' + esc(r.error.message) + (r.error.stack ? '\\n' + esc(r.error.stack) : '') + '</pre>';
+    lines.push('✗ 错误: ' + r.error.message);
+    if (r.error.stack) lines.push(r.error.stack);
   }
+  if (lines.length === 0) {
+    lines.push('（无输出）');
+  }
+  let html = '<div class="section-title">输出</div>';
+  html += '<div class="sql-editor" style="white-space:pre-wrap;word-break:break-all;min-height:80px;cursor:default;color:' + (r.error ? '#ef4444' : 'var(--text)') + '">' + esc(lines.join('\n')) + '</div>';
   if (r.truncated) html += '<p class="subtitle">输出已截断</p>';
   return html;
 }
@@ -4274,6 +4281,7 @@ function mountScriptRunView(scriptId) {
   btn.onclick = async () => {
     const resultBox = $('scriptResult-' + scriptId);
     if (!resultBox) return;
+    resultBox.classList.add('show');
     resultBox.innerHTML = '<div class="empty">运行中…</div>';
     try {
       const data = await api('/api/tools/js/scripts/' + scriptId);
