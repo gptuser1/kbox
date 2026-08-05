@@ -923,7 +923,7 @@ function renderDispatchTool() {
       <div class="section-title" id="dispatchInputsTitle">输入参数</div>
       <div id="dispatchInputs"></div>
     </div>
-    <div style="display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap">
+    <div style="display:flex;gap:8px;margin-top:16px;margin-bottom:16px;flex-wrap:wrap">
       <button class="btn btn-primary" id="dispatchTriggerBtn" disabled>触发</button>
       <button class="btn btn-outline" id="dispatchSaveBtn">保存配置</button>
     </div>
