@@ -102,6 +102,23 @@ input, select, button, textarea { font-family: inherit; }
 .tool-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 16px; }
 .tool-grid.view-compact { grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 12px; }
 .tool-grid.view-list { display: flex; flex-direction: column; gap: 8px; }
+
+/* ─── 首页加载动画（读取布局偏好期间掩盖布局突变）─── */
+.home-grid-wrap { position: relative; min-height: 200px; }
+.home-loader {
+  position: absolute; inset: 0; z-index: 5;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 12px; color: var(--text-muted); font-size: 13px;
+  background: var(--bg); border-radius: 12px;
+  transition: opacity 0.25s ease;
+}
+.home-loader.hide { opacity: 0; pointer-events: none; }
+.home-loader .spinner {
+  width: 32px; height: 32px; border-radius: 50%;
+  border: 3px solid var(--border); border-top-color: var(--primary);
+  animation: homeSpin 0.8s linear infinite;
+}
+@keyframes homeSpin { to { transform: rotate(360deg); } }
 .tool-card {
   background: var(--card); border-radius: 12px; padding: 24px; cursor: pointer;
   box-shadow: var(--shadow); transition: box-shadow 0.2s, transform 0.2s, background 0.3s;
@@ -499,7 +516,13 @@ input[type="checkbox"] { accent-color: var(--primary); width: 16px; height: 16px
       <button class="btn btn-primary btn-sm" id="exitEditBtn" style="display:none">完成</button>
     </div>
   </div>
-  <div class="tool-grid" id="toolGrid"></div>
+  <div class="home-grid-wrap" id="homeGridWrap">
+    <div class="home-loader" id="homeLoader">
+      <div class="spinner"></div>
+      <span>加载中…</span>
+    </div>
+    <div class="tool-grid" id="toolGrid"></div>
+  </div>
   <div id="toolViews"></div>
 </div>
 
@@ -871,7 +894,14 @@ function initTools() {
   toolViews.innerHTML = views;
   for (const t of TOOLS) { t.mount(); }
   bindHomeToolbar();
-  loadHomeLayout();
+  // 加载布局偏好期间显示加载动画，掩盖默认布局与最终布局的突变
+  loadHomeLayout().finally(() => {
+    const loader = $('homeLoader');
+    if (loader) {
+      loader.classList.add('hide');
+      setTimeout(() => loader.remove(), 300);
+    }
+  });
 }
 
 window.showTool = function(id) {
