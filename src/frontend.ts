@@ -609,14 +609,14 @@ const TOOLS = [
 
 // ─── 首页布局偏好 ───
 // 结构：{ viewMode: 'grid'|'compact'|'list', order: [toolId...], overrides: { toolId: { name?, icon?, hidden? } } }
-let homeLayout = { viewMode: 'grid', order: [] as string[], overrides: {} as Record<string, { name?: string; icon?: string; hidden?: boolean }> };
+let homeLayout = { viewMode: 'grid', order: [], overrides: {} };
 let editMode = false;
 let dragSrcId = null;
 // 已发布 JS 脚本（动态注入首页卡片）
-let publishedScripts: any[] = [];
+let publishedScripts = [];
 
 // 取工具的显示名/图标（应用用户覆盖）
-function findScriptById(id: string) {
+function findScriptById(id) {
   const m = id.match(/^script:(.+)$/);
   if (!m) return null;
   return publishedScripts.find(s => s.id === m[1]) || null;
@@ -647,7 +647,7 @@ function toolDesc(id) {
 }
 
 // 所有可用工具 id（静态 TOOLS + 已发布脚本）
-function allToolIds(): string[] {
+function allToolIds() {
   const ids = TOOLS.map(t => t.id);
   for (const s of publishedScripts) {
     ids.push('script:' + s.id);
@@ -658,7 +658,7 @@ function allToolIds(): string[] {
 // 按偏好顺序排列工具，未在 order 里的补到末尾
 function orderedTools() {
   const ids = allToolIds();
-  const ordered: string[] = [];
+  const ordered = [];
   for (const id of homeLayout.order) {
     if (ids.includes(id)) ordered.push(id);
   }
