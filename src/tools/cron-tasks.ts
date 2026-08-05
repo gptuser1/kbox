@@ -135,6 +135,10 @@ async function runTask(env: any, task: CronTask): Promise<{ ok: boolean; error?:
     const script = await getScriptById(env, task.scriptId);
     if (!script) return { ok: false, error: '关联脚本不存在' };
     const r = await executeScript(env, script.code, {});
+    // Workers 运行时禁止 eval/new Function，定时执行无法在服务端运行用户代码
+    if (r.error && /Code generation from strings disallowed/.test(r.error.message)) {
+      return { ok: false, error: '服务端不支持执行 JS，请打开页面手动运行脚本' };
+    }
     return { ok: !r.error, error: r.error?.message };
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : String(e) };

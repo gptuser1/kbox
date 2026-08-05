@@ -371,6 +371,62 @@ app.post('/run', async (c) => {
   return c.json(result);
 });
 
+// ─── 通用 KV 读写（供前端 kbox.kv 调用，带黑名单校验） ───
+app.get('/kv/:ns/:key', async (c) => {
+  const kv = getKv(c);
+  const ns = c.req.param('ns');
+  const key = c.req.param('key');
+  try {
+    const value = await kv.get(ns, key);
+    return c.json({ value });
+  } catch (e) {
+    if (kv.error()) return c.json({ error: kv.error() }, 503);
+    return c.json({ error: e instanceof Error ? e.message : '读取失败' }, 500);
+  }
+});
+
+app.post('/kv/:ns/:key', async (c) => {
+  const kv = getKv(c);
+  const ns = c.req.param('ns');
+  const key = c.req.param('key');
+  if (isWriteForbidden(ns)) return c.json({ error: '禁止写入系统 namespace: ' + ns }, 403);
+  let body: any;
+  try { body = await c.req.json(); } catch { return c.json({ error: '无效 JSON' }, 400); }
+  try {
+    await kv.set(ns, key, body.value);
+    return c.json({ ok: true });
+  } catch (e) {
+    if (kv.error()) return c.json({ error: kv.error() }, 503);
+    return c.json({ error: e instanceof Error ? e.message : '写入失败' }, 500);
+  }
+});
+
+app.delete('/kv/:ns/:key', async (c) => {
+  const kv = getKv(c);
+  const ns = c.req.param('ns');
+  const key = c.req.param('key');
+  if (isWriteForbidden(ns)) return c.json({ error: '禁止写入系统 namespace: ' + ns }, 403);
+  try {
+    await kv.delete(ns, key);
+    return c.json({ ok: true });
+  } catch (e) {
+    if (kv.error()) return c.json({ error: kv.error() }, 503);
+    return c.json({ error: e instanceof Error ? e.message : '删除失败' }, 500);
+  }
+});
+
+app.get('/kv/:ns', async (c) => {
+  const kv = getKv(c);
+  const ns = c.req.param('ns');
+  try {
+    const items = await kv.list(ns);
+    return c.json({ items });
+  } catch (e) {
+    if (kv.error()) return c.json({ error: kv.error() }, 503);
+    return c.json({ error: e instanceof Error ? e.message : '列出失败' }, 500);
+  }
+});
+
 // 运行已保存脚本
 app.post('/scripts/:id/run', async (c) => {
   const kv = getKv(c);
@@ -395,6 +451,29 @@ app.post('/scripts/:id/run', async (c) => {
   } catch (e) {
     if (kv.error()) return c.json({ error: kv.error() }, 503);
     return c.json({ error: e instanceof Error ? e.message : '运行失败' }, 500);
+  }
+});
+
+// 记录脚本运行结果（前端执行后调用，仅更新 last_run）
+app.post('/scripts/:id/record-run', async (c) => {
+  const kv = getKv(c);
+  const id = c.req.param('id');
+  let body: any;
+  try { body = await c.req.json(); } catch { body = {}; }
+  try {
+    const script = await kv.get<JsScript>(NS_SCRIPTS, id);
+    if (!script) return c.json({ error: '脚本不存在' }, 404);
+    script.last_run = {
+      at: nowISO(),
+      status: body.status === 'ok' ? 'ok' : 'error',
+      duration_ms: body.duration_ms || 0,
+      error: body.error,
+    };
+    await kv.set(NS_SCRIPTS, id, script);
+    return c.json({ ok: true });
+  } catch (e) {
+    if (kv.error()) return c.json({ error: kv.error() }, 503);
+    return c.json({ error: e instanceof Error ? e.message : '记录失败' }, 500);
   }
 });
 

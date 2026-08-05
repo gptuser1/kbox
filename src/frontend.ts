@@ -3834,12 +3834,15 @@ function renderJsTool() {
         <p><code>await kbox.sleep(ms)</code> — 等待</p>
         <p><code>kbox.now()</code> — 当前时间</p>
         <p style="color:var(--text);font-weight:600;margin:10px 0 6px">数据读写</p>
-        <p><code>await kbox.kv.get(ns, key)</code> / <code>kbox.kv.set(ns, key, val)</code> / <code>kbox.kv.list(ns)</code></p>
+        <p><code>await kbox.kv.get(ns, key)</code> · <code>kbox.kv.set(ns, key, val)</code></p>
+        <p><code>await kbox.kv.list(ns)</code> · <code>kbox.kv.delete(ns, key)</code></p>
         <p style="color:var(--text-muted);font-size:12px">系统 namespace 不可写入</p>
         <p style="color:var(--text);font-weight:600;margin:10px 0 6px">内置数据源</p>
-        <p><code>await kbox.news.list(10)</code> · <code>kbox.news.top()</code></p>
-        <p><code>await kbox.stock.funds()</code></p>
-        <p><code>await kbox.disk.files()</code> · <code>kbox.disk.stats()</code></p>
+        <p><code>await kbox.news.list(10)</code> — 返回新闻数组</p>
+        <p><code>await kbox.news.top()</code> — 返回热词数组</p>
+        <p><code>await kbox.stock.funds()</code> — 返回基金数组</p>
+        <p><code>await kbox.disk.files()</code> — 返回文件数组</p>
+        <p><code>await kbox.disk.stats()</code> — 返回容量统计</p>
         <p style="color:var(--text-muted);font-size:12px;margin-top:10px">执行超时 5s，可用 return 返回值</p>
       </div>
     </details>
@@ -3899,31 +3902,112 @@ async function loadJsScripts() {
   }
 }
 
+// ─── 前端 JS 执行引擎（Workers 禁止 eval/new Function，故在浏览器执行） ───
+function formatLogArg(a) {
+  if (a === null) return 'null';
+  if (a === undefined) return 'undefined';
+  if (typeof a === 'object') { try { return JSON.stringify(a); } catch { return String(a); } }
+  return String(a);
+}
+
+function buildFrontendKbox(logs) {
+  const log = (...args) => logs.push(args.map(formatLogArg).join(' '));
+  return {
+    log,
+    now: () => new Date(Date.now() + 8 * 60 * 60 * 1000).toISOString(),
+    sleep: (ms) => new Promise(r => setTimeout(r, ms)),
+    fetch: (url, opts) => fetch(url, opts),
+    kv: {
+      get: async (ns, key) => {
+        const d = await api('/api/tools/js/kv/' + encodeURIComponent(ns) + '/' + encodeURIComponent(key));
+        return d.value;
+      },
+      set: async (ns, key, value) => {
+        await api('/api/tools/js/kv/' + encodeURIComponent(ns) + '/' + encodeURIComponent(key), {
+          method: 'POST', body: JSON.stringify({ value }), headers: { 'Content-Type': 'application/json' },
+        });
+      },
+      delete: async (ns, key) => {
+        await api('/api/tools/js/kv/' + encodeURIComponent(ns) + '/' + encodeURIComponent(key), { method: 'DELETE' });
+      },
+      list: async (ns) => {
+        const d = await api('/api/tools/js/kv/' + encodeURIComponent(ns));
+        return d.items || [];
+      },
+    },
+    news: {
+      list: async (limit) => {
+        const d = await api('/api/tools/news/list' + (limit ? '?limit=' + limit : ''));
+        return d.results || [];
+      },
+      top: async () => {
+        const d = await api('/api/tools/news/top');
+        return d.keywords || [];
+      },
+    },
+    stock: { funds: async () => (await api('/api/tools/stock/funds')).results || [] },
+    disk: {
+      files: async () => (await api('/api/tools/disk/files')).files || [],
+      stats: async () => api('/api/tools/disk/stats'),
+    },
+  };
+}
+
+async function executeJsCode(code, params = {}) {
+  const logs = [];
+  const kbox = buildFrontendKbox(logs);
+  const sandboxConsole = { log: kbox.log, info: kbox.log, warn: kbox.log, error: kbox.log, debug: kbox.log };
+  const started = Date.now();
+  const paramNames = Object.keys(params);
+  const wrapped = \`
+    const { log, fetch, kv, news, stock, disk, now, sleep } = kbox;
+    const { \${paramNames.join(', ')} } = params;
+    return (async () => {
+      \${code}
+    })();
+  \`;
+  try {
+    const fn = new Function('kbox', 'console', 'params', wrapped);
+    const result = await Promise.race([
+      fn(kbox, sandboxConsole, params),
+      new Promise((_, rej) => setTimeout(() => rej(new Error('执行超时（5s）')), 5000)),
+    ]);
+    return { logs, result: result === undefined ? null : result, duration_ms: Date.now() - started };
+  } catch (e) {
+    return { logs, error: { message: e instanceof Error ? e.message : String(e), stack: e instanceof Error ? e.stack : undefined }, duration_ms: Date.now() - started };
+  }
+}
+
 async function runJsTmp() {
   const code = ($('jsCodeInput')?.value) || '';
   const resultBox = $('jsTmpResult');
   if (!resultBox) return;
   resultBox.innerHTML = '<div class="empty">运行中…</div>';
-  try {
-    const r = await api('/api/tools/js/run', { method: 'POST', body: JSON.stringify({ code }), headers: {'Content-Type':'application/json'} });
-    resultBox.innerHTML = formatJsResult(r);
-  } catch (e) {
-    resultBox.innerHTML = '<div class="result-box show error">' + esc(e.message) + '</div>';
-  }
+  const r = await executeJsCode(code, {});
+  resultBox.innerHTML = formatJsResult(r);
 }
 
 window.runJsScript = async function(id) {
-  toast('运行中...', 'info');
+  const resultBox = $('jsTmpResult');
+  if (resultBox) resultBox.innerHTML = '<div class="empty">运行中…</div>';
   try {
-    const r = await api('/api/tools/js/scripts/' + id + '/run', { method: 'POST', body: JSON.stringify({}), headers: {'Content-Type':'application/json'} });
-    // 在临时结果区显示
-    const resultBox = $('jsTmpResult');
+    const data = await api('/api/tools/js/scripts/' + id);
+    const script = data.script;
+    if (!script) { toast('脚本不存在', 'error'); return; }
+    const r = await executeJsCode(script.code, {});
     if (resultBox) resultBox.innerHTML = formatJsResult(r);
-    if (r.error) toast('执行出错：' + r.error.message, 'error');
-    else toast('执行完成', 'success');
+    // 记录 last_run
+    api('/api/tools/js/scripts/' + id + '/record-run', {
+      method: 'POST',
+      body: JSON.stringify({ status: r.error ? 'error' : 'ok', error: r.error?.message, duration_ms: r.duration_ms }),
+      headers: { 'Content-Type': 'application/json' },
+    }).catch(() => {});
+    toast(r.error ? '执行出错' : '执行完成', r.error ? 'error' : 'success');
     loadJsScripts();
   } catch (e) {
-    toast('运行失败：' + e.message, 'error');
+    if (e.message === 'UNAUTHORIZED') return;
+    if (resultBox) resultBox.innerHTML = formatJsResult({ logs: [], error: { message: e.message } });
+    toast('运行失败', 'error');
   }
 }
 
@@ -4077,7 +4161,6 @@ function ensureScriptViews() {
 function renderScriptRunView(s) {
   return \`
     <h2>\${esc(s.icon)} \${esc(s.name)}</h2>
-    <p class="subtitle">\${esc(s.desc || '用户脚本')}</p>
     <div style="margin:12px 0">
       <button class="btn btn-primary" id="scriptRunBtn-\${s.id}">▶ 运行</button>
     </div>
@@ -4093,10 +4176,14 @@ function mountScriptRunView(scriptId) {
     if (!resultBox) return;
     resultBox.innerHTML = '<div class="empty">运行中…</div>';
     try {
-      const r = await api('/api/tools/js/scripts/' + scriptId + '/run', { method: 'POST', body: JSON.stringify({}), headers: {'Content-Type':'application/json'} });
+      const data = await api('/api/tools/js/scripts/' + scriptId);
+      const script = data.script;
+      if (!script) { resultBox.innerHTML = formatJsResult({ logs: [], error: { message: '脚本不存在' } }); return; }
+      const r = await executeJsCode(script.code, {});
       resultBox.innerHTML = formatJsResult(r);
     } catch (e) {
-      resultBox.innerHTML = '<div class="result-box show error">' + esc(e.message) + '</div>';
+      if (e.message === 'UNAUTHORIZED') return;
+      resultBox.innerHTML = formatJsResult({ logs: [], error: { message: e.message } });
     }
   };
 }
