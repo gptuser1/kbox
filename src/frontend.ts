@@ -377,6 +377,8 @@ body:has(.disk-modal-overlay.show) .float-back { display: none !important; }
 .db-meta { font-size: 12px; color: var(--text-muted); margin-left: auto; }
 .db-editor { width: 100%; min-height: 180px; padding: 12px; border-radius: 10px; border: 1px solid var(--border); background: var(--input-bg); color: var(--text); font-family: var(--font-mono, monospace); font-size: 13px; line-height: 1.5; resize: vertical; outline: none; tab-size: 2; }
 .db-editor:focus { border-color: var(--primary); }
+.sql-editor { width: 100%; padding: 12px; border-radius: 10px; border: 1px solid var(--border); background: var(--input-bg); color: var(--text); font-family: var(--font-mono, monospace); font-size: 13px; line-height: 1.5; resize: vertical; outline: none; tab-size: 2; box-sizing: border-box; }
+.sql-editor:focus { border-color: var(--primary); }
 .db-results-wrap { background: var(--card); border-radius: 10px; box-shadow: var(--shadow); overflow: hidden; }
 .db-results-head { padding: 10px 14px; font-size: 12px; color: var(--text-muted); border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap; }
 .db-results-scroll { max-height: 56vh; overflow: auto; }
@@ -706,6 +708,7 @@ function bindDragEvents() {
       dragSrcId = card.getAttribute('data-id');
       card.classList.add('dragging');
       e.dataTransfer.effectAllowed = 'move';
+      e.dataTransfer.setData('text/plain', dragSrcId);
     });
     card.addEventListener('dragend', () => {
       card.classList.remove('dragging');

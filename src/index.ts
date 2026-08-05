@@ -108,6 +108,7 @@ app.route('/api/tools/js', jsRunner);
 // ─── Cron 任务管理（软定时） ───
 app.get('/api/cron-tasks', async (c) => {
   try {
+    await ensureDefaultTasks(c.env);
     const tasks = await listTasks(c.env);
     return c.json({ tasks });
   } catch (e) {
