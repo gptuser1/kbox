@@ -26,9 +26,13 @@ export function renderFrontend(): string {
   --input-bg: #f0f2f5;
   --tag-bg: #f1f5f9;
   --overlay: rgba(0,0,0,0.5);
+  --fm-bg: #ffffff;
+  --fm-hover: #f0f2f5;
+  --fm-border: #e2e8f0;
+  --fm-shadow: 0 8px 32px rgba(0,0,0,0.12);
 }
 @media (prefers-color-scheme: dark) {
-  :root {
+  :root:not([data-theme="light"]) {
     --bg: #0f172a;
     --card: #1e293b;
     --primary: #818cf8;
@@ -47,7 +51,35 @@ export function renderFrontend(): string {
     --input-bg: #1e293b;
     --tag-bg: #334155;
     --overlay: rgba(0,0,0,0.7);
+    --fm-bg: #1e293b;
+    --fm-hover: #334155;
+    --fm-border: #334155;
+    --fm-shadow: 0 8px 32px rgba(0,0,0,0.5);
   }
+}
+html[data-theme="dark"] {
+  --bg: #0f172a;
+  --card: #1e293b;
+  --primary: #818cf8;
+  --primary-hover: #6366f1;
+  --primary-light: #1e1b4b;
+  --danger: #f87171;
+  --danger-hover: #ef4444;
+  --success: #4ade80;
+  --text: #e2e8f0;
+  --text-secondary: #94a3b8;
+  --text-muted: #64748b;
+  --border: #334155;
+  --bar-bg: rgba(15,23,42,0.95);
+  --shadow: 0 1px 3px rgba(0,0,0,0.3), 0 1px 2px rgba(0,0,0,0.2);
+  --shadow-lg: 0 4px 24px rgba(0,0,0,0.4);
+  --input-bg: #1e293b;
+  --tag-bg: #334155;
+  --overlay: rgba(0,0,0,0.7);
+  --fm-bg: #1e293b;
+  --fm-hover: #334155;
+  --fm-border: #334155;
+  --fm-shadow: 0 8px 32px rgba(0,0,0,0.5);
 }
 * { margin: 0; padding: 0; box-sizing: border-box; }
 body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', sans-serif; background: var(--bg); color: var(--text); line-height: 1.5; transition: background 0.3s, color 0.3s; min-height: 100vh; }
@@ -63,21 +95,33 @@ input, select, button, textarea { font-family: inherit; }
 }
 .token-bar .logo { font-size: 20px; font-weight: 700; color: var(--primary); display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
 .token-bar .logo span { font-size: 22px; }
-.token-bar .token-group { display: flex; align-items: center; gap: 8px; flex: 1; min-width: 0; }
+.token-bar .token-group { display: flex; align-items: center; gap: 8px; margin-left: auto; }
 .token-bar .token-group input {
-  flex: 1; padding: 9px 14px; border: 1px solid var(--border); border-radius: 8px;
-  font-size: 14px; outline: none; transition: border-color 0.2s, background 0.3s; background: var(--input-bg); color: var(--text); min-width: 0;
+  width: 200px; padding: 9px 14px; border: 1px solid var(--border); border-radius: 999px;
+  font-size: 14px; outline: none; transition: border-color 0.2s, background 0.3s; background: var(--input-bg); color: var(--text);
 }
 .token-bar .token-group input:focus { border-color: var(--primary); }
+.token-bar .token-group input:disabled { display: none; }
 .token-bar .btn-verify {
-  padding: 9px 28px; border: none; border-radius: 8px; font-size: 14px; font-weight: 500;
-  cursor: pointer; background: var(--primary); color: #fff; transition: background 0.2s, opacity 0.2s; white-space: nowrap; flex-shrink: 0; min-width: 88px;
+  padding: 9px 24px; border: none; border-radius: 999px; font-size: 14px; font-weight: 500;
+  cursor: pointer; background: var(--primary); color: #fff; transition: background 0.2s, opacity 0.2s; white-space: nowrap;
 }
 .token-bar .btn-verify:hover:not(:disabled) { background: var(--primary-hover); }
 .token-bar .btn-verify:disabled { opacity: 0.6; cursor: not-allowed; }
 .token-bar .btn-verify.ok { background: var(--success); }
 .token-bar .btn-verify.err { background: var(--danger); }
 .token-bar .btn-verify.loading { opacity: 0.75; }
+.token-bar .btn-verify.logout { cursor: pointer; }
+.token-bar .btn-verify.logout:hover { filter: brightness(1.1); }
+
+/* 三态主题切换（令牌栏右侧） */
+.theme-switcher { display: inline-flex; background: var(--card); border: 1px solid var(--border); border-radius: 999px; padding: 3px; gap: 2px; }
+.theme-switcher button {
+  background: none; border: none; padding: 5px 9px; border-radius: 999px; cursor: pointer; font-size: 14px; color: var(--text-muted);
+  transition: background 0.15s, color 0.15s; line-height: 1;
+}
+.theme-switcher button.active { background: var(--primary); color: #fff; }
+.theme-switcher button:hover:not(.active) { color: var(--text); }
 
 /* ─── Toast ─── */
 .toast-container { position: fixed; top: 80px; right: 20px; z-index: 999; display: flex; flex-direction: column; gap: 8px; pointer-events: none; }
@@ -187,7 +231,6 @@ input, select, button, textarea { font-family: inherit; }
 .tool-view.active { display: block; }
 
 /* ─── 常驻浮动返回按钮 ─── */
-/* 仅在工具子页可见，钉在可视区域左下角，z-index 高于 toast(999) 和 modal(200) */
 .float-back {
   position: fixed; left: 24px; z-index: 1500;
   width: 48px; height: 48px; border-radius: 50%; border: none;
@@ -198,8 +241,45 @@ input, select, button, textarea { font-family: inherit; }
 }
 .float-back:hover { background: var(--primary-hover); box-shadow: 0 8px 24px rgba(99, 102, 241, 0.5); }
 .float-back.show { display: inline-flex; }
-/* 任何弹窗打开时隐藏浮动按钮（弹窗自身有关闭/取消，避免重叠） */
 body:has(.disk-modal-overlay.show) .float-back { display: none !important; }
+
+/* ─── 右侧浮动菜单按钮 + 面板 ─── */
+.float-menu-btn {
+  position: fixed; right: 24px; z-index: 1500;
+  width: 48px; height: 48px; border-radius: 50%; border: none;
+  background: var(--primary); color: #fff; cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  box-shadow: 0 6px 20px rgba(99, 102, 241, 0.4);
+  transition: background 0.2s, box-shadow 0.2s, top 0.2s ease, transform 0.2s;
+}
+.float-menu-btn:hover { background: var(--primary-hover); box-shadow: 0 8px 24px rgba(99, 102, 241, 0.5); }
+.float-menu-btn.active { background: var(--primary-hover); }
+.float-menu-btn svg { width: 22px; height: 22px; }
+.float-menu-panel {
+  position: fixed; right: 24px; z-index: 1499;
+  min-width: 200px; background: var(--fm-bg); border: 1px solid var(--fm-border);
+  border-radius: 14px; box-shadow: var(--fm-shadow); padding: 10px;
+  display: none;
+}
+.float-menu-panel.show { display: block; animation: fmIn 0.18s ease; }
+@keyframes fmIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+.float-menu-section { padding: 6px 0; border-bottom: 1px solid var(--fm-border); }
+.float-menu-section:last-child { border-bottom: none; }
+.float-menu-label { font-size: 11px; font-weight: 600; color: var(--text-muted); padding: 4px 10px; text-transform: uppercase; letter-spacing: 0.5px; }
+.float-menu-item {
+  display: flex; align-items: center; gap: 8px; padding: 8px 10px; border-radius: 8px;
+  cursor: pointer; font-size: 14px; color: var(--text); transition: background 0.12s;
+}
+.float-menu-item:hover { background: var(--fm-hover); }
+.float-menu-item .icon { width: 20px; text-align: center; }
+.float-menu-item .right { margin-left: auto; font-size: 12px; color: var(--text-muted); }
+.float-menu-view-switcher { display: flex; gap: 2px; padding: 4px 10px; }
+.float-menu-view-switcher button {
+  flex: 1; padding: 6px 0; border: 1px solid var(--fm-border); border-radius: 8px;
+  background: var(--bg); color: var(--text-secondary); cursor: pointer; font-size: 13px; transition: all 0.15s;
+}
+.float-menu-view-switcher button.active { background: var(--primary); color: #fff; border-color: var(--primary); }
+.float-menu-view-switcher button:hover:not(.active) { border-color: var(--primary); color: var(--primary); }
 .tool-view h2 { font-size: 22px; font-weight: 700; margin-bottom: 8px; }
 .tool-view .subtitle { font-size: 14px; color: var(--text-muted); margin-bottom: 24px; }
 
@@ -306,11 +386,16 @@ body:has(.disk-modal-overlay.show) .float-back { display: none !important; }
 @media (max-width: 640px) {
   .token-bar { padding: 12px 16px; gap: 8px; }
   .token-bar .logo { font-size: 17px; }
-  .token-bar .token-group input { font-size: 13px; padding: 8px 10px; }
-  .token-bar .btn-verify { padding: 8px 14px; font-size: 13px; min-width: 70px; }
+  .token-bar .token-group { gap: 6px; }
+  .token-bar .token-group input { width: 140px; font-size: 13px; padding: 8px 10px; }
+  .token-bar .btn-verify { padding: 8px 14px; font-size: 13px; }
   .container { padding: 24px 16px 60px; }
   .tool-grid { grid-template-columns: 1fr; }
   .form-row { flex-direction: column; align-items: stretch; }
+  .float-menu-btn, .float-menu-panel { right: 16px; }
+  .float-menu-panel { min-width: 170px; }
+  .float-menu-view-switcher { padding: 4px 6px; }
+  .float-menu-view-switcher button { font-size: 12px; padding: 5px 0; }
 }
 @media (max-width: 400px) {
   .token-bar { flex-wrap: wrap; }
@@ -496,26 +581,51 @@ input[type="checkbox"] { accent-color: var(--primary); width: 16px; height: 16px
 
 <div class="toast-container" id="toastContainer"></div>
 
-<!-- 常驻浮动返回按钮：仅在工具子页可见，固定右上角，最上层 -->
+<!-- 常驻浮动返回按钮：仅在工具子页可见 -->
 <button class="float-back" id="floatBack" onclick="backToGrid()" title="返回首页" aria-label="返回首页">
   <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
     <path d="M19 12H5"/><path d="M12 19l-7-7 7-7"/>
   </svg>
 </button>
 
-<!-- 主页：工具网格 -->
-<div class="container" id="mainContent">
-  <div class="home-toolbar">
-    <div class="view-switcher" id="viewSwitcher">
+<!-- 右侧浮动菜单按钮 -->
+<button class="float-menu-btn" id="floatMenuBtn" title="菜单" aria-label="菜单">
+  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M3 12h18"/><path d="M3 6h18"/><path d="M3 18h18"/>
+  </svg>
+</button>
+
+<!-- 右侧浮动菜单面板 -->
+<div class="float-menu-panel" id="floatMenuPanel">
+  <div class="float-menu-section" id="fmViewSection">
+    <div class="float-menu-label">视图</div>
+    <div class="float-menu-view-switcher" id="fmViewSwitcher">
       <button data-mode="grid" title="大图标">▦</button>
       <button data-mode="compact" title="小图标">≡</button>
-      <button data-mode="list" title="详细信息">☰</button>
-    </div>
-    <div class="right-group">
-      <button class="btn btn-outline btn-sm" id="editLayoutBtn">✎ 自定义</button>
-      <button class="btn btn-primary btn-sm" id="exitEditBtn" style="display:none">完成</button>
+      <button data-mode="list" title="详细">☰</button>
     </div>
   </div>
+  <div class="float-menu-section">
+    <div class="float-menu-label">操作</div>
+    <div class="float-menu-item" id="fmEditBtn">
+      <span class="icon">✎</span><span>自定义布局</span>
+    </div>
+    <div class="float-menu-item" id="fmExitEditBtn" style="display:none">
+      <span class="icon">✓</span><span>完成编辑</span>
+    </div>
+  </div>
+  <div class="float-menu-section" id="fmThemeSection">
+    <div class="float-menu-label">主题</div>
+    <div class="theme-switcher" id="fmThemeSwitcher" style="margin:4px 10px">
+      <button data-theme="light" title="亮色">☀️</button>
+      <button data-theme="auto" title="跟随">🖥️</button>
+      <button data-theme="dark" title="暗色">🌙</button>
+    </div>
+  </div>
+</div>
+
+<!-- 主页：工具网格 -->
+<div class="container" id="mainContent">
   <div class="home-grid-wrap" id="homeGridWrap">
     <div class="home-loader" id="homeLoader">
       <div class="spinner"></div>
@@ -581,6 +691,28 @@ function setBtnStatus(text, cls, disabled) {
   verifyBtn.disabled = !!disabled;
 }
 
+function setVerifiedState() {
+  tokenInput.disabled = true;
+  setBtnStatus('✓ 已验证', 'ok logout', false);
+  verifyBtn.onclick = confirmLogout;
+}
+
+function resetVerifiedState() {
+  tokenInput.disabled = false;
+  setBtnStatus('验证', '', false);
+  verifyBtn.onclick = verifyToken;
+}
+
+function confirmLogout() {
+  if (confirm('是否退出？')) {
+    localStorage.removeItem('kbox_token');
+    token = '';
+    resetVerifiedState();
+    mainContent.classList.remove('active');
+    toast('已退出', 'info');
+  }
+}
+
 // ─── 令牌验证 ───
 async function verifyToken() {
   token = tokenInput.value.trim();
@@ -590,7 +722,7 @@ async function verifyToken() {
     const res = await fetch('/api/verify', { headers: { 'Authorization': 'Bearer ' + token } });
     if (res.ok) {
       localStorage.setItem('kbox_token', token);
-      setBtnStatus('✓ 已授权', 'ok');
+      setVerifiedState();
       mainContent.classList.add('active');
       initTools();
     } else if (res.status === 401) {
@@ -613,9 +745,10 @@ async function api(url, options) {
     headers: { ...options?.headers, 'Authorization': 'Bearer ' + token },
   });
   if (res.status === 401) {
+    localStorage.removeItem('kbox_token');
+    tokenInput.disabled = false;
     setBtnStatus('✗ 已失效', 'err');
     mainContent.classList.remove('active');
-    localStorage.removeItem('kbox_token');
     toast('令牌已失效，请重新验证', 'error');
     throw new Error('UNAUTHORIZED');
   }
@@ -625,6 +758,66 @@ async function api(url, options) {
     throw new Error(msg);
   }
   return res.json();
+}
+
+// ─── 主题系统 ───
+const THEME_KEY = 'kbox_theme';
+
+function applyTheme(theme) {
+  if (theme === 'dark') {
+    document.documentElement.setAttribute('data-theme', 'dark');
+  } else if (theme === 'light') {
+    document.documentElement.setAttribute('data-theme', 'light');
+  } else {
+    document.documentElement.removeAttribute('data-theme');
+  }
+}
+
+function setTheme(theme) {
+  localStorage.setItem(THEME_KEY, theme);
+  applyTheme(theme);
+  updateThemeButtons(theme);
+}
+
+function updateThemeButtons(theme) {
+  document.querySelectorAll('[id$="ThemeSwitcher"]').forEach(sw => {
+    if (!sw) return;
+    sw.querySelectorAll('button').forEach(b => {
+      b.classList.toggle('active', b.getAttribute('data-theme') === theme);
+    });
+  });
+}
+
+function initTheme() {
+  const saved = localStorage.getItem(THEME_KEY) || 'auto';
+  applyTheme(saved);
+  updateThemeButtons(saved);
+}
+
+// 浮动菜单按钮：面板展开/关闭 + 主题切换绑定（与令牌验证状态无关，需尽早绑定）
+function bindFloatMenu() {
+  // 主题切换绑定（浮动菜单内）
+  document.querySelectorAll('[id$="ThemeSwitcher"]').forEach(sw => {
+    sw.querySelectorAll('button').forEach(b => {
+      b.addEventListener('click', () => setTheme(b.getAttribute('data-theme')));
+    });
+  });
+  // 浮动菜单按钮
+  const fmb = $('floatMenuBtn');
+  const fmp = $('floatMenuPanel');
+  if (fmb && fmp) {
+    fmb.addEventListener('click', (e) => {
+      e.stopPropagation();
+      fmp.classList.toggle('show');
+      fmb.classList.toggle('active', fmp.classList.contains('show'));
+    });
+    document.addEventListener('click', (e) => {
+      if (!fmp.classList.contains('show')) return;
+      if (fmp.contains(e.target) || fmb.contains(e.target)) return;
+      fmp.classList.remove('show');
+      fmb.classList.remove('active');
+    });
+  }
 }
 
 // ─── 工具函数 ───
@@ -789,7 +982,7 @@ async function loadHomeLayout() {
     if (e.message !== 'UNAUTHORIZED') console.error('load home layout failed', e);
   }
   // 应用视图模式按钮高亮
-  document.querySelectorAll('#viewSwitcher button').forEach(b => {
+  document.querySelectorAll('[id$="ViewSwitcher"] button').forEach(b => {
     b.classList.toggle('active', b.getAttribute('data-mode') === homeLayout.viewMode);
   });
   // 加载已发布脚本（会触发 renderToolGrid）
@@ -798,29 +991,34 @@ async function loadHomeLayout() {
 
 // 视图切换与编辑模式按钮绑定
 function bindHomeToolbar() {
-  document.querySelectorAll('#viewSwitcher button').forEach(btn => {
-    btn.addEventListener('click', () => {
-      homeLayout.viewMode = btn.getAttribute('data-mode');
-      document.querySelectorAll('#viewSwitcher button').forEach(b => b.classList.remove('active'));
-      btn.classList.add('active');
-      saveHomeLayout();
-      renderToolGrid();
+  // 视图切换（浮动菜单 + 令牌栏双源）
+  function onViewModeChange(mode) {
+    homeLayout.viewMode = mode;
+    document.querySelectorAll('[id$="ViewSwitcher"] button').forEach(b => {
+      b.classList.toggle('active', b.getAttribute('data-mode') === mode);
+    });
+    saveHomeLayout();
+    renderToolGrid();
+  }
+  document.querySelectorAll('[id$="ViewSwitcher"]').forEach(sw => {
+    sw.querySelectorAll('button').forEach(btn => {
+      btn.addEventListener('click', () => onViewModeChange(btn.getAttribute('data-mode')));
     });
   });
-  const editBtn = $('editLayoutBtn');
-  const exitBtn = $('exitEditBtn');
-  if (editBtn) editBtn.addEventListener('click', () => {
-    editMode = true;
-    editBtn.style.display = 'none';
-    exitBtn.style.display = 'inline-flex';
+  // 自定义/完成按钮（浮动菜单 + 令牌栏双源）
+  function setEditModeUI(on) {
+    editMode = on;
+    const fmEdit = $('fmEditBtn');
+    const fmExit = $('fmExitEditBtn');
+    if (fmEdit) fmEdit.style.display = on ? 'none' : 'flex';
+    if (fmExit) fmExit.style.display = on ? 'flex' : 'none';
     renderToolGrid();
-  });
-  if (exitBtn) exitBtn.addEventListener('click', () => {
-    editMode = false;
-    editBtn.style.display = 'inline-flex';
-    exitBtn.style.display = 'none';
-    renderToolGrid();
-  });
+  }
+  const fmEditBtn = $('fmEditBtn');
+  const fmExitEditBtn = $('fmExitEditBtn');
+  if (fmEditBtn) fmEditBtn.addEventListener('click', () => setEditModeUI(true));
+  if (fmExitEditBtn) fmExitEditBtn.addEventListener('click', () => setEditModeUI(false));
+  // 主题切换与浮动菜单按钮的展开/关闭已在 bindFloatMenu() 中尽早绑定，此处无需重复
 }
 
 // ─── 工具卡片编辑弹层 ───
@@ -906,53 +1104,48 @@ function initTools() {
 
 window.showTool = function(id) {
   toolGrid.style.display = 'none';
-  // 隐藏 homeGridWrap（避免其 min-height 残留撑开空白）
   const hgw = $('homeGridWrap');
   if (hgw) hgw.style.display = 'none';
-  // 隐藏工具栏（进入子页时不显示视图切换/编辑按钮）
-  const tb = document.querySelector('.home-toolbar');
-  if (tb) tb.style.display = 'none';
-  // 隐藏所有 view，再激活目标
   const allViews = document.querySelectorAll('.tool-view');
   allViews.forEach(v => v.classList.remove('active'));
   const target = $('view-' + id);
   if (target) target.classList.add('active');
-  // 显示常驻浮动返回按钮
   $('floatBack').classList.add('show');
+  // 进入子页时关闭浮动菜单面板
+  $('floatMenuPanel')?.classList.remove('show');
+  $('floatMenuBtn')?.classList.remove('active');
 }
 
 window.backToGrid = function() {
   const allViews = document.querySelectorAll('.tool-view');
   allViews.forEach(v => v.classList.remove('active'));
   toolGrid.style.display = 'grid';
-  // 恢复 homeGridWrap 显示
   const hgw = $('homeGridWrap');
   if (hgw) hgw.style.display = '';
-  // 显示工具栏
-  const tb = document.querySelector('.home-toolbar');
-  if (tb) tb.style.display = 'flex';
-  // 隐藏常驻浮动返回按钮，回到顶部
   $('floatBack').classList.remove('show');
+  $('floatMenuPanel')?.classList.remove('show');
+  $('floatMenuBtn')?.classList.remove('active');
   window.scrollTo({ top: 0, behavior: 'smooth' });
 };
 
-// 浮动返回按钮：监听滚动/缩放，用 JS 实时定位到可视区域左下角
-// 规避 position:fixed 在某些场景下（祖先 transform/filter）相对页面而非视口的问题
+// 浮动按钮定位：监听滚动/缩放，钉在可视区域底部
 (function() {
   const fb = document.getElementById('floatBack');
-  if (!fb) return;
-  function pinFloatBack() {
-    if (!fb.classList.contains('show')) return;
-    // fixed 相对视口：top = 视口高度 - 按钮高度 - 间距
-    const top = window.innerHeight - fb.offsetHeight - 24;
-    fb.style.top = Math.max(24, top) + 'px';
+  const fm = document.getElementById('floatMenuBtn');
+  if (!fb && !fm) return;
+  function pinFloatButtons() {
+    const top = window.innerHeight - 48 - 24;
+    const pinTop = Math.max(24, top) + 'px';
+    if (fb && fb.classList.contains('show')) fb.style.top = pinTop;
+    if (fm) fm.style.top = pinTop;
   }
-  window.addEventListener('scroll', pinFloatBack, { passive: true });
-  window.addEventListener('resize', pinFloatBack);
-  // 显示/隐藏时也要更新
-  const obs = new MutationObserver(pinFloatBack);
-  obs.observe(fb, { attributes: true, attributeFilter: ['class'] });
-  pinFloatBack();
+  window.addEventListener('scroll', pinFloatButtons, { passive: true });
+  window.addEventListener('resize', pinFloatButtons);
+  if (fb) {
+    const obs = new MutationObserver(pinFloatButtons);
+    obs.observe(fb, { attributes: true, attributeFilter: ['class'] });
+  }
+  pinFloatButtons();
 })();
 
 // ═══ 工具 1：GitHub Workflow Dispatch ═══
@@ -3733,8 +3926,9 @@ function mountDbAdminTool() {
 }
 
 // ─── 初始化 ───
-tokenInput.value = token;
-verifyBtn.addEventListener('click', verifyToken);
+initTheme();
+bindFloatMenu();
+verifyBtn.onclick = verifyToken;
 tokenInput.addEventListener('keydown', e => { if (e.key === 'Enter') verifyToken(); });
 
 // 自动验证已保存的令牌
@@ -3743,18 +3937,18 @@ if (token) {
   fetch('/api/verify', { headers: { 'Authorization': 'Bearer ' + token } })
     .then(res => {
       if (res.ok) {
-        setBtnStatus('✓ 已授权', 'ok');
+        setVerifiedState();
         mainContent.classList.add('active');
         initTools();
       } else {
-        setBtnStatus('验证', '');
+        resetVerifiedState();
         localStorage.removeItem('kbox_token');
         token = '';
       }
     })
-    .catch(() => setBtnStatus('验证', ''));
+    .catch(() => resetVerifiedState());
 } else {
-  setBtnStatus('验证', '');
+  resetVerifiedState();
 }
 
 // ═══ 工具：Cron 任务管理 ═══
@@ -4233,7 +4427,7 @@ function formatJsResult(r) {
     lines.push('（无输出）');
   }
   let html = '<div class="section-title">输出</div>';
-  html += '<div class="sql-editor" style="white-space:pre-wrap;word-break:break-all;min-height:80px;cursor:default;color:' + (r.error ? '#ef4444' : 'var(--text)') + '">' + esc(lines.join('\n')) + '</div>';
+  html += '<div class="sql-editor" style="white-space:pre-wrap;word-break:break-all;min-height:80px;cursor:default;color:' + (r.error ? '#ef4444' : 'var(--text)') + '">' + esc(lines.join('\\n')) + '</div>';
   if (r.truncated) html += '<p class="subtitle">输出已截断</p>';
   return html;
 }
