@@ -120,7 +120,6 @@ export function mount(): void {
 
   function formatNewsTime(ts) {
     try {
-      if (ts == null || ts === 0 || ts === '0') return '未知';
       const d = new Date(ts);
       if (isNaN(d.getTime())) return ts || '';
       const pad = (n) => String(n).padStart(2, '0');
