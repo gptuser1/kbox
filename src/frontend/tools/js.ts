@@ -59,7 +59,7 @@ function renderJsTool(): string {
         <p style="color:var(--text-muted);font-size:12px;margin-top:10px">执行超时 5s，可用 return 返回值</p>
       </div>
     </details>
-    <textarea id="jsCodeInput" class="sql-editor" rows="10" placeholder="// 试试：console.log('hello world')" style="margin-top:8px"></textarea>
+    <textarea id="jsCodeInput" class="sql-editor" rows="10" placeholder="// 试试：console.log('hello world')" style="margin-top:8px" autocorrect="off" spellcheck="false" autocapitalize="off"></textarea>
     <div style="display:flex;gap:8px;margin:8px 0;flex-wrap:wrap">
       <button class="btn btn-primary" id="jsRunTmpBtn">▶ 运行</button>
       <button class="btn btn-outline" id="jsSaveAsBtn">存为脚本</button>
@@ -342,7 +342,7 @@ async function saveAsScript(): Promise<void> {
     </div>
     <div class="form-group">
       <label>代码</label>
-      <textarea id="jsCode" class="sql-editor" rows="12" placeholder="// 输入代码">${script ? esc(script.code) : ''}</textarea>
+      <textarea id="jsCode" class="sql-editor" rows="12" placeholder="// 输入代码" autocorrect="off" spellcheck="false" autocapitalize="off">${script ? esc(script.code) : ''}</textarea>
     </div>
     <div class="form-group">
       <label class="check-row"><input type="checkbox" id="jsPublished" ${script && script.published ? 'checked' : ''}> 发布到首页</label>
