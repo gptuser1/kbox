@@ -30,41 +30,47 @@ export function mount(id?: string): void {
 function renderJsTool(): string {
   return `
     <h2>📜 JS 运行工具</h2>
-    <div style="display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap">
-      <button class="btn btn-primary" id="jsNewBtn">+ 新建脚本</button>
-      <button class="btn btn-outline" id="jsRefreshBtn">刷新</button>
+    <div class="db-tabs" id="jsTabs" style="margin-bottom:16px">
+      <button class="db-tab active" data-jstab="scripts">脚本</button>
+      <button class="db-tab" data-jstab="playground">临时运行</button>
     </div>
-    <div class="section-title">脚本列表</div>
-    <div id="jsScriptsList"></div>
-    <div class="section-title" style="margin-top:24px">临时运行</div>
-    <details style="margin-bottom:12px">
-      <summary style="cursor:pointer;font-size:13px;color:var(--text-muted);padding:4px 0">使用说明 / kbox API</summary>
-      <div style="padding:12px 14px;background:var(--card);border-radius:8px;margin-top:8px;font-size:13px;line-height:1.7;color:var(--text-secondary)">
-        <p style="color:var(--text);font-weight:600;margin-bottom:6px">可直接使用</p>
-        <p><code>console.log(...)</code> — 输出到下方结果区</p>
-        <p><code>await kbox.log(...)</code> — 同上</p>
-        <p><code>await kbox.fetch(url, opts)</code> — 发起 HTTP 请求</p>
-        <p><code>await kbox.sleep(ms)</code> — 等待</p>
-        <p><code>kbox.now()</code> — 当前时间</p>
-        <p style="color:var(--text);font-weight:600;margin:10px 0 6px">数据读写</p>
-        <p><code>await kbox.kv.get(ns, key)</code> · <code>kbox.kv.set(ns, key, val)</code></p>
-        <p><code>await kbox.kv.list(ns)</code> · <code>kbox.kv.delete(ns, key)</code></p>
-        <p style="color:var(--text-muted);font-size:12px">系统 namespace 不可写入</p>
-        <p style="color:var(--text);font-weight:600;margin:10px 0 6px">内置数据源</p>
-        <p><code>await kbox.news.list(10)</code> — 返回新闻数组</p>
-        <p><code>await kbox.news.top()</code> — 返回热词数组</p>
-        <p><code>await kbox.stock.funds()</code> — 返回基金数组</p>
-        <p><code>await kbox.disk.files()</code> — 返回文件数组</p>
-        <p><code>await kbox.disk.stats()</code> — 返回容量统计</p>
-        <p style="color:var(--text-muted);font-size:12px;margin-top:10px">执行超时 5s，可用 return 返回值</p>
+    <div id="jsScriptsPane">
+      <div id="jsScriptsList"></div>
+      <div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap">
+        <button class="btn btn-primary" id="jsNewBtn">+ 新建脚本</button>
+        <button class="btn btn-outline" id="jsRefreshBtn">刷新</button>
       </div>
-    </details>
-    <textarea id="jsCodeInput" class="sql-editor" rows="10" placeholder="// 试试：console.log('hello world')" style="margin-top:8px" autocorrect="off" spellcheck="false" autocapitalize="off"></textarea>
-    <div style="display:flex;gap:8px;margin:8px 0;flex-wrap:wrap">
-      <button class="btn btn-primary" id="jsRunTmpBtn">▶ 运行</button>
-      <button class="btn btn-outline" id="jsSaveAsBtn">存为脚本</button>
     </div>
-    <div class="result-box" id="jsTmpResult"></div>
+    <div id="jsPlaygroundPane" style="display:none">
+      <details style="margin-bottom:12px">
+        <summary style="cursor:pointer;font-size:13px;color:var(--text-muted);padding:4px 0">使用说明 / kbox API</summary>
+        <div style="padding:12px 14px;background:var(--card);border-radius:8px;margin-top:8px;font-size:13px;line-height:1.7;color:var(--text-secondary)">
+          <p style="color:var(--text);font-weight:600;margin-bottom:6px">可直接使用</p>
+          <p><code>console.log(...)</code> — 输出到下方结果区</p>
+          <p><code>await kbox.log(...)</code> — 同上</p>
+          <p><code>await kbox.fetch(url, opts)</code> — 发起 HTTP 请求</p>
+          <p><code>await kbox.sleep(ms)</code> — 等待</p>
+          <p><code>kbox.now()</code> — 当前时间</p>
+          <p style="color:var(--text);font-weight:600;margin:10px 0 6px">数据读写</p>
+          <p><code>await kbox.kv.get(ns, key)</code> · <code>kbox.kv.set(ns, key, val)</code></p>
+          <p><code>await kbox.kv.list(ns)</code> · <code>kbox.kv.delete(ns, key)</code></p>
+          <p style="color:var(--text-muted);font-size:12px">系统 namespace 不可写入</p>
+          <p style="color:var(--text);font-weight:600;margin:10px 0 6px">内置数据源</p>
+          <p><code>await kbox.news.list(10)</code> — 返回新闻数组</p>
+          <p><code>await kbox.news.top()</code> — 返回热词数组</p>
+          <p><code>await kbox.stock.funds()</code> — 返回基金数组</p>
+          <p><code>await kbox.disk.files()</code> — 返回文件数组</p>
+          <p><code>await kbox.disk.stats()</code> — 返回容量统计</p>
+          <p style="color:var(--text-muted);font-size:12px;margin-top:10px">执行超时 5s，可用 return 返回值</p>
+        </div>
+      </details>
+      <textarea id="jsCodeInput" class="sql-editor" rows="10" placeholder="// 试试：console.log('hello world')" style="margin-top:8px" autocorrect="off" spellcheck="false" autocapitalize="off"></textarea>
+      <div style="display:flex;gap:8px;margin:8px 0;flex-wrap:wrap">
+        <button class="btn btn-primary" id="jsRunTmpBtn">▶ 运行</button>
+        <button class="btn btn-outline" id="jsSaveAsBtn">存为脚本</button>
+      </div>
+      <div class="result-box" id="jsTmpResult"></div>
+    </div>
     <div class="disk-modal-overlay" id="jsModalOverlay">
       <div class="disk-modal" style="max-width:680px">
         <div class="disk-modal-header">
@@ -82,6 +88,22 @@ function renderJsTool(): string {
 }
 
 function mountJsTool(): void {
+  // tab 切换
+  const tabsEl = $('jsTabs');
+  const scriptsPane = $('jsScriptsPane');
+  const playgroundPane = $('jsPlaygroundPane');
+  if (tabsEl) {
+    tabsEl.querySelectorAll('.db-tab').forEach((btn: Element) => {
+      btn.addEventListener('click', () => {
+        const tab = btn.getAttribute('data-jstab');
+        tabsEl.querySelectorAll('.db-tab').forEach((b: Element) => b.classList.toggle('active', b === btn));
+        const isScripts = tab === 'scripts';
+        if (scriptsPane) scriptsPane.style.display = isScripts ? '' : 'none';
+        if (playgroundPane) playgroundPane.style.display = isScripts ? 'none' : '';
+      });
+    });
+  }
+
   const newBtn = $('jsNewBtn');
   const refreshBtn = $('jsRefreshBtn');
   if (newBtn) newBtn.onclick = () => (window as any).renderJsEditor(null);
