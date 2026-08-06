@@ -2,3 +2,5 @@ node_modules/
 dist/
 .wrangler/
 .dev.vars
+# 前端构建产物（由 esbuild 从 src/frontend 生成）
+public/js/

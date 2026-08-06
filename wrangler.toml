@@ -3,6 +3,12 @@ main = "src/index.ts"
 compatibility_date = "2024-12-01"
 workers_dev = false
 
+# 前端静态资源（esbuild 编译 src/frontend 产物）：/js/* 走静态，未命中走 Worker
+# 这是 Workers 原生 Static Assets，非 Pages
+[assets]
+directory = "./public"
+not_found_handling = "none"
+
 [triggers]
 # 每小时第 5 分钟触发，由 KV 任务表（cron_tasks）软定时分发具体任务
 crons = ["5 * * * *"]

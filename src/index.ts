@@ -1,5 +1,5 @@
 import { Hono } from 'hono';
-import { renderFrontend } from './frontend';
+import { renderShellHTML } from './shell-html';
 import disk from './tools/cloud-disk';
 import stock from './tools/stock';
 import news from './tools/news';
@@ -74,8 +74,8 @@ app.use('/api/*', async (c, next) => {
 
 // ─── 路由 ───
 
-// 前端页面
-app.get('/', (c) => c.html(renderFrontend()));
+// 前端页面（薄壳：仅含壳 DOM + 引用 /js/shell.js；工具 JS 按需懒加载）
+app.get('/', (c) => c.html(renderShellHTML()));
 
 // favicon
 app.get('/favicon.svg', (c) => {

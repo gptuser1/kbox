@@ -15,6 +15,9 @@ jobs:
 
       - run: npm install --legacy-peer-deps
 
+      - name: Build frontend (esbuild ESM modules)
+        run: npm run build:frontend
+
       - name: Deploy to Cloudflare Workers
         run: npx wrangler deploy
         env:
