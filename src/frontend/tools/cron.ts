@@ -34,6 +34,19 @@ export function mount(): void {
   const refreshBtn = $('cronRefreshBtn');
   if (newBtn) newBtn.onclick = () => (window as any).renderCronEditor(null);
   if (refreshBtn) refreshBtn.onclick = () => loadCronTasks();
+  // 事件委托：避免内联 onclick 的引号转义陷阱
+  const list = $('cronList');
+  if (list) {
+    list.addEventListener('click', (e: Event) => {
+      const btn = (e.target as HTMLElement).closest('button[data-act]') as HTMLElement | null;
+      if (!btn) return;
+      const act = btn.getAttribute('data-act') || '';
+      const id = btn.getAttribute('data-id') || '';
+      if (act === 'run') (window as any).triggerCronTask(id);
+      else if (act === 'edit') (window as any).renderCronEditor(id);
+      else if (act === 'delete') (window as any).deleteCronTask(id);
+    });
+  }
   loadCronTasks();
 }
 
@@ -57,7 +70,12 @@ async function loadCronTasks(): Promise<void> {
       const actionLabel = CRON_ACTIONS[t.action] || t.action || '-';
       const hours = Array.isArray(t.hours) ? t.hours : [];
       const hoursText = hours.length === 0 ? '每小时' : hours.map((h: number) => String(h).padStart(2, '0')).join(',');
-      html += '<tr' + errTip + '><td>' + esc(t.name) + '</td><td>' + esc(actionLabel) + '</td><td>' + esc(hoursText) + '</td><td>' + (t.enabled ? '✓' : '✗') + '</td><td>' + esc(lastRun) + '</td><td>' + statusBadge + '</td><td class="row-actions"><button class="btn btn-outline btn-sm" onclick="triggerCronTask(\\\'' + t.id + '\\\')">运行</button><button class="btn btn-outline btn-sm" onclick="renderCronEditor(\\\'' + t.id + '\\\')">编辑</button><button class="btn btn-sm btn-danger" onclick="deleteCronTask(\\\'' + t.id + '\\\')">删除</button></td></tr>';
+      const tid = esc(t.id);
+      html += '<tr' + errTip + '><td>' + esc(t.name) + '</td><td>' + esc(actionLabel) + '</td><td>' + esc(hoursText) + '</td><td>' + (t.enabled ? '✓' : '✗') + '</td><td>' + esc(lastRun) + '</td><td>' + statusBadge + '</td><td class="row-actions">' +
+        '<button class="btn btn-outline btn-sm" data-act="run" data-id="' + tid + '">运行</button>' +
+        '<button class="btn btn-outline btn-sm" data-act="edit" data-id="' + tid + '">编辑</button>' +
+        '<button class="btn btn-sm btn-danger" data-act="delete" data-id="' + tid + '">删除</button>' +
+        '</td></tr>';
     }
     html += '</tbody></table>';
     list.innerHTML = html;

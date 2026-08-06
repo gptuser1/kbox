@@ -90,6 +90,20 @@ function mountJsTool(): void {
   if (runBtn) runBtn.onclick = () => runJsTmp();
   const saveAsBtn = $('jsSaveAsBtn');
   if (saveAsBtn) saveAsBtn.onclick = () => saveAsScript();
+  // 事件委托：避免内联 onclick 的引号转义陷阱，刷新列表后无需重新绑定
+  const list = $('jsScriptsList');
+  if (list) {
+    list.addEventListener('click', (e: Event) => {
+      const btn = (e.target as HTMLElement).closest('button[data-act]') as HTMLElement | null;
+      if (!btn) return;
+      const act = btn.getAttribute('data-act') || '';
+      const id = btn.getAttribute('data-id') || '';
+      if (act === 'run') (window as any).runJsScript(id);
+      else if (act === 'publish') (window as any).toggleJsPublish(id, btn.getAttribute('data-pub') === '1');
+      else if (act === 'edit') (window as any).renderJsEditor(id);
+      else if (act === 'delete') (window as any).deleteJsScript(id);
+    });
+  }
   loadJsScripts();
 }
 
@@ -106,7 +120,15 @@ async function loadJsScripts(): Promise<void> {
     let html = '<table class="data-table"><thead><tr><th>名称</th><th>已发布</th><th>上次运行</th><th>操作</th></tr></thead><tbody>';
     for (const s of data.scripts) {
       const lastRun = s.last_run ? new Date(s.last_run.at).toLocaleString('zh-CN') + ' (' + (s.last_run.status === 'ok' ? 'OK' : 'ERR') + ')' : '从未';
-      html += '<tr><td>' + esc(s.icon) + ' ' + esc(s.name) + '</td><td>' + (s.published ? '✓' : '✗') + '</td><td>' + esc(lastRun) + '</td><td class="row-actions"><button class="btn btn-outline btn-sm" onclick="runJsScript(\\\'' + s.id + '\\\')">运行</button><button class="btn btn-outline btn-sm" onclick="toggleJsPublish(\\\'' + s.id + '\\\',' + !s.published + ')">' + (s.published ? '取消发布' : '发布') + '</button><button class="btn btn-outline btn-sm" onclick="renderJsEditor(\\\'' + s.id + '\\\')">编辑</button><button class="btn btn-sm btn-danger" onclick="deleteJsScript(\\\'' + s.id + '\\\')">删除</button></td></tr>';
+      const sid = esc(s.id);
+      const pubBtn = s.published
+        ? '<button class="btn btn-outline btn-sm" data-act="publish" data-id="' + sid + '" data-pub="0">取消发布</button>'
+        : '<button class="btn btn-outline btn-sm" data-act="publish" data-id="' + sid + '" data-pub="1">发布</button>';
+      html += '<tr><td>' + esc(s.icon) + ' ' + esc(s.name) + '</td><td>' + (s.published ? '✓' : '✗') + '</td><td>' + esc(lastRun) + '</td><td class="row-actions">' +
+        '<button class="btn btn-outline btn-sm" data-act="run" data-id="' + sid + '">运行</button>' + pubBtn +
+        '<button class="btn btn-outline btn-sm" data-act="edit" data-id="' + sid + '">编辑</button>' +
+        '<button class="btn btn-sm btn-danger" data-act="delete" data-id="' + sid + '">删除</button>' +
+        '</td></tr>';
     }
     html += '</tbody></table>';
     list.innerHTML = html;
