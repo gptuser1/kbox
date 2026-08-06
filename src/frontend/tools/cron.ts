@@ -130,7 +130,7 @@ async function loadCronTasks(): Promise<void> {
   title.textContent = task ? '编辑任务' : '新建任务';
   let actionOptions = '';
   for (const k in CRON_ACTIONS) {
-    actionOptions += '<option value="' + k + '"' + (task && task.action === k ? ' selected' : '') + '>' + esc(CRON_ACTIONS[k]) + '</option>';
+    actionOptions += '<option value="' + k + '"' + (task && task.action === k ? ' selected' : '') + '>' + esc(k) + '</option>';
   }
   const curHours = (task && Array.isArray(task.hours)) ? task.hours : [];
   let hoursCheckboxes = '';
@@ -144,7 +144,7 @@ async function loadCronTasks(): Promise<void> {
       <input type="text" id="cronName" value="${task ? esc(task.name) : ''}" placeholder="任务名">
     </div>
     <div class="form-group">
-      <label>类型</label>
+      <label>Action</label>
       <select id="cronAction">${actionOptions}</select>
     </div>
     <div class="form-group">
