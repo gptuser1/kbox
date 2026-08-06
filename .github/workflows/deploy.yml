@@ -24,9 +24,6 @@ jobs:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CF_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CF_ACCOUNT_ID }}
 
-      # 仅需一个 KBOX_TOKEN：同时作为鉴权 ACCESS_TOKEN 与 D1 访问/加密主密钥 D1_API_TOKEN
-      # 其余业务配置（OPENAI_API_KEY / GH_TOKEN / 模型名 等）通过 /api/config 端点管理，
-      # 加密存入 D1 kbox_kv 表，不再通过 wrangler secret 下发。
       - name: Set secrets (ACCESS_TOKEN + D1_API_TOKEN from KBOX_TOKEN)
         run: |
           if [ -z "${{ secrets.KBOX_TOKEN }}" ]; then
