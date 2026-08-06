@@ -162,8 +162,6 @@ app.get('/api/health', (c) => {
 });
 
 // ─── Share Text 端点（公开只读，简单 token 认证）───
-// namespace: share_text, key: 用户指定, 响应: value 原始内容
-// 不走系统鉴权中间件，使用独立 token 认证
 app.get('/share/text', async (c) => {
   const token = c.req.query('token');
   if (token !== 'REVOKED') {
@@ -173,7 +171,9 @@ app.get('/share/text', async (c) => {
   if (!key) {
     return c.json({ error: 'Missing key parameter' }, 400);
   }
-  const kv = createKv(c.env.D1_API_TOKEN, c.env.D1_API_BASE);
+  const diskBase = await getConfig(c, 'disk', 'disk_d1_base');
+  const diskToken = await getConfig(c, 'disk', 'disk_d1_token');
+  const kv = createKv(diskToken || c.env.D1_API_TOKEN, diskBase || c.env.D1_API_BASE);
   try {
     const value = await kv.get('share_text', key);
     if (value === null) {
