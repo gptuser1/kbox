@@ -264,43 +264,76 @@ input, select, button, textarea { font-family: inherit; }
 .float-back.show { display: inline-flex; }
 body:has(.disk-modal-overlay.show) .float-back { display: none !important; }
 
-/* ─── 右侧浮动菜单按钮 + 面板 ─── */
-.float-menu-btn {
-  position: fixed; right: 24px; z-index: 1500;
-  width: 48px; height: 48px; border-radius: 50%; border: none;
-  background: var(--primary); color: #fff; cursor: pointer;
-  display: flex; align-items: center; justify-content: center;
+/* ─── 右侧浮动菜单（按钮自身膨胀展开） ─── */
+.float-menu-container {
+  position: fixed; right: 24px; bottom: 24px; z-index: 1500;
+  width: 48px; height: 48px; border-radius: 50%;
+  background: linear-gradient(135deg, var(--primary) 0%, var(--primary-hover) 100%);
   box-shadow: 0 6px 20px rgba(99, 102, 241, 0.4);
-  transition: background 0.2s, box-shadow 0.2s, top 0.2s ease, transform 0.2s;
+  cursor: pointer;
+  overflow: hidden;
+  transition: all 0.45s cubic-bezier(0.34, 1.56, 0.64, 1);
+  display: flex; flex-direction: column;
+  user-select: none;
 }
-.float-menu-btn:hover { background: var(--primary-hover); box-shadow: 0 8px 24px rgba(99, 102, 241, 0.5); }
-.float-menu-btn.active { background: var(--primary-hover); }
-.float-menu-btn svg { width: 22px; height: 22px; }
-.float-menu-panel {
-  position: fixed; right: 24px; z-index: 1499;
-  min-width: 200px; background: var(--fm-bg); border: 1px solid var(--fm-border);
-  border-radius: 14px; box-shadow: var(--fm-shadow); padding: 10px;
-  display: none;
+.float-menu-container.open {
+  width: 220px; height: 290px; border-radius: 16px;
+  box-shadow: 0 20px 60px rgba(99, 102, 241, 0.5);
+  cursor: default;
 }
-.float-menu-panel.show { display: block; animation: fmIn 0.18s ease; }
-@keyframes fmIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
-.float-menu-section { padding: 6px 0; border-bottom: 1px solid var(--fm-border); }
-.float-menu-section:last-child { border-bottom: none; }
-.float-menu-label { font-size: 11px; font-weight: 600; color: var(--text-muted); padding: 4px 10px; text-transform: uppercase; letter-spacing: 0.5px; }
-.float-menu-item {
-  display: flex; align-items: center; gap: 8px; padding: 8px 10px; border-radius: 8px;
-  cursor: pointer; font-size: 14px; color: var(--text); transition: background 0.12s;
+
+/* 汉堡图标 */
+.fm-icon {
+  position: absolute; top: 13px; left: 13px;
+  width: 22px; height: 22px;
+  color: #fff;
+  transition: all 0.35s ease;
+  pointer-events: none;
+  z-index: 1;
 }
-.float-menu-item:hover { background: var(--fm-hover); }
-.float-menu-item .icon { width: 20px; text-align: center; }
-.float-menu-item .right { margin-left: auto; font-size: 12px; color: var(--text-muted); }
-.float-menu-view-switcher { display: flex; gap: 2px; padding: 4px 10px; }
-.float-menu-view-switcher button {
-  flex: 1; padding: 6px 0; border: 1px solid var(--fm-border); border-radius: 8px;
-  background: var(--bg); color: var(--text-secondary); cursor: pointer; font-size: 13px; transition: all 0.15s;
+.float-menu-container.open .fm-icon {
+  opacity: 0;
+  transform: rotate(90deg) scale(0.5);
 }
-.float-menu-view-switcher button.active { background: var(--primary); color: #fff; border-color: var(--primary); }
-.float-menu-view-switcher button:hover:not(.active) { border-color: var(--primary); color: var(--primary); }
+
+/* 菜单项容器 */
+.fm-items {
+  position: absolute; top: 48px; left: 0; right: 0; bottom: 0;
+  padding: 8px 14px 14px;
+  opacity: 0;
+  transform: translateY(12px);
+  transition: all 0.35s ease 0.12s;
+  pointer-events: none;
+}
+.float-menu-container.open .fm-items {
+  opacity: 1;
+  transform: translateY(0);
+  pointer-events: auto;
+}
+
+.fm-section { padding: 6px 0; border-bottom: 1px solid rgba(255,255,255,0.15); }
+.fm-section:last-child { border-bottom: none; }
+.fm-label { font-size: 11px; font-weight: 600; color: rgba(255,255,255,0.6); padding: 4px 0; text-transform: uppercase; letter-spacing: 0.5px; }
+.fm-item {
+  display: flex; align-items: center; gap: 8px; padding: 7px 10px; border-radius: 8px;
+  cursor: pointer; font-size: 13px; color: rgba(255,255,255,0.9); transition: background 0.12s;
+}
+.fm-item:hover { background: rgba(255,255,255,0.12); }
+.fm-item .icon { width: 20px; text-align: center; }
+
+/* 视图切换器（在菜单内） */
+.fm-view-switcher { display: flex; gap: 4px; padding: 2px 0; }
+.fm-view-switcher button {
+  flex: 1; padding: 5px 0; border: 1px solid rgba(255,255,255,0.2); border-radius: 8px;
+  background: rgba(255,255,255,0.1); color: rgba(255,255,255,0.8); cursor: pointer; font-size: 13px; transition: all 0.15s;
+}
+.fm-view-switcher button.active { background: rgba(255,255,255,0.25); color: #fff; border-color: rgba(255,255,255,0.4); }
+.fm-view-switcher button:hover:not(.active) { background: rgba(255,255,255,0.16); }
+
+/* 主题切换器（在菜单内） */
+.float-menu-container .theme-switcher { background: rgba(255,255,255,0.1); border-color: rgba(255,255,255,0.2); margin: 2px 0; }
+.float-menu-container .theme-switcher button { color: rgba(255,255,255,0.7); }
+.float-menu-container .theme-switcher button.active { background: rgba(255,255,255,0.25); color: #fff; }
 .tool-view h2 { font-size: 22px; font-weight: 700; margin-bottom: 8px; }
 .tool-view .subtitle { font-size: 14px; color: var(--text-muted); margin-bottom: 24px; }
 
@@ -413,10 +446,8 @@ body:has(.disk-modal-overlay.show) .float-back { display: none !important; }
   .container { padding: 24px 16px 60px; }
   .tool-grid { grid-template-columns: 1fr; }
   .form-row { flex-direction: column; align-items: stretch; }
-  .float-menu-btn, .float-menu-panel { right: 16px; }
-  .float-menu-panel { min-width: 170px; }
-  .float-menu-view-switcher { padding: 4px 6px; }
-  .float-menu-view-switcher button { font-size: 12px; padding: 5px 0; }
+  .float-menu-container { right: 16px; bottom: 16px; }
+  .float-menu-container.open { width: 200px; height: 270px; }
 }
 @media (max-width: 400px) {
   .token-bar { flex-wrap: wrap; }
@@ -615,38 +646,32 @@ input[type="checkbox"] { accent-color: var(--primary); width: 16px; height: 16px
   </svg>
 </button>
 
-<!-- 右侧浮动菜单按钮 -->
-<button class="float-menu-btn" id="floatMenuBtn" title="菜单" aria-label="菜单">
-  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+<!-- 右侧浮动菜单（按钮自身膨胀展开） -->
+<div class="float-menu-container" id="floatMenuBtn">
+  <svg class="fm-icon" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
     <path d="M3 12h18"/><path d="M3 6h18"/><path d="M3 18h18"/>
   </svg>
-</button>
-
-<!-- 右侧浮动菜单面板 -->
-<div class="float-menu-panel" id="floatMenuPanel">
-  <div class="float-menu-section" id="fmViewSection">
-    <div class="float-menu-label">视图</div>
-    <div class="float-menu-view-switcher" id="fmViewSwitcher">
-      <button data-mode="grid" title="大图标">▦</button>
-      <button data-mode="compact" title="小图标">≡</button>
-      <button data-mode="list" title="详细">☰</button>
+  <div class="fm-items">
+    <div class="fm-section">
+      <div class="fm-label">视图</div>
+      <div class="fm-view-switcher" id="fmViewSwitcher">
+        <button data-mode="grid" title="大图标">▦</button>
+        <button data-mode="compact" title="小图标">≡</button>
+        <button data-mode="list" title="详细">☰</button>
+      </div>
     </div>
-  </div>
-  <div class="float-menu-section">
-    <div class="float-menu-label">操作</div>
-    <div class="float-menu-item" id="fmEditBtn">
-      <span class="icon">✎</span><span>自定义布局</span>
+    <div class="fm-section">
+      <div class="fm-label">操作</div>
+      <div class="fm-item" id="fmEditBtn"><span class="icon">✎</span>自定义布局</div>
+      <div class="fm-item" id="fmExitEditBtn" style="display:none"><span class="icon">✓</span>完成编辑</div>
     </div>
-    <div class="float-menu-item" id="fmExitEditBtn" style="display:none">
-      <span class="icon">✓</span><span>完成编辑</span>
-    </div>
-  </div>
-  <div class="float-menu-section" id="fmThemeSection">
-    <div class="float-menu-label">主题</div>
-    <div class="theme-switcher" id="fmThemeSwitcher" style="margin:4px 10px">
-      <button data-theme="light" title="亮色">☀️</button>
-      <button data-theme="auto" title="跟随">🖥️</button>
-      <button data-theme="dark" title="暗色">🌙</button>
+    <div class="fm-section">
+      <div class="fm-label">主题</div>
+      <div class="theme-switcher" id="fmThemeSwitcher">
+        <button data-theme="light" title="亮色">☀️</button>
+        <button data-theme="auto" title="跟随">🖥️</button>
+        <button data-theme="dark" title="暗色">🌙</button>
+      </div>
     </div>
   </div>
 </div>

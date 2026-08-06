@@ -52,26 +52,24 @@ function initTheme() {
   updateThemeButtons(saved);
 }
 
-// ─── 浮动菜单（展开/关闭 + 主题切换） ───
+// ─── 浮动菜单（按钮自身膨胀展开 + 主题切换） ───
 function bindFloatMenu() {
   document.querySelectorAll('[id$="ThemeSwitcher"]').forEach(sw => {
     sw.querySelectorAll('button').forEach(b => {
       b.addEventListener('click', () => setTheme(b.getAttribute('data-theme') || 'auto'));
     });
   });
-  const fmb = $('floatMenuBtn');
-  const fmp = $('floatMenuPanel');
-  if (fmb && fmp) {
-    fmb.addEventListener('click', (e) => {
+  const fmc = $('floatMenuBtn');
+  if (fmc) {
+    fmc.addEventListener('click', (e) => {
+      if (fmc.classList.contains('open')) return; // 展开后点击菜单项由各自 handler 处理
       e.stopPropagation();
-      fmp.classList.toggle('show');
-      fmb.classList.toggle('active', fmp.classList.contains('show'));
+      fmc.classList.add('open');
     });
     document.addEventListener('click', (e) => {
-      if (!fmp.classList.contains('show')) return;
-      if (fmp.contains(e.target as Node) || fmb.contains(e.target as Node)) return;
-      fmp.classList.remove('show');
-      fmb.classList.remove('active');
+      if (!fmc.classList.contains('open')) return;
+      if (fmc.contains(e.target as Node)) return;
+      fmc.classList.remove('open');
     });
   }
 }
@@ -337,8 +335,7 @@ async function showTool(id: string) {
   view.id = 'view-' + id;
   toolViews.appendChild(view);
   $('floatBack').classList.add('show');
-  $('floatMenuPanel')?.classList.remove('show');
-  $('floatMenuBtn')?.classList.remove('active');
+  $('floatMenuBtn')?.classList.remove('open');
   // 进入工具页：隐藏首页菜单按钮（视图切换/自定义布局仅对首页有意义，避免在工具页误点）
   const fmb = $('floatMenuBtn'); if (fmb) fmb.style.display = 'none';
 
@@ -380,8 +377,7 @@ function backToGrid() {
   toolGrid.style.display = 'grid';
   const hgw = $('homeGridWrap'); if (hgw) hgw.style.display = '';
   $('floatBack').classList.remove('show');
-  $('floatMenuPanel')?.classList.remove('show');
-  $('floatMenuBtn')?.classList.remove('active');
+  $('floatMenuBtn')?.classList.remove('open');
   // 回到首页：恢复菜单按钮显示
   const fmb = $('floatMenuBtn'); if (fmb) fmb.style.display = '';
   window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -409,23 +405,19 @@ function initTools() {
   });
 }
 
-// ─── 浮动按钮定位（钉在可视区域底部） ───
+// ─── 浮动按钮定位（返回按钮钉在可视区域底部） ───
 (function pinFloatButtons() {
   const fb = document.getElementById('floatBack');
-  const fm = document.getElementById('floatMenuBtn');
-  if (!fb && !fm) return;
+  if (!fb) return;
   function pin() {
     const top = window.innerHeight - 48 - 24;
     const pinTop = Math.max(24, top) + 'px';
-    if (fb && fb.classList.contains('show')) fb.style.top = pinTop;
-    if (fm) fm.style.top = pinTop;
+    if (fb.classList.contains('show')) fb.style.top = pinTop;
   }
   window.addEventListener('scroll', pin, { passive: true });
   window.addEventListener('resize', pin);
-  if (fb) {
-    const obs = new MutationObserver(pin);
-    obs.observe(fb, { attributes: true, attributeFilter: ['class'] });
-  }
+  const obs = new MutationObserver(pin);
+  obs.observe(fb, { attributes: true, attributeFilter: ['class'] });
   pin();
 })();
 
