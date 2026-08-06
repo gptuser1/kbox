@@ -147,22 +147,43 @@ input, select, button, textarea { font-family: inherit; }
 .tool-grid.view-compact { grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 12px; }
 .tool-grid.view-list { display: flex; flex-direction: column; gap: 8px; }
 
-/* ─── 首页加载动画（读取布局偏好期间掩盖布局突变）─── */
-.home-grid-wrap { position: relative; }
-.home-loader {
-  position: fixed; inset: 0; z-index: 1500;
+/* ─── 加载层（首屏全屏 + 工具区，统一视觉）─── */
+/* 首屏：inline 在 body 最前，DOM 解析即渲染，不依赖 JS；z-index 9999 盖住一切 */
+.app-loader {
+  position: fixed; inset: 0; z-index: 9999;
   display: flex; flex-direction: column; align-items: center; justify-content: center;
-  gap: 12px; color: var(--text-muted); font-size: 13px;
+  gap: 18px;
   background: var(--bg);
-  transition: opacity 0.25s ease;
+  transition: opacity 0.3s ease;
 }
-.home-loader.hide { opacity: 0; pointer-events: none; }
-.home-loader .spinner {
-  width: 32px; height: 32px; border-radius: 50%;
-  border: 3px solid var(--border); border-top-color: var(--primary);
-  animation: homeSpin 0.8s linear infinite;
+.app-loader.hide { opacity: 0; pointer-events: none; }
+.app-loader__mark {
+  font-size: 26px; font-weight: 700; letter-spacing: 3px;
+  background: linear-gradient(135deg, var(--primary), var(--primary-hover));
+  -webkit-background-clip: text; background-clip: text;
+  -webkit-text-fill-color: transparent;
+  animation: appLoaderPulse 1.8s ease-in-out infinite;
 }
-@keyframes homeSpin { to { transform: rotate(360deg); } }
+.app-loader__bar {
+  width: 120px; height: 3px; border-radius: 2px;
+  background: var(--border); position: relative; overflow: hidden;
+}
+.app-loader__bar::after {
+  content: ''; position: absolute; top: 0; left: -40%;
+  width: 40%; height: 100%; border-radius: 2px;
+  background: linear-gradient(90deg, transparent, var(--primary), transparent);
+  animation: appLoaderSweep 1.4s ease-in-out infinite;
+}
+@keyframes appLoaderPulse { 0%, 100% { opacity: 0.5; transform: scale(1); } 50% { opacity: 1; transform: scale(1.04); } }
+@keyframes appLoaderSweep { 0% { left: -40%; } 100% { left: 100%; } }
+
+/* 工具视图加载（区域级，不全屏，保留 token 栏与浮动按钮）*/
+.tool-loader {
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 14px; padding: 100px 0;
+}
+.tool-loader .app-loader__bar { width: 80px; }
+.tool-loader__text { color: var(--text-muted); font-size: 13px; letter-spacing: 0.5px; }
 .tool-card {
   background: var(--card); border-radius: 12px; padding: 24px; cursor: pointer;
   box-shadow: var(--shadow); transition: box-shadow 0.2s, transform 0.2s, background 0.3s;
@@ -571,6 +592,12 @@ input[type="checkbox"] { accent-color: var(--primary); width: 16px; height: 16px
 </head>
 <body>
 
+<!-- 首屏加载层：body 最前，DOM 解析即渲染，盖住一切；后端响应+前端渲染完成后由 shell.ts 淡出 -->
+<div class="app-loader" id="appLoader">
+  <div class="app-loader__mark">kbox</div>
+  <div class="app-loader__bar"></div>
+</div>
+
 <div class="token-bar">
   <div class="logo"><span>🧭</span> kbox</div>
   <div class="token-group">
@@ -627,10 +654,6 @@ input[type="checkbox"] { accent-color: var(--primary); width: 16px; height: 16px
 <!-- 主页：工具网格 -->
 <div class="container" id="mainContent">
   <div class="home-grid-wrap" id="homeGridWrap">
-    <div class="home-loader" id="homeLoader">
-      <div class="spinner"></div>
-      <span>加载中…</span>
-    </div>
     <div class="tool-grid" id="toolGrid"></div>
   </div>
   <div id="toolViews"></div>

@@ -327,6 +327,7 @@ function bindHomeToolbar() {
 
 // ─── 工具懒加载（核心隔离机制） ───
 // 动态 import 工具模块；render/mount 各自 try-catch，单工具失败只 toast，不波及壳与其他工具。
+// 进入时立即显示 tool-loader 覆盖工具区，掩盖 import/render/mount 的延迟。
 async function showTool(id: string) {
   toolGrid.style.display = 'none';
   const hgw = $('homeGridWrap'); if (hgw) hgw.style.display = 'none';
@@ -338,6 +339,9 @@ async function showTool(id: string) {
   $('floatBack').classList.add('show');
   $('floatMenuPanel')?.classList.remove('show');
   $('floatMenuBtn')?.classList.remove('active');
+
+  // 立即显示工具加载层（区域级，不全屏，保留 token 栏与浮动按钮）
+  view.innerHTML = '<div class="tool-loader"><div class="app-loader__bar"></div><div class="tool-loader__text">加载中…</div></div>';
 
   // script:xxx 复用 js 工具模块渲染
   const realId = id.startsWith('script:') ? 'js' : id;
@@ -378,16 +382,25 @@ function backToGrid() {
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
+// ─── 首屏加载层 ───
+// appLoader 在 HTML 中 inline 于 body 最前，DOM 解析即渲染（最高优先级，盖住一切）。
+// token 验证通过 + 主页布局加载渲染完成后淡出；验证失败/无 token 时立即淡出露出 token 栏。
+function hideAppLoader() {
+  const loader = $('appLoader');
+  if (!loader || loader.classList.contains('hide')) return;
+  loader.classList.add('hide');
+  setTimeout(() => loader.remove(), 350);
+}
+
 // ─── 初始化工具区 ───
 function initTools() {
-  renderToolGrid();
   bindHomeToolbar();
+  // 先在网格区显示加载层，掩盖布局偏好加载期间的空白与布局跳变
+  toolGrid.innerHTML = '<div class="tool-loader" style="grid-column:1/-1"><div class="app-loader__bar"></div><div class="tool-loader__text">加载中…</div></div>';
   loadHomeLayout().finally(() => {
-    const loader = $('homeLoader');
-    if (loader) {
-      loader.classList.add('hide');
-      setTimeout(() => loader.remove(), 300);
-    }
+    // loadHomeLayout 内部正常会 renderToolGrid；此处兜底确保渲染
+    if (toolGrid.querySelector('.tool-loader')) renderToolGrid();
+    hideAppLoader();
   });
 }
 
@@ -442,14 +455,19 @@ if (savedToken) {
       if (res.ok) {
         setVerifiedState();
         mainContent.classList.add('active');
-        initTools();
+        initTools(); // 内部 loadHomeLayout 完成后 hideAppLoader
       } else {
         resetVerifiedState();
         localStorage.removeItem('kbox_token');
         setToken('');
+        hideAppLoader(); // token 失效，露出 token 栏让用户重新输入
       }
     })
-    .catch(() => resetVerifiedState());
+    .catch(() => {
+      resetVerifiedState();
+      hideAppLoader(); // 网络错误，露出 token 栏
+    });
 } else {
   resetVerifiedState();
+  hideAppLoader(); // 无保存 token，直接显示 token 栏
 }
