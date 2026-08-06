@@ -60,18 +60,18 @@ async function loadCronTasks(): Promise<void> {
       list.innerHTML = '<div class="empty">暂无任务</div>';
       return;
     }
-    let html = '<table class="data-table"><thead><tr><th>名称</th><th>类型</th><th>触发小时</th><th>启用</th><th>上次执行</th><th>状态</th><th>操作</th></tr></thead><tbody>';
+    let html = '<table class="data-table"><thead><tr><th>名称</th><th>Action</th><th>触发小时</th><th>启用</th><th>上次执行</th><th>状态</th><th>操作</th></tr></thead><tbody>';
     for (const t of data.tasks) {
       const statusBadge = t.lastStatus === 'ok' ? '<span class="badge badge-ok">OK</span>'
         : t.lastStatus === 'error' ? '<span class="badge badge-err">ERR</span>'
         : '<span class="badge">-</span>';
       const lastRun = t.lastRunAt ? new Date(t.lastRunAt).toLocaleString('zh-CN') : '从未';
       const errTip = t.lastError ? ' title="' + esc(t.lastError) + '"' : '';
-      const actionLabel = CRON_ACTIONS[t.action] || t.action || '-';
       const hours = Array.isArray(t.hours) ? t.hours : [];
       const hoursText = hours.length === 0 ? '每小时' : hours.map((h: number) => String(h).padStart(2, '0')).join(',');
       const tid = esc(t.id);
-      html += '<tr' + errTip + '><td>' + esc(t.name) + '</td><td>' + esc(actionLabel) + '</td><td>' + esc(hoursText) + '</td><td>' + (t.enabled ? '✓' : '✗') + '</td><td>' + esc(lastRun) + '</td><td>' + statusBadge + '</td><td class="row-actions">' +
+      const actionLabel = t.action ? esc(t.action) : '-';
+      html += '<tr' + errTip + '><td>' + esc(t.name) + '</td><td><code>' + actionLabel + '</code></td><td>' + esc(hoursText) + '</td><td>' + (t.enabled ? '✓' : '✗') + '</td><td>' + esc(lastRun) + '</td><td>' + statusBadge + '</td><td class="row-actions">' +
         '<button class="btn btn-outline btn-sm" data-act="run" data-id="' + tid + '">运行</button>' +
         '<button class="btn btn-outline btn-sm" data-act="edit" data-id="' + tid + '">编辑</button>' +
         '<button class="btn btn-sm btn-danger" data-act="delete" data-id="' + tid + '">删除</button>' +
