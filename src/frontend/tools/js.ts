@@ -40,6 +40,7 @@ function renderJsTool(): string {
         <button class="btn btn-primary" id="jsNewBtn">+ 新建脚本</button>
         <button class="btn btn-outline" id="jsRefreshBtn">刷新</button>
       </div>
+      <div class="result-box" id="jsScriptResult"></div>
     </div>
     <div id="jsPlaygroundPane" style="display:none">
       <details style="margin-bottom:12px">
@@ -266,7 +267,7 @@ function notifyScriptsChanged(): void {
 }
 
 (window as any).runJsScript = async function (id: string) {
-  const resultBox = $('jsTmpResult');
+  const resultBox = $('jsScriptResult');
   if (resultBox) {
     resultBox.classList.add('show');
     resultBox.innerHTML = '<div class="empty">运行中…</div>';
