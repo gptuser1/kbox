@@ -67,7 +67,7 @@ async function readConfig(c: any, ns: string, key: string): Promise<string | nul
   if (cached !== undefined) return cached;
 
   const kv = createKv(c.env.D1_API_TOKEN, c.env.D1_API_BASE);
-  const value = await kv.get<any>(ns, key);
+  const value = await kv.getJson<any>(ns, key);
 
   let result: string | null = null;
   if (value == null) {

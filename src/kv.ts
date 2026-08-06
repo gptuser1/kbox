@@ -57,8 +57,8 @@ export function createKv(token: string, base?: string) {
     ensure,
     error,
 
-    // ─── 读单条 ───
-    async get<T = any>(namespace: string, key: string): Promise<T | null> {
+    // ─── 读单条（原始值，无 JSON 解析）───
+    async get(namespace: string, key: string): Promise<string | null> {
       if (!await ensure()) throw new Error(error() || 'KV 表未就绪');
       const db = createDb(token, apiBase);
       const row = await db.queryOne<{ value: string }>(
@@ -66,8 +66,15 @@ export function createKv(token: string, base?: string) {
         [namespace, key]
       );
       if (!row) return null;
+      return row.value;
+    },
+
+    // ─── 读单条并 JSON 解析 ───
+    async getJson<T = any>(namespace: string, key: string): Promise<T | null> {
+      const raw = await this.get(namespace, key);
+      if (raw === null) return null;
       try {
-        return JSON.parse(row.value) as T;
+        return JSON.parse(raw) as T;
       } catch {
         return null;
       }

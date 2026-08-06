@@ -344,7 +344,7 @@ app.get('/api/preferences/:key', async (c) => {
   const key = c.req.param('key');
   const kv = createKv(c.env.D1_API_TOKEN, c.env.D1_API_BASE);
   try {
-    const value = await kv.get<any>(NS_PREFS, key);
+    const value = await kv.getJson<any>(NS_PREFS, key);
     return c.json({ key, value: value === null ? null : value });
   } catch (e) {
     if (kv.error()) return c.json({ error: kv.error() }, 503);

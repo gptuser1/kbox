@@ -219,7 +219,7 @@ app.get('/top', async (c) => {
   if (!await ensureTable(c.env.D1_API_TOKEN, c.env.D1_API_BASE)) return tableError(c);
   const kv = getKv(c);
   try {
-    const latest = await kv.get<{ generated_at: number; keywords: KeywordStat[] }>(NS_KEYWORDS, KEYWORDS_KEY);
+    const latest = await kv.getJson<{ generated_at: number; keywords: KeywordStat[] }>(NS_KEYWORDS, KEYWORDS_KEY);
     if (!latest) {
       return c.json({ generated_at: null, keywords: [] });
     }
@@ -262,7 +262,7 @@ export async function listNews(env: any, limit = 30): Promise<any[]> {
 export async function getTopKeywords(env: any): Promise<{ generated_at: number | null; keywords: any[] }> {
   const kv = createKv(env.D1_API_TOKEN, env.D1_API_BASE);
   try {
-    const latest = await kv.get<{ generated_at: number; keywords: any[] }>(NS_KEYWORDS, KEYWORDS_KEY);
+    const latest = await kv.getJson<{ generated_at: number; keywords: any[] }>(NS_KEYWORDS, KEYWORDS_KEY);
     return latest || { generated_at: null, keywords: [] };
   } catch { return { generated_at: null, keywords: [] }; }
 }

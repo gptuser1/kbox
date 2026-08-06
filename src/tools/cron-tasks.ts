@@ -140,7 +140,7 @@ export async function createTask(env: any, data: Partial<CronTask>): Promise<Cro
 
 export async function updateTask(env: any, id: string, data: Partial<CronTask>): Promise<CronTask | null> {
   const kv = createKv(env.D1_API_TOKEN, env.D1_API_BASE);
-  const existing = await kv.get<CronTask>(NS_CRON_TASKS, id);
+  const existing = await kv.getJson<CronTask>(NS_CRON_TASKS, id);
   if (!existing) return null;
   if (data.name !== undefined) existing.name = (data.name || '').trim() || existing.name;
   if (data.action !== undefined && CRON_ACTIONS[data.action]) existing.action = data.action;
@@ -158,7 +158,7 @@ export async function deleteTask(env: any, id: string): Promise<boolean> {
 
 export async function triggerTask(env: any, id: string): Promise<{ ok: boolean; error?: string }> {
   const kv = createKv(env.D1_API_TOKEN, env.D1_API_BASE);
-  const task = await kv.get<CronTask>(NS_CRON_TASKS, id);
+  const task = await kv.getJson<CronTask>(NS_CRON_TASKS, id);
   if (!task) return { ok: false, error: '任务不存在' };
   const status = await runTask(env, task);
   task.lastRunAt = nowUnix();

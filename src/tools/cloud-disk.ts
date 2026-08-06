@@ -291,7 +291,7 @@ app.get('/files/:id/download', async (c) => {
   }
 
   try {
-    const tk = await kv.get<{ file_id: number; expires_at: number }>('disk_tokens', dt);
+    const tk = await kv.getJson<{ file_id: number; expires_at: number }>('disk_tokens', dt);
     if (!tk) return c.json({ error: '下载令牌无效或已使用' }, 401);
     if (tk.expires_at < Math.floor(Date.now() / 1000)) {
       await kv.delete('disk_tokens', dt);

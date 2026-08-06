@@ -89,7 +89,7 @@ function buildKbox(env: any, logs: string[]): any {
     kv: {
       get: async (ns: string, key: string) => {
         const kv = createKv(env.D1_API_TOKEN, env.D1_API_BASE);
-        return await kv.get(ns, key);
+        return await kv.getJson(ns, key);
       },
       set: async (ns: string, key: string, value: any) => {
         if (isWriteForbidden(ns)) throw new Error('禁止写入系统 namespace: ' + ns);
@@ -337,7 +337,7 @@ app.get('/kv/:ns/:key', async (c) => {
   const ns = c.req.param('ns');
   const key = c.req.param('key');
   try {
-    const value = await kv.get(ns, key);
+    const value = await kv.getJson(ns, key);
     return c.json({ value });
   } catch (e) {
     if (kv.error()) return c.json({ error: kv.error() }, 503);

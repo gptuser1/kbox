@@ -105,7 +105,7 @@ app.get('/funds', async (c) => {
 app.get('/funds/:id', async (c) => {
   const kv = getKv(c);
   try {
-    const fund = await kv.get<FundRecord>(NS_STOCK, c.req.param('id'));
+    const fund = await kv.getJson<FundRecord>(NS_STOCK, c.req.param('id'));
     if (!fund) return c.json({ error: '记录不存在' }, 404);
     return c.json({ results: [fund] });
   } catch (e) {
@@ -238,7 +238,7 @@ app.put('/funds/:id', async (c) => {
   }
 
   try {
-    const existing = await kv.get<FundRecord>(NS_STOCK, id);
+    const existing = await kv.getJson<FundRecord>(NS_STOCK, id);
     if (!existing) return c.json({ error: '记录不存在' }, 404);
 
     if (body.fund_name !== undefined) {

@@ -90,7 +90,7 @@ async function callD1Rest(
 async function getConn(c: any, id: string): Promise<DbConnection | Response> {
   const kv = getKv(c);
   try {
-    const conn = await kv.get<DbConnection>(NS, id);
+    const conn = await kv.getJson<DbConnection>(NS, id);
     if (!conn) return c.json({ error: '连接不存在' }, 404);
     return conn;
   } catch (e) {
@@ -146,7 +146,7 @@ app.put('/connections/:id', async (c) => {
   const kv = getKv(c);
   try {
     const id = c.req.param('id');
-    const existing = await kv.get<DbConnection>(NS, id);
+    const existing = await kv.getJson<DbConnection>(NS, id);
     if (!existing) return c.json({ error: '连接不存在' }, 404);
     const body = await c.req.json();
     const updated: DbConnection = {
