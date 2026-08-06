@@ -161,6 +161,33 @@ app.get('/api/health', (c) => {
   return c.json({ status: 'ok', d1_token: !!c.env.D1_API_TOKEN });
 });
 
+// ─── Share Text 端点（公开只读，简单 token 认证）───
+// namespace: share_text, key: 用户指定, 响应: value 原始内容
+// 不走系统鉴权中间件，使用独立 token 认证
+app.get('/share/text', async (c) => {
+  const token = c.req.query('token');
+  if (token !== 'REVOKED') {
+    return c.json({ error: 'Unauthorized' }, 401);
+  }
+  const key = c.req.query('key');
+  if (!key) {
+    return c.json({ error: 'Missing key parameter' }, 400);
+  }
+  const kv = createKv(c.env.D1_API_TOKEN, c.env.D1_API_BASE);
+  try {
+    const value = await kv.get('share_text', key);
+    if (value === null) {
+      return c.json({ error: 'Key not found' }, 404);
+    }
+    return new Response(value, {
+      headers: { 'Content-Type': 'text/plain; charset=utf-8' }
+    });
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : 'Failed to read data';
+    return c.json({ error: msg }, 500);
+  }
+});
+
 // ─── 配置管理 ───
 
 // 工具清单（用于前端渲染工具级覆盖 UI）
