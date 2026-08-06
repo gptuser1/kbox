@@ -246,7 +246,7 @@ app.get('/scripts/:id', async (c) => {
   const kv = getKv(c);
   const id = c.req.param('id');
   try {
-    const script = await kv.get<JsScript>(NS_SCRIPTS, id);
+    const script = await kv.getJson<JsScript>(NS_SCRIPTS, id);
     if (!script) return c.json({ error: '脚本不存在' }, 404);
     return c.json({ script: { ...script, id } });
   } catch (e) {
@@ -264,7 +264,7 @@ app.put('/scripts/:id', async (c) => {
     return c.json({ error: '请求体必须是有效的JSON' }, 400);
   }
   try {
-    const existing = await kv.get<JsScript>(NS_SCRIPTS, id);
+    const existing = await kv.getJson<JsScript>(NS_SCRIPTS, id);
     if (!existing) return c.json({ error: '脚本不存在' }, 404);
     const updated: JsScript = {
       ...existing,
@@ -305,7 +305,7 @@ app.post('/scripts/:id/publish', async (c) => {
     return c.json({ error: '请求体必须是有效的JSON' }, 400);
   }
   try {
-    const existing = await kv.get<JsScript>(NS_SCRIPTS, id);
+    const existing = await kv.getJson<JsScript>(NS_SCRIPTS, id);
     if (!existing) return c.json({ error: '脚本不存在' }, 404);
     existing.published = !!body.published;
     existing.updated_at = nowUnix();
@@ -396,7 +396,7 @@ app.post('/scripts/:id/run', async (c) => {
   const params = body.params && typeof body.params === 'object' ? body.params : {};
 
   try {
-    const script = await kv.get<JsScript>(NS_SCRIPTS, id);
+    const script = await kv.getJson<JsScript>(NS_SCRIPTS, id);
     if (!script) return c.json({ error: '脚本不存在' }, 404);
     const result = await executeScript(c.env, script.code, params);
     // 记录 last_run
@@ -420,7 +420,7 @@ app.post('/scripts/:id/record-run', async (c) => {
   let body: any;
   try { body = await c.req.json(); } catch { body = {}; }
   try {
-    const script = await kv.get<JsScript>(NS_SCRIPTS, id);
+    const script = await kv.getJson<JsScript>(NS_SCRIPTS, id);
     if (!script) return c.json({ error: '脚本不存在' }, 404);
     script.last_run = {
       at: nowUnix(),

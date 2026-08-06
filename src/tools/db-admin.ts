@@ -169,7 +169,7 @@ app.delete('/connections/:id', async (c) => {
   const kv = getKv(c);
   try {
     const id = c.req.param('id');
-    const existing = await kv.get<DbConnection>(NS, id);
+    const existing = await kv.getJson<DbConnection>(NS, id);
     if (!existing) return c.json({ error: '连接不存在' }, 404);
     await kv.delete(NS, id);
     return c.json({ ok: true });
