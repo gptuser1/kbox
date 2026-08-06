@@ -2158,13 +2158,13 @@ function mountNewsTool() {
     loadCurrent();
   }
 
-  function formatNewsTime(iso) {
+  function formatNewsTime(ts) {
     try {
-      const d = new Date(iso);
+      const d = new Date(ts);
       const pad = (n) => String(n).padStart(2, '0');
       const cst = new Date(d.getTime() + 8 * 60 * 60 * 1000);
       return (cst.getUTCMonth() + 1) + '/' + pad(cst.getUTCDate()) + ' ' + pad(cst.getUTCHours()) + ':' + pad(cst.getUTCMinutes());
-    } catch { return iso || ''; }
+    } catch { return ts || ''; }
   }
 
   triggerBtn.onclick = async () => {

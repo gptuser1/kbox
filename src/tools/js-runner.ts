@@ -37,9 +37,9 @@ interface JsScript {
   code: string;
   icon: string;
   published: boolean;
-  created_at: string;
-  updated_at: string;
-  last_run?: { at: string; status: 'ok' | 'error'; error?: string };
+  created_at: number;
+  updated_at: number;
+  last_run?: { at: number; status: 'ok' | 'error'; error?: string };
 }
 
 interface RunResult {
@@ -53,8 +53,8 @@ function genId(): string {
   return Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
 }
 
-function nowISO(): string {
-  return new Date(Date.now() + 8 * 60 * 60 * 1000).toISOString();
+function nowUnix(): number {
+  return Date.now();
 }
 
 function getKv(c: any) {
@@ -82,7 +82,7 @@ function buildKbox(env: any, logs: string[]): any {
 
   const kbox = {
     log,
-    now: () => nowISO(),
+    now: () => Date.now(),
     sleep: (ms: number) => new Promise(r => setTimeout(r, ms)),
     fetch: (url: string, opts?: any) => fetch(url, opts),
 
@@ -189,7 +189,7 @@ app.get('/scripts', async (c) => {
   try {
     const items = await kv.list<JsScript>(NS_SCRIPTS);
     const scripts = items.map(i => ({ ...i.value, id: i.key }))
-      .sort((a, b) => (a.created_at > b.created_at ? -1 : 1));
+      .sort((a, b) => b.created_at - a.created_at);
     return c.json({ scripts });
   } catch (e) {
     if (kv.error()) return c.json({ error: kv.error() }, 503);
@@ -205,7 +205,7 @@ app.get('/published', async (c) => {
     const published = items
       .map(i => ({ ...i.value, id: i.key }))
       .filter(s => s.published)
-      .sort((a, b) => (a.created_at > b.created_at ? -1 : 1));
+      .sort((a, b) => b.created_at - a.created_at);
     return c.json({ scripts: published });
   } catch (e) {
     if (kv.error()) return c.json({ error: kv.error() }, 503);
@@ -221,7 +221,7 @@ app.post('/scripts', async (c) => {
     return c.json({ error: '请求体必须是有效的JSON' }, 400);
   }
   const id = genId();
-  const now = nowISO();
+  const now = nowUnix();
   const script: JsScript = {
     id,
     name: (body.name || '').trim() || '未命名脚本',
@@ -273,7 +273,7 @@ app.put('/scripts/:id', async (c) => {
       code: body.code !== undefined ? body.code : existing.code,
       icon: body.icon !== undefined ? body.icon : existing.icon,
       published: body.published !== undefined ? !!body.published : existing.published,
-      updated_at: nowISO(),
+      updated_at: nowUnix(),
     };
     await kv.set(NS_SCRIPTS, id, updated);
     return c.json({ script: { ...updated, id } });
@@ -308,7 +308,7 @@ app.post('/scripts/:id/publish', async (c) => {
     const existing = await kv.get<JsScript>(NS_SCRIPTS, id);
     if (!existing) return c.json({ error: '脚本不存在' }, 404);
     existing.published = !!body.published;
-    existing.updated_at = nowISO();
+    existing.updated_at = nowUnix();
     await kv.set(NS_SCRIPTS, id, existing);
     return c.json({ ok: true, published: existing.published });
   } catch (e) {
@@ -401,7 +401,7 @@ app.post('/scripts/:id/run', async (c) => {
     const result = await executeScript(c.env, script.code, params);
     // 记录 last_run
     script.last_run = {
-      at: nowISO(),
+      at: nowUnix(),
       status: result.error ? 'error' : 'ok',
       error: result.error?.message,
     };
@@ -423,7 +423,7 @@ app.post('/scripts/:id/record-run', async (c) => {
     const script = await kv.get<JsScript>(NS_SCRIPTS, id);
     if (!script) return c.json({ error: '脚本不存在' }, 404);
     script.last_run = {
-      at: nowISO(),
+      at: nowUnix(),
       status: body.status === 'ok' ? 'ok' : 'error',
       error: body.error,
     };

@@ -14,30 +14,24 @@ export interface CronTask {
   action: string;            // 原生任务类型，见 CRON_ACTIONS
   hours: number[];           // 触发小时（0-23，北京时间），空数组表示每小时都触发
   enabled: boolean;
-  lastRunAt: string | null;
+  lastRunAt: number | null;
   lastStatus?: 'ok' | 'error';
   lastError?: string;
-  createdAt: string;
+  createdAt: number;
 }
 
 function genId(): string {
   return Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
 }
 
-function nowISO(): string {
-  return new Date(Date.now() + 8 * 60 * 60 * 1000).toISOString();
+function nowUnix(): number {
+  return Date.now();
 }
 
 // 当前北京时间的小时（0-23）
 function currentHourCN(): number {
   const d = new Date(Date.now() + 8 * 60 * 60 * 1000);
   return d.getUTCHours();
-}
-
-function parseISO(ts: string | null): number {
-  if (!ts) return 0;
-  const t = Date.parse(ts);
-  return isNaN(t) ? 0 : t;
 }
 
 function normalizeHours(input: any): number[] {
@@ -77,22 +71,21 @@ export async function runCronTasks(env: any): Promise<{ ran: number; skipped: nu
     }
 
     // 防同一小时内重复执行（cron 每小时一次，理论上不会重复，保险起见）
-    const lastMs = parseISO(task.lastRunAt);
-    if (lastMs > 0 && (now - lastMs) < 55 * 60 * 1000) {
+    if (task.lastRunAt && task.lastRunAt > 0 && (now - task.lastRunAt) < 55 * 60 * 1000) {
       result.skipped++;
       continue;
     }
 
     try {
       const status = await runTask(env, task);
-      task.lastRunAt = nowISO();
+      task.lastRunAt = nowUnix();
       task.lastStatus = status.ok ? 'ok' : 'error';
       task.lastError = status.error;
       await kv.set(NS_CRON_TASKS, task.id, task);
       if (status.ok) result.ran++;
       else result.errors++;
     } catch (e) {
-      task.lastRunAt = nowISO();
+      task.lastRunAt = nowUnix();
       task.lastStatus = 'error';
       task.lastError = e instanceof Error ? e.message : String(e);
       await kv.set(NS_CRON_TASKS, task.id, task);
@@ -124,7 +117,7 @@ export async function listTasks(env: any): Promise<CronTask[]> {
   const kv = createKv(env.D1_API_TOKEN, env.D1_API_BASE);
   const items = await kv.list<CronTask>(NS_CRON_TASKS);
   return items.map(i => ({ ...i.value, id: i.key }))
-    .sort((a, b) => (a.createdAt > b.createdAt ? -1 : 1));
+    .sort((a, b) => b.createdAt - a.createdAt);
 }
 
 export async function createTask(env: any, data: Partial<CronTask>): Promise<CronTask> {
@@ -139,7 +132,7 @@ export async function createTask(env: any, data: Partial<CronTask>): Promise<Cro
     hours: normalizeHours(data.hours),
     enabled: data.enabled !== false,
     lastRunAt: null,
-    createdAt: nowISO(),
+    createdAt: nowUnix(),
   };
   await kv.set(NS_CRON_TASKS, task.id, task);
   return task;
@@ -168,7 +161,7 @@ export async function triggerTask(env: any, id: string): Promise<{ ok: boolean; 
   const task = await kv.get<CronTask>(NS_CRON_TASKS, id);
   if (!task) return { ok: false, error: '任务不存在' };
   const status = await runTask(env, task);
-  task.lastRunAt = nowISO();
+  task.lastRunAt = nowUnix();
   task.lastStatus = status.ok ? 'ok' : 'error';
   task.lastError = status.error;
   await kv.set(NS_CRON_TASKS, id, task);

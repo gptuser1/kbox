@@ -34,7 +34,7 @@ async function ensureTable(token: string, base?: string): Promise<boolean> {
   try {
     await db.query(`CREATE TABLE IF NOT EXISTS newsfeed (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
-      crawled_at TEXT NOT NULL,
+      crawled_at INTEGER NOT NULL,
       source TEXT NOT NULL DEFAULT '',
       title TEXT NOT NULL DEFAULT '',
       url TEXT NOT NULL DEFAULT '',
@@ -63,8 +63,8 @@ function tableError(c: any) {
   return c.json({ error: tableInitError || '数据库初始化失败，请检查 D1_API_TOKEN' }, 503);
 }
 
-function nowISO(): string {
-  return new Date(Date.now() + 8 * 60 * 60 * 1000).toISOString();
+function nowUnix(): number {
+  return Date.now();
 }
 
 // ─── 抓取 + AI 锐评 + 入库 ───
@@ -75,7 +75,7 @@ export async function runCron(env: any): Promise<{ success: boolean; articles_co
   const db = createDb(env.D1_API_TOKEN, env.D1_API_BASE);
 
   try {
-    const now = nowISO();
+    const now = nowUnix();
     const articles = await crawlAll(env);
 
     if (articles.length === 0) {
@@ -148,7 +148,7 @@ export async function runCron(env: any): Promise<{ success: boolean; articles_co
 }
 
 // ─── 生成 Top 10 关键词快照 ───
-export async function generateTopKeywords(env: any): Promise<{ success: boolean; generated_at: string | null; count: number; error?: string }> {
+export async function generateTopKeywords(env: any): Promise<{ success: boolean; generated_at: number | null; count: number; error?: string }> {
   if (!await ensureTable(env.D1_API_TOKEN, env.D1_API_BASE)) {
     return { success: false, generated_at: null, count: 0, error: tableInitError || '建表失败' };
   }
@@ -169,7 +169,7 @@ export async function generateTopKeywords(env: any): Promise<{ success: boolean;
       return { success: false, generated_at: null, count: 0, error: 'LLM 提取失败，请检查 OPENAI 配置后重试' };
     }
 
-    const now = nowISO();
+    const now = nowUnix();
     await kv.set(NS_KEYWORDS, KEYWORDS_KEY, { generated_at: now, keywords: topKeywords });
 
     return { success: true, generated_at: now, count: topKeywords.length };
@@ -219,7 +219,7 @@ app.get('/top', async (c) => {
   if (!await ensureTable(c.env.D1_API_TOKEN, c.env.D1_API_BASE)) return tableError(c);
   const kv = getKv(c);
   try {
-    const latest = await kv.get<{ generated_at: string; keywords: KeywordStat[] }>(NS_KEYWORDS, KEYWORDS_KEY);
+    const latest = await kv.get<{ generated_at: number; keywords: KeywordStat[] }>(NS_KEYWORDS, KEYWORDS_KEY);
     if (!latest) {
       return c.json({ generated_at: null, keywords: [] });
     }
@@ -259,10 +259,10 @@ export async function listNews(env: any, limit = 30): Promise<any[]> {
   } catch { return []; }
 }
 
-export async function getTopKeywords(env: any): Promise<{ generated_at: string | null; keywords: any[] }> {
+export async function getTopKeywords(env: any): Promise<{ generated_at: number | null; keywords: any[] }> {
   const kv = createKv(env.D1_API_TOKEN, env.D1_API_BASE);
   try {
-    const latest = await kv.get<{ generated_at: string; keywords: any[] }>(NS_KEYWORDS, KEYWORDS_KEY);
+    const latest = await kv.get<{ generated_at: number; keywords: any[] }>(NS_KEYWORDS, KEYWORDS_KEY);
     return latest || { generated_at: null, keywords: [] };
   } catch { return { generated_at: null, keywords: [] }; }
 }
