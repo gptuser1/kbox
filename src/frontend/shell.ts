@@ -339,6 +339,8 @@ async function showTool(id: string) {
   $('floatBack').classList.add('show');
   $('floatMenuPanel')?.classList.remove('show');
   $('floatMenuBtn')?.classList.remove('active');
+  // 进入工具页：隐藏首页菜单按钮（视图切换/自定义布局仅对首页有意义，避免在工具页误点）
+  const fmb = $('floatMenuBtn'); if (fmb) fmb.style.display = 'none';
 
   // 立即显示工具加载层（区域级，不全屏，保留 token 栏与浮动按钮）
   view.innerHTML = '<div class="tool-loader"><div class="app-loader__bar"></div><div class="tool-loader__text">加载中…</div></div>';
@@ -370,6 +372,7 @@ async function showTool(id: string) {
     toast('工具初始化失败：' + errMsg(e), 'error');
     // mount 失败不抛出：壳与其他工具继续可用
   }
+  window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
 function backToGrid() {
@@ -379,6 +382,8 @@ function backToGrid() {
   $('floatBack').classList.remove('show');
   $('floatMenuPanel')?.classList.remove('show');
   $('floatMenuBtn')?.classList.remove('active');
+  // 回到首页：恢复菜单按钮显示
+  const fmb = $('floatMenuBtn'); if (fmb) fmb.style.display = '';
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
