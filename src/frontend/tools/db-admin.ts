@@ -297,6 +297,59 @@ export function mount(): void {
 
   function escapeAttr(s: any) { return esc(s == null ? '' : String(s)); }
 
+  function isTextType(colType: string): boolean {
+    const t = (colType || '').toUpperCase();
+    return t.startsWith('TEXT') || t.startsWith('VARCHAR') || t.startsWith('CHAR') || t.startsWith('CLOB') || t.startsWith('BLOB') || t.includes('JSON');
+  }
+
+  function renderDbField(col: any, value: string, placeholder: string, disabled: boolean): string {
+    const colName = escapeAttr(col.name);
+    const colType = col.type || '';
+    const useTextarea = isTextType(colType) && !disabled;
+    const val = escapeAttr(value);
+    const ph = escapeAttr(placeholder);
+    const disabledAttr = disabled ? ' disabled' : '';
+    const taClass = useTextarea ? ' db-field-ta' : '';
+    if (disabled) {
+      return '<input data-col="' + colName + '" value="' + val + '" placeholder="' + ph + '"' + disabledAttr + '>';
+    }
+    if (useTextarea) {
+      return '<div class="db-field-wrap"><textarea data-col="' + colName + '" class="db-field-input' + taClass + '" placeholder="' + ph + '" rows="4">' + val + '</textarea><button type="button" class="db-field-expand" onclick="toggleDbField(this)" title="切换为单行">⛶</button></div>';
+    }
+    return '<div class="db-field-wrap"><input data-col="' + colName + '" class="db-field-input" value="' + val + '" placeholder="' + ph + '"' + disabledAttr + '><button type="button" class="db-field-expand" onclick="toggleDbField(this)" title="展开多行编辑">⛶</button></div>';
+  }
+
+  (window as any).toggleDbField = function(btn: HTMLElement) {
+    const wrap = btn.parentNode as HTMLElement;
+    if (!wrap || !wrap.classList.contains('db-field-wrap')) return;
+    const field = wrap.querySelector('.db-field-input') as HTMLInputElement | HTMLTextAreaElement | null;
+    if (!field) return;
+    const col = field.getAttribute('data-col') || '';
+    const val = field.value;
+    const ph = field.getAttribute('placeholder') || '';
+    const isTextarea = field.tagName === 'TEXTAREA';
+    if (isTextarea) {
+      const inp = document.createElement('input');
+      inp.className = 'db-field-input';
+      inp.setAttribute('data-col', col);
+      inp.value = val;
+      inp.placeholder = ph;
+      wrap.insertBefore(inp, btn);
+      field.remove();
+      btn.title = '展开多行编辑';
+    } else {
+      const ta = document.createElement('textarea');
+      ta.className = 'db-field-input db-field-ta';
+      ta.setAttribute('data-col', col);
+      ta.value = val;
+      ta.placeholder = ph;
+      ta.rows = 4;
+      wrap.insertBefore(ta, btn);
+      field.remove();
+      btn.title = '切换为单行';
+    }
+  };
+
   function renderCell(v: any): string {
     if (v == null) return '<td><span class="db-cell-null">NULL</span></td>';
     let s: string;
@@ -699,7 +752,7 @@ export function mount(): void {
         const auto = c.pk && /integer/i.test(c.type || '');
         const placeholder = auto ? '（自增，留空）' : (c.dflt_value != null ? '默认: ' + c.dflt_value : '');
         return '<label>' + esc(c.name) + pkHint + '</label>' +
-          '<input data-col="' + escapeAttr(c.name) + '" placeholder="' + escapeAttr(placeholder) + '"' + (auto ? ' disabled' : '') + '>';
+          renderDbField(c, '', placeholder, auto);
       }).join('') + '</div>';
     } catch (e: any) {
       if (e.message === 'UNAUTHORIZED') return;
@@ -709,7 +762,7 @@ export function mount(): void {
 
   insertSubmitBtn.onclick = async () => {
     if (!activeConnId || !activeTable) return;
-    const inputs = insertForm.querySelectorAll('input[data-col]:not(:disabled)');
+    const inputs = insertForm.querySelectorAll('[data-col]:not(:disabled)');
     const values: any = {};
     inputs.forEach((inp: any) => {
       const col = inp.getAttribute('data-col');
@@ -769,9 +822,8 @@ export function mount(): void {
         const pkHint = c.pk ? '<span class="db-form-pk-hint">★ 主键</span>' : '';
         const auto = c.pk && /integer/i.test(c.type || '');
         const val = row[c.name] != null ? String(row[c.name]) : '';
-        const disabled = auto ? ' disabled' : '';
         return '<label>' + esc(c.name) + pkHint + '</label>' +
-          '<input data-col="' + escapeAttr(c.name) + '" value="' + escapeAttr(val) + '"' + disabled + '>';
+          renderDbField(c, val, '', auto);
       }).join('') + '</div>';
     } catch (e: any) {
       if (e.message === 'UNAUTHORIZED') { closeDbRowModal(); return; }
@@ -791,7 +843,7 @@ export function mount(): void {
         const auto = c.pk && /integer/i.test(c.type || '');
         const placeholder = auto ? '（自增，留空）' : (c.dflt_value != null ? '默认: ' + c.dflt_value : '');
         return '<label>' + esc(c.name) + pkHint + '</label>' +
-          '<input data-col="' + escapeAttr(c.name) + '" placeholder="' + escapeAttr(placeholder) + '"' + (auto ? ' disabled' : '') + '>';
+          renderDbField(c, '', placeholder, auto);
       }).join('') + '</div>';
     } catch (e: any) {
       if (e.message === 'UNAUTHORIZED') { closeDbRowModal(); return; }
@@ -801,7 +853,7 @@ export function mount(): void {
 
   rowSaveBtn.onclick = async () => {
     if (!rowEditingState) return;
-    const inputs = rowModalBody.querySelectorAll('input[data-col]:not(:disabled)');
+    const inputs = rowModalBody.querySelectorAll('[data-col]:not(:disabled)');
     const set: any = {};
     inputs.forEach((inp: any) => {
       const col = inp.getAttribute('data-col');

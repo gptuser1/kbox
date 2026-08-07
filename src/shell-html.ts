@@ -692,6 +692,17 @@ input[type="checkbox"] { accent-color: var(--primary); width: 16px; height: 16px
 .db-form-grid input:focus, .db-form-grid textarea:focus { border-color: var(--primary); }
 .db-form-grid textarea { min-height: 60px; resize: vertical; }
 .db-form-pk-hint { font-size: 11px; color: var(--primary); margin-left: 6px; }
+/* 字段编辑容器（输入框 + 展开按钮） */
+.db-field-wrap { display: flex; gap: 4px; align-items: stretch; }
+.db-field-wrap .db-field-input { flex: 1; min-width: 0; }
+.db-field-wrap .db-field-input.db-field-ta { min-height: 60px; resize: vertical; }
+.db-field-expand {
+  flex-shrink: 0; width: 28px; border: 1px solid var(--border); border-radius: 6px;
+  background: var(--input-bg); color: var(--text-muted); cursor: pointer; font-size: 13px;
+  display: flex; align-items: center; justify-content: center; transition: background 0.15s, color 0.15s;
+  padding: 0; line-height: 1;
+}
+.db-field-expand:hover { background: var(--bg); color: var(--primary); }
 /* 可视化建表列编辑器 */
 .db-cols-head { display: grid; grid-template-columns: 1.4fr 1fr 0.6fr 1.6fr 1.2fr 32px; gap: 6px; padding: 0 4px 6px; font-size: 11px; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.4px; }
 .db-col-row { display: grid; grid-template-columns: 1.4fr 1fr 0.6fr 1.6fr 1.2fr 32px; gap: 6px; padding: 4px; align-items: center; border-bottom: 1px solid var(--border); }
