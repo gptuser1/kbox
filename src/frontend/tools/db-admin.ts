@@ -36,8 +36,8 @@ export function render(): string {
       <!-- 选择数据 -->
       <div class="db-panel active" id="dbPanel-data">
         <div class="db-filter-row" id="dbFilterRow">
-          <input id="dbFilterCol" placeholder="列名" style="width:120px">
-          <input id="dbFilterVal" placeholder="值" style="width:160px">
+          <input id="dbFilterCol" placeholder="列名">
+          <input id="dbFilterVal" placeholder="值">
           <button class="btn btn-outline btn-sm" id="dbFilterBtn">过滤</button>
           <button class="btn btn-outline btn-sm" id="dbFilterClearBtn">清除</button>
         </div>

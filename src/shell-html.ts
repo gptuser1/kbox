@@ -400,7 +400,7 @@ body:has(.modal-overlay.show) .float-back { display: none !important; }
 .input-required { color: var(--danger); }
 
 /* ─── 工具标题行（标题与统计信息同行） ─── */
-.tool-title-row { display: flex; align-items: center; gap: 16px; margin-bottom: 4px; flex-wrap: wrap; }
+.tool-title-row { display: flex; align-items: center; gap: 16px; padding-bottom: 12px; border-bottom: 1px solid var(--border); margin-bottom: 16px; flex-wrap: wrap; }
 .tool-title-row h2 { margin: 0; }
 .ttr-stats { display: flex; align-items: center; gap: 8px; margin-left: auto; font-size: 13px; color: var(--text-secondary); }
 .ttr-storage { white-space: nowrap; font-size: 12px; }
@@ -671,8 +671,10 @@ input[type="checkbox"] { accent-color: var(--primary); width: 16px; height: 16px
 .db-pagination button { padding: 4px 10px; border: 1px solid var(--border); border-radius: 6px; background: var(--input-bg); color: var(--text); cursor: pointer; font-size: 12px; }
 .db-pagination button:disabled { opacity: 0.4; cursor: not-allowed; }
 .db-pagination .db-page-size { margin-left: auto; padding: 4px 8px; border-radius: 6px; border: 1px solid var(--border); background: var(--input-bg); color: var(--text); font-size: 12px; }
-.db-filter-row { display: flex; gap: 6px; align-items: center; margin-bottom: 8px; flex-wrap: wrap; font-size: 12px; }
-.db-filter-row input, .db-filter-row select { padding: 4px 8px; border: 1px solid var(--border); border-radius: 6px; background: var(--input-bg); color: var(--text); font-size: 12px; outline: none; }
+.db-filter-row { display: flex; gap: 6px; align-items: center; margin-bottom: 8px; font-size: 12px; }
+.db-filter-row input, .db-filter-row select { padding: 4px 8px; border: 1px solid var(--border); border-radius: 6px; background: var(--input-bg); color: var(--text); font-size: 12px; outline: none; min-width: 0; }
+.db-filter-row input { flex: 1 1 80px; width: 0; }
+.db-filter-row .btn { flex-shrink: 0; white-space: nowrap; }
 .db-filter-row input:focus, .db-filter-row select:focus { border-color: var(--primary); }
 .db-schema-table { width: 100%; border-collapse: collapse; font-size: 13px; }
 .db-schema-table th, .db-schema-table td { padding: 8px 12px; border-bottom: 1px solid var(--border); text-align: left; }
