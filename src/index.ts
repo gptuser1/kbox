@@ -167,8 +167,12 @@ app.get('/api/health', (c) => {
 
 // ─── Share Text 端点（公开只读，简单 token 认证）───
 app.get('/share/text', async (c) => {
+  const expected = await getConfig(c, 'share', 'share_token');
+  if (!expected) {
+    return c.json({ error: '分享端点未启用（未配置 share_token）' }, 403);
+  }
   const token = c.req.query('token');
-  if (token !== 'REVOKED') {
+  if (token !== expected) {
     return c.json({ error: 'Unauthorized' }, 401);
   }
   const key = c.req.query('key');

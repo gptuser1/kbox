@@ -22,6 +22,7 @@ const APP_CONFIG_SCHEMA: ConfigField[] = [
     { key: 'disk_d1_base',  desc: '云盘 D1 REST API 地址', sensitive: false, placeholder: 'https://ocean.klinux.dpdns.org', tools: ['disk'] },
 
   { key: 'disk_d1_token', desc: '云盘 D1 REST API Token', sensitive: true,  placeholder: '留空则使用全局主令牌', tools: ['disk'] },
+  { key: 'share_token', desc: '分享端点口令', sensitive: true, placeholder: '留空则禁用分享端点' },
 ];
 
 export const NS_APP = 'app';
