@@ -4,3 +4,6 @@ dist/
 .dev.vars
 # 前端构建产物（由 esbuild 从 src/frontend 生成）
 public/js/
+# 客户端上报脚本（仅本地使用，不提交仓库）
+kbox-mon.py
+kbox-mon.sh

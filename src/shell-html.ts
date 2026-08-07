@@ -463,6 +463,66 @@ body:has(.disk-modal-overlay.show) .float-back { display: none !important; }
 .disk-dl-popup .btn { width: 100%; justify-content: center; }
 .disk-dl-popup .btn + .btn { margin-top: 8px; }
 
+/* ─── 系统监控看板 ─── */
+.sm-host-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 12px; }
+.sm-host-card { background: var(--card); border-radius: 10px; padding: 14px 16px; box-shadow: var(--shadow); cursor: pointer; transition: box-shadow 0.2s, transform 0.15s; border: 1px solid transparent; }
+.sm-host-card:hover { box-shadow: var(--shadow-lg); transform: translateY(-1px); border-color: var(--primary); }
+.sm-card-header { display: flex; align-items: center; gap: 8px; }
+.sm-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+.sm-dot-online { background: var(--success); box-shadow: 0 0 6px var(--success); }
+.sm-dot-offline { background: var(--text-muted); }
+.sm-card-name { font-size: 15px; font-weight: 600; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sm-card-status { font-size: 11px; color: var(--text-muted); }
+.sm-card-meta { font-size: 12px; color: var(--text-muted); margin-top: 4px; }
+.sm-card-summary { display: flex; flex-direction: column; gap: 6px; margin-top: 10px; }
+.sm-mini-metric { display: flex; align-items: center; gap: 8px; }
+.sm-mini-label { font-size: 11px; color: var(--text-muted); width: 60px; flex-shrink: 0; }
+.sm-mini-bar { flex: 1; height: 4px; background: var(--input-bg); border-radius: 2px; overflow: hidden; }
+.sm-mini-fill { height: 100%; border-radius: 2px; transition: width 0.3s; }
+.sm-mini-fill.sm-ok { background: var(--success); }
+.sm-mini-fill.sm-warn { background: #f59e0b; }
+.sm-mini-fill.sm-crit { background: var(--danger); }
+.sm-mini-val { font-size: 11px; font-weight: 600; min-width: 40px; text-align: right; font-variant-numeric: tabular-nums; }
+
+/* 详情页 */
+.sm-detail-bar { display: flex; align-items: center; gap: 10px; margin-bottom: 16px; flex-wrap: wrap; }
+.sm-detail-title { font-size: 18px; font-weight: 600; }
+.sm-status-badge { font-size: 11px; padding: 2px 10px; border-radius: 12px; font-weight: 600; }
+.sm-badge-online { background: var(--success); color: #fff; }
+.sm-badge-offline { background: var(--text-muted); color: #fff; }
+.sm-rename-input { padding: 5px 10px; border: 1px solid var(--border); border-radius: 6px; background: var(--input-bg); color: var(--text); font-size: 13px; width: 160px; }
+
+/* 指标分类卡片 */
+.sm-cat-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 12px; }
+.sm-cat-card { background: var(--card); border-radius: 10px; padding: 14px 16px; box-shadow: var(--shadow); }
+.sm-cat-title { font-size: 12px; font-weight: 700; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 10px; padding-bottom: 6px; border-bottom: 1px solid var(--border); }
+.sm-cat-body { display: flex; flex-direction: column; gap: 10px; }
+
+/* 单个指标 */
+.sm-metric { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.sm-metric-label { font-size: 13px; color: var(--text-secondary); }
+.sm-metric-value { font-size: 14px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.sm-metric-value.sm-ok { color: var(--success); }
+.sm-metric-value.sm-warn { color: #f59e0b; }
+.sm-metric-value.sm-crit { color: var(--danger); }
+.sm-metric-bar { flex-direction: column; align-items: stretch; gap: 4px; }
+.sm-metric-head { display: flex; align-items: center; justify-content: space-between; }
+.sm-progress { height: 6px; background: var(--input-bg); border-radius: 3px; overflow: hidden; }
+.sm-progress-fill { height: 100%; border-radius: 3px; transition: width 0.4s ease; }
+.sm-progress-fill.sm-ok { background: var(--success); }
+.sm-progress-fill.sm-warn { background: #f59e0b; }
+.sm-progress-fill.sm-crit { background: var(--danger); }
+
+/* 历史图表 */
+.sm-chart-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 12px; }
+.sm-chart-card { background: var(--card); border-radius: 10px; padding: 12px 14px; box-shadow: var(--shadow); }
+.sm-chart-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+.sm-chart-label { font-size: 12px; font-weight: 600; color: var(--text-secondary); }
+.sm-chart-range { font-size: 10px; color: var(--text-muted); font-variant-numeric: tabular-nums; }
+.sm-sparkline { width: 100%; height: 40px; display: block; }
+.sm-spark-area { fill: var(--primary); fill-opacity: 0.12; }
+.sm-spark-line { fill: none; stroke: var(--primary); stroke-width: 1.5; stroke-linejoin: round; stroke-linecap: round; }
+
 @media (max-width: 640px) {
   .token-bar { padding: 12px 16px; gap: 8px; }
   .token-bar .logo { font-size: 17px; }
