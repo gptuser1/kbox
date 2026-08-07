@@ -273,12 +273,13 @@ body:has(.disk-modal-overlay.show) .float-back { display: none !important; }
   cursor: pointer;
   overflow: hidden;
   transition: all 0.45s cubic-bezier(0.34, 1.56, 0.64, 1);
-  display: flex; flex-direction: column;
   user-select: none;
 }
 .float-menu-container.open {
   width: 220px; height: 290px; border-radius: 16px;
-  box-shadow: 0 20px 60px rgba(99, 102, 241, 0.5);
+  background: var(--fm-bg);
+  border: 1px solid var(--fm-border);
+  box-shadow: var(--fm-shadow);
   cursor: default;
 }
 
@@ -298,12 +299,13 @@ body:has(.disk-modal-overlay.show) .float-back { display: none !important; }
 
 /* 菜单项容器 */
 .fm-items {
-  position: absolute; top: 48px; left: 0; right: 0; bottom: 0;
-  padding: 8px 14px 14px;
+  position: absolute; top: 0; left: 0; right: 0; bottom: 0;
+  padding: 16px;
   opacity: 0;
-  transform: translateY(12px);
+  transform: translateY(8px);
   transition: all 0.35s ease 0.12s;
   pointer-events: none;
+  overflow-y: auto;
 }
 .float-menu-container.open .fm-items {
   opacity: 1;
@@ -311,29 +313,19 @@ body:has(.disk-modal-overlay.show) .float-back { display: none !important; }
   pointer-events: auto;
 }
 
-.fm-section { padding: 6px 0; border-bottom: 1px solid rgba(255,255,255,0.15); }
+.fm-section { padding: 8px 0; border-bottom: 1px solid var(--border); }
 .fm-section:last-child { border-bottom: none; }
-.fm-label { font-size: 11px; font-weight: 600; color: rgba(255,255,255,0.6); padding: 4px 0; text-transform: uppercase; letter-spacing: 0.5px; }
-.fm-item {
-  display: flex; align-items: center; gap: 8px; padding: 7px 10px; border-radius: 8px;
-  cursor: pointer; font-size: 13px; color: rgba(255,255,255,0.9); transition: background 0.12s;
-}
-.fm-item:hover { background: rgba(255,255,255,0.12); }
-.fm-item .icon { width: 20px; text-align: center; }
+.fm-label { font-size: 11px; font-weight: 600; color: var(--text-muted); padding: 4px 0; text-transform: uppercase; letter-spacing: 0.5px; }
 
-/* 视图切换器（在菜单内） */
-.fm-view-switcher { display: flex; gap: 4px; padding: 2px 0; }
-.fm-view-switcher button {
-  flex: 1; padding: 5px 0; border: 1px solid rgba(255,255,255,0.2); border-radius: 8px;
-  background: rgba(255,255,255,0.1); color: rgba(255,255,255,0.8); cursor: pointer; font-size: 13px; transition: all 0.15s;
+/* 统一胶囊按钮组（主题/视图/操作共用） */
+.fm-btn-group { display: flex; gap: 4px; padding: 2px 0; }
+.fm-btn-group button {
+  flex: 1; padding: 5px 9px; border: 1px solid var(--border); border-radius: 999px;
+  background: none; color: var(--text-muted); cursor: pointer; font-size: 13px; line-height: 1.4;
+  transition: all 0.15s; white-space: nowrap;
 }
-.fm-view-switcher button.active { background: rgba(255,255,255,0.25); color: #fff; border-color: rgba(255,255,255,0.4); }
-.fm-view-switcher button:hover:not(.active) { background: rgba(255,255,255,0.16); }
-
-/* 主题切换器（在菜单内） */
-.float-menu-container .theme-switcher { background: rgba(255,255,255,0.1); border-color: rgba(255,255,255,0.2); margin: 2px 0; }
-.float-menu-container .theme-switcher button { color: rgba(255,255,255,0.7); }
-.float-menu-container .theme-switcher button.active { background: rgba(255,255,255,0.25); color: #fff; }
+.fm-btn-group button.active { background: var(--primary); color: #fff; border-color: var(--primary); }
+.fm-btn-group button:hover:not(.active) { color: var(--text); border-color: var(--primary); }
 .tool-view h2 { font-size: 22px; font-weight: 700; margin-bottom: 8px; }
 .tool-view .subtitle { font-size: 14px; color: var(--text-muted); margin-bottom: 24px; }
 
@@ -653,8 +645,16 @@ input[type="checkbox"] { accent-color: var(--primary); width: 16px; height: 16px
   </svg>
   <div class="fm-items">
     <div class="fm-section">
+      <div class="fm-label">主题</div>
+      <div class="fm-btn-group" id="fmThemeSwitcher">
+        <button data-theme="light" title="亮色">☀️</button>
+        <button data-theme="auto" title="跟随">🖥️</button>
+        <button data-theme="dark" title="暗色">🌙</button>
+      </div>
+    </div>
+    <div class="fm-section">
       <div class="fm-label">视图</div>
-      <div class="fm-view-switcher" id="fmViewSwitcher">
+      <div class="fm-btn-group" id="fmViewSwitcher">
         <button data-mode="grid" title="大图标">▦</button>
         <button data-mode="compact" title="小图标">≡</button>
         <button data-mode="list" title="详细">☰</button>
@@ -662,15 +662,9 @@ input[type="checkbox"] { accent-color: var(--primary); width: 16px; height: 16px
     </div>
     <div class="fm-section">
       <div class="fm-label">操作</div>
-      <div class="fm-item" id="fmEditBtn"><span class="icon">✎</span>自定义布局</div>
-      <div class="fm-item" id="fmExitEditBtn" style="display:none"><span class="icon">✓</span>完成编辑</div>
-    </div>
-    <div class="fm-section">
-      <div class="fm-label">主题</div>
-      <div class="theme-switcher" id="fmThemeSwitcher">
-        <button data-theme="light" title="亮色">☀️</button>
-        <button data-theme="auto" title="跟随">🖥️</button>
-        <button data-theme="dark" title="暗色">🌙</button>
+      <div class="fm-btn-group">
+        <button id="fmEditBtn">✎ 自定义布局</button>
+        <button id="fmExitEditBtn" style="display:none">✓ 完成编辑</button>
       </div>
     </div>
   </div>
