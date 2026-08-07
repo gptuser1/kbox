@@ -40,7 +40,7 @@ interface YahooChartResponse {
 }
 
 // 市场代码标准化
-function normalizeCode(code: string, market: string): string {
+export function normalizeCode(code: string, market: string): string {
   const trimmed = code.trim();
   if (market === 'HK') {
     return trimmed.padStart(5, '0');
@@ -49,7 +49,7 @@ function normalizeCode(code: string, market: string): string {
 }
 
 // 获取腾讯行情symbol
-function toTencentSymbol(code: string, market: string): string | null {
+export function toTencentSymbol(code: string, market: string): string | null {
   if (market === 'A') {
     return code.startsWith('6') ? `sh${code}` : `sz${code}`;
   }
@@ -60,7 +60,7 @@ function toTencentSymbol(code: string, market: string): string | null {
 }
 
 // 获取Yahoo Finance symbol
-function toYahooSymbol(code: string, market: string): string | null {
+export function toYahooSymbol(code: string, market: string): string | null {
   if (market === 'US') return code;
   if (market === 'KR') return `${code}.KS`;
   if (market === 'TW') return `${code}.TW`;
@@ -74,7 +74,7 @@ interface MarketSession {
   sessions: [number, number][];
 }
 
-function getMarketInfo(market: string): MarketSession | null {
+export function getMarketInfo(market: string): MarketSession | null {
   switch (market) {
     case 'A':  return { tz: 'Asia/Shanghai',    sessions: [[930, 1130], [1300, 1500]] };
     case 'HK': return { tz: 'Asia/Hong_Kong',   sessions: [[930, 1200], [1300, 1600]] };

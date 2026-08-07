@@ -24,7 +24,7 @@ const WRITE_BLACKLIST = [
   'app', 'preferences', 'dispatch_configs', 'db_admin_connections',
   'js_scripts', 'disk_tokens', 'news_top_keywords', 'stock_funds', 'cron_tasks',
 ];
-function isWriteForbidden(ns: string): boolean {
+export function isWriteForbidden(ns: string): boolean {
   if (WRITE_BLACKLIST.includes(ns)) return true;
   if (ns.startsWith('tool:')) return true;
   return false;

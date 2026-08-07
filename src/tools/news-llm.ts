@@ -35,7 +35,7 @@ export interface KeywordStat {
   articles: NewsItem[];
 }
 
-function buildPrompt(articles: { title: string; source: string }[], attempt: number): ChatMessage[] {
+export function buildPrompt(articles: { title: string; source: string }[], attempt: number): ChatMessage[] {
   const articlesText = articles
     .map((a, i) => `${i + 1}. [${a.source}] ${a.title}`)
     .join('\n')
@@ -65,7 +65,7 @@ function buildPrompt(articles: { title: string; source: string }[], attempt: num
 }
 
 /** Try JSON parse first, fall back to numbered line parsing */
-function parseSummaries(raw: string, articleCount: number): Map<number, string> {
+export function parseSummaries(raw: string, articleCount: number): Map<number, string> {
   const map = new Map<number, string>()
 
   try {
@@ -104,7 +104,7 @@ function parseSummaries(raw: string, articleCount: number): Map<number, string> 
 }
 
 /** Check if the summaries are valid (at least some coverage and reasonable length) */
-function isValidSummaries(summaries: string[], articleCount: number): boolean {
+export function isValidSummaries(summaries: string[], articleCount: number): boolean {
   const validOnes = summaries.filter(s => s.trim().length >= 10)
   return validOnes.length >= Math.min(articleCount, 5)
 }
@@ -191,7 +191,7 @@ interface DedupeItem {
   source: string;
 }
 
-function buildDedupePrompt(items: DedupeItem[]): ChatMessage[] {
+export function buildDedupePrompt(items: DedupeItem[]): ChatMessage[] {
   const itemsText = items
     .map(it => `${it.index}. [${it.source}] ${it.title}`)
     .join('\n');
@@ -218,7 +218,7 @@ function buildDedupePrompt(items: DedupeItem[]): ChatMessage[] {
   ];
 }
 
-function parseDedupeGroups(raw: string, itemCount: number): number[][] | null {
+export function parseDedupeGroups(raw: string, itemCount: number): number[][] | null {
   let jsonStr = raw.trim();
   const fenceMatch = jsonStr.match(/```(?:json)?\n?([\s\S]*?)```/);
   if (fenceMatch) jsonStr = fenceMatch[1].trim();
@@ -317,7 +317,7 @@ export async function dedupeArticlesByLLM<T extends { title: string; source: str
 
 // ═══ 关键词提取（纯基于库内新闻）═══
 
-function buildKeywordPrompt(
+export function buildKeywordPrompt(
   articles: NewsItem[],
   topN: number,
   dateStr: string,
@@ -381,7 +381,7 @@ interface LlmKeywordItem {
   indices: number[];
 }
 
-function parseKeywords(raw: string, articleCount: number): LlmKeywordItem[] {
+export function parseKeywords(raw: string, articleCount: number): LlmKeywordItem[] {
   let jsonStr = raw.trim();
   const fenceMatch = jsonStr.match(/```(?:json)?\n?([\s\S]*?)```/);
   if (fenceMatch) jsonStr = fenceMatch[1].trim();
@@ -413,12 +413,12 @@ function parseKeywords(raw: string, articleCount: number): LlmKeywordItem[] {
 }
 
 // 归一化关键词用于做语义去重前的粗筛：去 #、去标点、转小写
-function normalizeKeyword(s: string): string {
+export function normalizeKeyword(s: string): string {
   return s.replace(/^#/, '').replace(/[，。、！？：；""''《》（）【】\[\]{}!?,.:;'"()\s\-—–·…#]+/g, '').toLowerCase();
 }
 
 // 简单字符重叠度（Jaccard on bigrams），用于检测 LLM 是否在同一事件上重复造话题
-function bigramJaccard(a: string, b: string): number {
+export function bigramJaccard(a: string, b: string): number {
   if (a.length < 2 || b.length < 2) return a === b ? 1 : 0;
   const big = (s: string) => {
     const set = new Set<string>();

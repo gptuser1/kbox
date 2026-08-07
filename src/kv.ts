@@ -146,7 +146,7 @@ export function createKv(token: string, base?: string) {
   };
 }
 
-function localtimeNow(): string {
+export function localtimeNow(): string {
   const now = new Date(Date.now() + 8 * 60 * 60 * 1000);
   const pad = (n: number) => String(n).padStart(2, '0');
   return `${now.getUTCFullYear()}-${pad(now.getUTCMonth() + 1)}-${pad(now.getUTCDate())} ${pad(now.getUTCHours())}:${pad(now.getUTCMinutes())}:${pad(now.getUTCSeconds())}`;

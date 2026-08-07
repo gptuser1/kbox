@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { getMarketStatus, parseTencentLine } from '../src/tools/stock-fetcher';
+import { getMarketStatus, parseTencentLine, normalizeCode, toTencentSymbol, toYahooSymbol, getMarketInfo } from '../src/tools/stock-fetcher';
 
 // ─── getMarketStatus ───
 
@@ -105,5 +105,99 @@ describe('parseTencentLine', () => {
   it('returns null for malformed line', () => {
     expect(parseTencentLine('not a tencent line')).toBeNull();
     expect(parseTencentLine('v_sh600000="1~2~3~4";')).toBeNull(); // < 33 fields
+  });
+});// ─── normalizeCode ───
+
+describe('normalizeCode', () => {
+  it('trims whitespace', () => {
+    expect(normalizeCode(' 600001 ', 'A')).toBe('600001');
+  });
+
+  it('pads HK codes to 5 digits', () => {
+    expect(normalizeCode('700', 'HK')).toBe('00700');
+    expect(normalizeCode('7000', 'HK')).toBe('07000');
+    expect(normalizeCode('70000', 'HK')).toBe('70000');
+  });
+
+  it('does not pad non-HK codes', () => {
+    expect(normalizeCode('600001', 'A')).toBe('600001');
+    expect(normalizeCode('AAPL', 'US')).toBe('AAPL');
+  });
+});
+
+// ─── toTencentSymbol ───
+
+describe('toTencentSymbol', () => {
+  it('prefixes sh for 6xxxxx A shares', () => {
+    expect(toTencentSymbol('600001', 'A')).toBe('sh600001');
+  });
+
+  it('prefixes sz for non-6xxxxx A shares', () => {
+    expect(toTencentSymbol('000001', 'A')).toBe('sz000001');
+    expect(toTencentSymbol('300001', 'A')).toBe('sz300001');
+  });
+
+  it('prefixes hk for HK stocks', () => {
+    expect(toTencentSymbol('00700', 'HK')).toBe('hk00700');
+  });
+
+  it('returns null for unsupported markets', () => {
+    expect(toTencentSymbol('AAPL', 'US')).toBeNull();
+    expect(toTencentSymbol('005930', 'KR')).toBeNull();
+  });
+});
+
+// ─── toYahooSymbol ───
+
+describe('toYahooSymbol', () => {
+  it('returns US code as-is', () => {
+    expect(toYahooSymbol('AAPL', 'US')).toBe('AAPL');
+  });
+
+  it('appends .KS for KR', () => {
+    expect(toYahooSymbol('005930', 'KR')).toBe('005930.KS');
+  });
+
+  it('appends .TW for TW', () => {
+    expect(toYahooSymbol('2330', 'TW')).toBe('2330.TW');
+  });
+
+  it('appends .T for JP', () => {
+    expect(toYahooSymbol('7203', 'JP')).toBe('7203.T');
+  });
+
+  it('returns null for unsupported markets', () => {
+    expect(toYahooSymbol('600001', 'A')).toBeNull();
+    expect(toYahooSymbol('00700', 'HK')).toBeNull();
+  });
+});
+
+// ─── getMarketInfo ───
+
+describe('getMarketInfo', () => {
+  it('returns A-share market info', () => {
+    const info = getMarketInfo('A');
+    expect(info).not.toBeNull();
+    expect(info!.tz).toBe('Asia/Shanghai');
+    expect(info!.sessions).toEqual([[930, 1130], [1300, 1500]]);
+  });
+
+  it('returns HK market info', () => {
+    const info = getMarketInfo('HK');
+    expect(info!.sessions).toEqual([[930, 1200], [1300, 1600]]);
+  });
+
+  it('returns US market info', () => {
+    const info = getMarketInfo('US');
+    expect(info!.sessions).toEqual([[930, 1600]]);
+  });
+
+  it('returns KR market info', () => {
+    const info = getMarketInfo('KR');
+    expect(info!.sessions).toEqual([[900, 1530]]);
+  });
+
+  it('returns null for unknown market', () => {
+    expect(getMarketInfo('XX')).toBeNull();
   });
 });

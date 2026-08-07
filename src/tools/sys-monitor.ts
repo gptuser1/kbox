@@ -28,7 +28,7 @@ interface MetricDef {
   summary?: boolean;
 }
 
-const METRIC_SCHEMA: MetricDef[] = [
+export const METRIC_SCHEMA: MetricDef[] = [
   { key: 'cpu_usage', category: 'CPU', label: 'CPU 使用率', type: 'percent', unit: '%', warn: 70, crit: 90, summary: true },
   { key: 'cpu_cores', category: 'CPU', label: 'CPU 核数', type: 'number', unit: '核' },
   { key: 'cpu_temp', category: 'CPU', label: 'CPU 温度', type: 'temp', unit: '°C', warn: 60, crit: 80 },
@@ -49,7 +49,7 @@ const METRIC_SCHEMA: MetricDef[] = [
   { key: 'uptime_seconds', category: '系统', label: '运行时长', type: 'number', unit: 's' },
 ];
 
-const SCHEMA_MAP: Record<string, MetricDef> = {};
+export const SCHEMA_MAP: Record<string, MetricDef> = {};
 for (const m of METRIC_SCHEMA) SCHEMA_MAP[m.key] = m;
 
 const CATEGORIES = ['CPU', '内存', '磁盘', '负载', '网络', '系统'];
@@ -83,7 +83,7 @@ function nowMs(): number {
 }
 
 // 按 schema 解析原始 data，返回结构化的分类指标
-function parseMetrics(data: Record<string, any>): Record<string, { label: string; metrics: { key: string; label: string; type: string; value: any; unit?: string; warn?: number; crit?: number }[] }> {
+export function parseMetrics(data: Record<string, any>): Record<string, { label: string; metrics: { key: string; label: string; type: string; value: any; unit?: string; warn?: number; crit?: number }[] }> {
   const result: Record<string, { label: string; metrics: any[] }> = {};
   for (const cat of CATEGORIES) result[cat] = { label: cat, metrics: [] };
 
@@ -111,7 +111,7 @@ function parseMetrics(data: Record<string, any>): Record<string, { label: string
 }
 
 // 提取摘要指标（用于列表页）
-function extractSummary(data: Record<string, any>): { key: string; label: string; value: any; unit?: string; warn?: number; crit?: number }[] {
+export function extractSummary(data: Record<string, any>): { key: string; label: string; value: any; unit?: string; warn?: number; crit?: number }[] {
   const summary: any[] = [];
   for (const def of METRIC_SCHEMA) {
     if (def.summary && data[def.key] != null) {
@@ -121,7 +121,7 @@ function extractSummary(data: Record<string, any>): { key: string; label: string
   return summary;
 }
 
-function isOnline(lastSeen: number): boolean {
+export function isOnline(lastSeen: number): boolean {
   return Date.now() - lastSeen < ONLINE_THRESHOLD_MIN * 60 * 1000;
 }
 

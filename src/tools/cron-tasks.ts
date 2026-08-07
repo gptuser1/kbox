@@ -20,21 +20,21 @@ export interface CronTask {
   createdAt: number;
 }
 
-function genId(): string {
+export function genId(): string {
   return Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
 }
 
-function nowUnix(): number {
+export function nowUnix(): number {
   return Date.now();
 }
 
 // 当前北京时间的小时（0-23）
-function currentHourCN(): number {
+export function currentHourCN(): number {
   const d = new Date(Date.now() + 8 * 60 * 60 * 1000);
   return d.getUTCHours();
 }
 
-function normalizeHours(input: any): number[] {
+export function normalizeHours(input: any): number[] {
   if (!Array.isArray(input)) return [];
   const seen = new Set<number>();
   for (const h of input) {
