@@ -12,8 +12,8 @@ type Variables = {
 
 const NS_HOSTS = 'sys_monitor:hosts';
 const NS_HISTORY = 'sys_monitor:history';
-const HISTORY_MAX = 500;
-const ONLINE_THRESHOLD_MIN = 10;
+const HISTORY_MAX = 10;
+const ONLINE_THRESHOLD_MIN = 30;
 
 // ─── 指标 Schema 定义 ───
 // 服务端预定义所有可解析的指标，知道每个字段属于哪个分类、什么类型、什么单位
