@@ -102,34 +102,76 @@ export function mount(): void {
         fileList.innerHTML = '<div class="empty">暂无文件</div>';
         return;
       }
-      fileList.innerHTML = files.map((f: any) =>
-        '<div class="file-item"><div class="file-icon">' + fileIcon(f.mime_type) + '</div>' +
-        '<div class="file-info"><div class="file-name">' + esc(f.name) + '</div>' +
-        '<div class="file-meta">' + formatSize(f.size) + ' · ' + formatDate(f.created_at) + '</div></div>' +
-        '<div class="file-actions">' +
-        '<button class="btn btn-outline btn-sm" onclick="downloadFile(' + f.id + ',\'' + esc(f.name) + '\')">下载</button>' +
-        '<button class="btn btn-outline btn-sm" onclick="deleteFile(' + f.id + ',\'' + esc(f.name) + '\')" style="color:var(--danger)">删除</button>' +
-        '</div></div>'
-      ).join('');
+      fileList.innerHTML =
+        '<table class="file-table">' +
+        '<thead><tr>' +
+        '<th></th><th>文件名</th><th>大小</th><th>上传时间</th><th></th>' +
+        '</tr></thead><tbody>' +
+        files.map((f: any) =>
+          '<tr>' +
+          '<td class="file-icon-cell">' + fileIcon(f.mime_type) + '</td>' +
+          '<td class="file-name-cell" title="' + esc(f.name) + '">' + esc(f.name) + '</td>' +
+          '<td class="file-size-cell">' + formatSize(f.size) + '</td>' +
+          '<td class="file-date-cell">' + formatDate(f.created_at) + '</td>' +
+          '<td class="file-actions-cell">' +
+          '<div class="dl-wrap" data-id="' + f.id + '" data-name="' + esc(f.name) + '">' +
+          '<button class="dl-btn" onclick="event.stopPropagation();toggleDlMenu(this)">下载 ▾</button>' +
+          '<div class="dl-menu"><div class="dl-menu-item" onclick="doDirectDl(' + f.id + ')">直接下载</div><div class="dl-menu-item" onclick="doCopyLink(' + f.id + ')">复制链接</div></div>' +
+          '</div>' +
+          ' <button class="btn btn-outline btn-sm" onclick="deleteFile(' + f.id + ',\'' + esc(f.name) + '\')" style="color:var(--danger);padding:5px 10px;font-size:12px">删除</button>' +
+          '</td>' +
+          '</tr>'
+        ).join('') +
+        '</tbody></table>';
     } catch (e: any) {
       if (e.message === 'UNAUTHORIZED') return;
       fileList.innerHTML = '<div class="empty">加载失败：' + esc(e.message) + '</div>';
     }
   }
 
-  (window as any).downloadFile = async function(id: any, name: string) {
+  // 下载下拉菜单切换
+  (window as any).toggleDlMenu = function(btn: HTMLElement) {
+    const wrap = btn.closest('.dl-wrap') as HTMLElement;
+    if (!wrap) return;
+    // 关闭其他菜单
+    document.querySelectorAll('.dl-menu.show').forEach(m => {
+      if (m.closest('.dl-wrap') !== wrap) m.classList.remove('show');
+    });
+    const menu = wrap.querySelector('.dl-menu') as HTMLElement;
+    menu.classList.toggle('show');
+  };
+
+  // 点击外部关闭所有下载菜单
+  document.addEventListener('click', () => {
+    document.querySelectorAll('.dl-menu.show').forEach(m => m.classList.remove('show'));
+  });
+
+  (window as any).doDirectDl = async function(id: number) {
     try {
       const data = await api('/api/tools/disk/files/' + id + '/download-token', { method: 'POST' });
       if (!data.dt) throw new Error('未获取到下载令牌');
       const a = document.createElement('a');
       a.href = '/api/tools/disk/files/' + id + '/download?dt=' + encodeURIComponent(data.dt);
-      a.download = name;
+      a.download = '';
       document.body.appendChild(a);
       a.click();
       a.remove();
     } catch (e: any) {
       if (e.message === 'UNAUTHORIZED') return;
       toast('下载失败：' + e.message, 'error');
+    }
+  };
+
+  (window as any).doCopyLink = async function(id: number) {
+    try {
+      const data = await api('/api/tools/disk/files/' + id + '/download-token', { method: 'POST' });
+      if (!data.dt) throw new Error('未获取到下载令牌');
+      const link = window.location.origin + '/api/tools/disk/files/' + id + '/download?dt=' + encodeURIComponent(data.dt);
+      await navigator.clipboard.writeText(link);
+      toast('下载链接已复制', 'success');
+    } catch (e: any) {
+      if (e.message === 'UNAUTHORIZED') return;
+      toast('复制失败：' + e.message, 'error');
     }
   };
 

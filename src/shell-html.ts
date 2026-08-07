@@ -428,14 +428,26 @@ body:has(.disk-modal-overlay.show) .float-back { display: none !important; }
 .disk-upload-progress .progress-bar { flex: 1; height: 4px; background: var(--input-bg); border-radius: 2px; overflow: hidden; }
 .disk-upload-progress .progress-fill { height: 100%; background: var(--primary); transition: width 0.3s; }
 
-.file-list { display: flex; flex-direction: column; gap: 8px; }
-.file-item { background: var(--card); border-radius: 10px; padding: 12px 14px; box-shadow: var(--shadow); display: flex; align-items: center; gap: 12px; transition: box-shadow 0.2s; }
-.file-item:hover { box-shadow: var(--shadow-lg); }
-.file-icon { font-size: 22px; flex-shrink: 0; }
-.file-info { flex: 1; min-width: 0; }
-.file-name { font-size: 14px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.file-meta { font-size: 12px; color: var(--text-muted); margin-top: 2px; }
-.file-actions { display: flex; gap: 6px; flex-shrink: 0; }
+/* ─── 文件列表（表格） ─── */
+.file-table { width: 100%; border-collapse: collapse; font-size: 13px; background: var(--card); border-radius: 10px; overflow: hidden; box-shadow: var(--shadow); }
+.file-table th, .file-table td { padding: 10px 12px; text-align: left; border-bottom: 1px solid var(--border); vertical-align: middle; }
+.file-table th { background: var(--bg); color: var(--text-secondary); font-weight: 600; font-size: 12px; white-space: nowrap; }
+.file-table tr:last-child td { border-bottom: none; }
+.file-table tr:hover td { background: var(--bg); }
+.file-table .file-icon-cell { font-size: 18px; width: 36px; padding-right: 0; }
+.file-table .file-name-cell { max-width: 280px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
+.file-table .file-size-cell { white-space: nowrap; color: var(--text-secondary); width: 80px; }
+.file-table .file-date-cell { white-space: nowrap; color: var(--text-muted); font-size: 12px; width: 130px; }
+.file-table .file-actions-cell { white-space: nowrap; width: 120px; text-align: right; }
+
+/* 下载下拉菜单 */
+.dl-wrap { position: relative; display: inline-block; }
+.dl-btn { padding: 5px 14px; border: 1px solid var(--border); border-radius: 6px; background: var(--card); color: var(--text); cursor: pointer; font-size: 12px; transition: all 0.15s; display: inline-flex; align-items: center; gap: 4px; }
+.dl-btn:hover { border-color: var(--primary); color: var(--primary); }
+.dl-menu { position: absolute; right: 0; top: 100%; margin-top: 4px; min-width: 130px; background: var(--fm-bg); border: 1px solid var(--fm-border); border-radius: 8px; box-shadow: var(--fm-shadow); padding: 4px; z-index: 10; display: none; }
+.dl-menu.show { display: block; }
+.dl-menu-item { padding: 7px 12px; border-radius: 6px; font-size: 13px; cursor: pointer; color: var(--text); transition: background 0.1s; white-space: nowrap; }
+.dl-menu-item:hover { background: var(--fm-hover); }
 
 @media (max-width: 640px) {
   .token-bar { padding: 12px 16px; gap: 8px; }
