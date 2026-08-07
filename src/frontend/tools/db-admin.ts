@@ -100,13 +100,13 @@ export function render(): string {
 </div>
 
 <!-- 连接管理弹层 -->
-<div class="disk-modal-overlay" id="dbConnOverlay">
-  <div class="disk-modal" style="max-width:640px">
-    <div class="disk-modal-header">
+<div class="modal-overlay" id="dbConnOverlay">
+  <div class="modal" style="max-width:640px">
+    <div class="modal-header">
       <h3>连接管理</h3>
-      <button class="disk-modal-close" onclick="closeDbConnModal()">✕</button>
+      <button class="modal-close" onclick="closeDbConnModal()">✕</button>
     </div>
-    <div class="disk-modal-body">
+    <div class="modal-body">
       <div class="db-conn-list" id="dbConnList"></div>
       <div class="section-title" id="dbConnFormTitle">添加连接</div>
       <div class="form-group">
@@ -123,7 +123,7 @@ export function render(): string {
       </div>
       <div class="result-box" id="dbConnFormResult"></div>
     </div>
-    <div class="disk-modal-footer">
+    <div class="modal-footer">
       <button class="btn btn-outline" id="dbConnTestBtn" style="margin-right:auto">测试连接</button>
       <button class="btn btn-outline" style="color:var(--danger);display:none" id="dbConnDeleteBtn">删除</button>
       <button class="btn btn-outline" onclick="closeDbConnModal()">取消</button>
@@ -133,14 +133,14 @@ export function render(): string {
 </div>
 
 <!-- 行编辑弹层 -->
-<div class="disk-modal-overlay" id="dbRowOverlay">
-  <div class="disk-modal" style="max-width:680px">
-    <div class="disk-modal-header">
+<div class="modal-overlay" id="dbRowOverlay">
+  <div class="modal" style="max-width:680px">
+    <div class="modal-header">
       <h3 id="dbRowModalTitle">编辑行</h3>
-      <button class="disk-modal-close" onclick="closeDbRowModal()">✕</button>
+      <button class="modal-close" onclick="closeDbRowModal()">✕</button>
     </div>
-    <div class="disk-modal-body" id="dbRowModalBody"></div>
-    <div class="disk-modal-footer">
+    <div class="modal-body" id="dbRowModalBody"></div>
+    <div class="modal-footer">
       <span class="db-meta" id="dbRowModalMeta" style="margin-right:auto"></span>
       <button class="btn btn-outline" onclick="closeDbRowModal()">取消</button>
       <button class="btn btn-primary" id="dbRowSaveBtn">保存</button>
@@ -149,13 +149,13 @@ export function render(): string {
 </div>
 
 <!-- 新建表弹层 -->
-<div class="disk-modal-overlay" id="dbCreateTableOverlay">
-  <div class="disk-modal" style="max-width:860px">
-    <div class="disk-modal-header">
+<div class="modal-overlay" id="dbCreateTableOverlay">
+  <div class="modal" style="max-width:860px">
+    <div class="modal-header">
       <h3>新建表</h3>
-      <button class="disk-modal-close" onclick="closeDbCreateTableModal()">✕</button>
+      <button class="modal-close" onclick="closeDbCreateTableModal()">✕</button>
     </div>
-    <div class="disk-modal-body">
+    <div class="modal-body">
       <div class="form-group">
         <label>表名</label>
         <input id="dbNewTableName" placeholder="如：my_table">
@@ -176,7 +176,7 @@ export function render(): string {
       </div>
       <div class="result-box" id="dbNewTableResult"></div>
     </div>
-    <div class="disk-modal-footer">
+    <div class="modal-footer">
       <button class="btn btn-outline" onclick="closeDbCreateTableModal()">取消</button>
       <button class="btn btn-primary" id="dbNewTableSubmitBtn">创建</button>
     </div>

@@ -62,8 +62,8 @@ export function render(): string {
       <div id="smHistory"></div>
     </div>
     <!-- extra 弹窗 -->
-    <div class="disk-dl-overlay" id="smExtraOverlay">
-      <div class="disk-dl-popup" style="width:400px;max-width:90vw">
+    <div class="dl-overlay" id="smExtraOverlay">
+      <div class="dl-popup" style="width:400px;max-width:90vw">
         <div class="dlp-title">📝 附加信息</div>
         <pre id="smExtraContent" style="white-space:pre-wrap;word-break:break-all;font-size:13px;line-height:1.6;max-height:300px;overflow-y:auto;margin:8px 0"></pre>
         <button class="btn btn-outline" id="smExtraClose" style="width:100%;font-size:12px">关闭</button>

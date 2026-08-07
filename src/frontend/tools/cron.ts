@@ -13,14 +13,14 @@ export function render(): string {
       <button class="btn btn-outline" id="cronRefreshBtn">刷新</button>
     </div>
     <div id="cronList"></div>
-    <div class="disk-modal-overlay" id="cronModalOverlay">
-      <div class="disk-modal" style="max-width:480px">
-        <div class="disk-modal-header">
+    <div class="modal-overlay" id="cronModalOverlay">
+      <div class="modal" style="max-width:480px">
+        <div class="modal-header">
           <h3 id="cronModalTitle">新建任务</h3>
-          <button class="disk-modal-close" onclick="closeCronModal()">✕</button>
+          <button class="modal-close" onclick="closeCronModal()">✕</button>
         </div>
-        <div class="disk-modal-body" id="cronModalBody"></div>
-        <div class="disk-modal-footer">
+        <div class="modal-body" id="cronModalBody"></div>
+        <div class="modal-footer">
           <button class="btn btn-primary" id="cronSaveBtn">保存</button>
           <button class="btn btn-outline" onclick="closeCronModal()">取消</button>
         </div>

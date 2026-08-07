@@ -23,44 +23,44 @@ export function render(): string {
 </div>
 
 <!-- 添加/编辑基金弹层 -->
-<div class="disk-modal-overlay" id="stockModalOverlay">
-  <div class="disk-modal" style="max-width:560px">
-    <div class="disk-modal-header">
-      <h3 id="stockModalTitle">添加基金</h3>
-      <button class="btn btn-outline btn-sm" id="stockGotoImportBtn" style="margin-right:auto;display:none">📥 自动导入</button>
-      <button class="disk-modal-close" onclick="closeStockModal()">✕</button>
-    </div>
-    <div class="disk-modal-body">
-      <div class="form-group">
-        <label>基金名称</label>
-        <input id="stockFundName" placeholder="如：华夏沪深300ETF">
+<div class="modal-overlay" id="stockModalOverlay">
+      <div class="modal" style="max-width:560px">
+        <div class="modal-header">
+          <h3 id="stockModalTitle">添加基金</h3>
+          <button class="btn btn-outline btn-sm" id="stockGotoImportBtn" style="margin-right:auto;display:none">📥 自动导入</button>
+          <button class="modal-close" onclick="closeStockModal()">✕</button>
+        </div>
+        <div class="modal-body">
+          <div class="form-group">
+            <label>基金名称</label>
+            <input id="stockFundName" placeholder="如：华夏沪深300ETF">
+          </div>
+          <div class="form-group">
+            <label>基金代码（可选）</label>
+            <input id="stockFundCode" placeholder="如：510300">
+          </div>
+          <div class="form-group">
+            <label>持仓明细 <button type="button" class="btn btn-outline btn-sm" onclick="addStockHolding()" style="margin-left:8px">+ 添加持仓</button></label>
+            <div id="stockHoldingsList"></div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button class="btn btn-outline" id="stockModalExportBtn" style="display:none;margin-right:auto">导出</button>
+          <button class="btn btn-outline" style="color:var(--danger);display:none" id="stockModalDeleteBtn">删除</button>
+          <button class="btn btn-outline" onclick="closeStockModal()">取消</button>
+          <button class="btn btn-primary" id="stockModalSave">保存</button>
+        </div>
       </div>
-      <div class="form-group">
-        <label>基金代码（可选）</label>
-        <input id="stockFundCode" placeholder="如：510300">
-      </div>
-      <div class="form-group">
-        <label>持仓明细 <button type="button" class="btn btn-outline btn-sm" onclick="addStockHolding()" style="margin-left:8px">+ 添加持仓</button></label>
-        <div id="stockHoldingsList"></div>
-      </div>
     </div>
-    <div class="disk-modal-footer">
-      <button class="btn btn-outline" id="stockModalExportBtn" style="display:none;margin-right:auto">导出</button>
-      <button class="btn btn-outline" style="color:var(--danger);display:none" id="stockModalDeleteBtn">删除</button>
-      <button class="btn btn-outline" onclick="closeStockModal()">取消</button>
-      <button class="btn btn-primary" id="stockModalSave">保存</button>
-    </div>
-  </div>
-</div>
 
 <!-- 自动导入弹层 -->
-<div class="disk-modal-overlay" id="stockImportOverlay">
-  <div class="disk-modal" style="max-width:640px">
-    <div class="disk-modal-header">
+<div class="modal-overlay" id="stockImportOverlay">
+  <div class="modal" style="max-width:640px">
+    <div class="modal-header">
       <h3>📥 自动导入基金</h3>
-      <button class="disk-modal-close" onclick="closeStockImport()">✕</button>
+      <button class="modal-close" onclick="closeStockImport()">✕</button>
     </div>
-    <div class="disk-modal-body">
+    <div class="modal-body">
       <div class="form-group">
         <label>JSON 数据 <span style="font-weight:400;color:var(--text-muted)">（最外层为数组，支持一次导入多个基金）</span></label>
         <textarea id="stockImportText" class="code-input" placeholder='粘贴 JSON 列表，例如：&#10;[&#10;  { "fund_name": "华夏沪深300ETF", "fund_code": "510300", "holdings": [{"name":"贵州茅台","code":"600519","market":"A","weight":5.23}] }&#10;]' spellcheck="false" style="width:100%;min-height:160px;font-family:var(--font-mono,monospace);font-size:12px;resize:vertical"></textarea>
@@ -70,7 +70,7 @@ export function render(): string {
         <button class="btn btn-outline btn-sm" id="stockFillTemplateBtn">填入模板</button>
       </div>
     </div>
-    <div class="disk-modal-footer">
+    <div class="modal-footer">
       <button class="btn btn-outline" onclick="closeStockImport()">取消</button>
       <button class="btn btn-primary" id="stockImportSubmit">导入</button>
     </div>
@@ -256,9 +256,9 @@ export function mount(): void {
     }
     html += '</tbody></table>';
     const detailOverlay = document.createElement('div');
-    detailOverlay.className = 'disk-modal-overlay show';
-    detailOverlay.innerHTML = '<div class="disk-modal" style="max-width:560px"><div class="disk-modal-header"><h3>估值详情</h3><button class="disk-modal-close">✕</button></div><div class="disk-modal-body">' + html + '</div></div>';
-    detailOverlay.onclick = (e) => { if (e.target === detailOverlay || (e.target as HTMLElement).className === 'disk-modal-close') detailOverlay.remove(); };
+    detailOverlay.className = 'modal-overlay show';
+    detailOverlay.innerHTML = '<div class="modal" style="max-width:560px"><div class="modal-header"><h3>估值详情</h3><button class="modal-close">✕</button></div><div class="modal-body">' + html + '</div></div>';
+    detailOverlay.onclick = (e) => { if (e.target === detailOverlay || (e.target as HTMLElement).className === 'modal-close') detailOverlay.remove(); };
     document.body.appendChild(detailOverlay);
   };
 

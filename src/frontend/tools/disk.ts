@@ -67,8 +67,8 @@ export function render(): string {
       </div>
     </details>
     <!-- 下载弹窗 -->
-    <div class="disk-dl-overlay" id="diskDlOverlay">
-      <div class="disk-dl-popup" id="diskDlPopup">
+    <div class="dl-overlay" id="diskDlOverlay">
+      <div class="dl-popup" id="diskDlPopup">
         <div class="dlp-title">下载文件</div>
         <button class="btn btn-primary" id="diskDlDirectBtn">⬇ 直接下载</button>
         <button class="btn btn-outline" id="diskDlCopyBtn">🔗 复制链接</button>
@@ -76,8 +76,8 @@ export function render(): string {
       </div>
     </div>
     <!-- 文件详情弹窗 -->
-    <div class="disk-dl-overlay" id="diskDetailOverlay">
-      <div class="disk-dl-popup" id="diskDetailPopup" style="width:320px">
+    <div class="dl-overlay" id="diskDetailOverlay">
+      <div class="dl-popup" id="diskDetailPopup" style="width:320px">
         <div class="dlp-title" id="diskDetailTitle">文件详情</div>
         <div id="diskDetailBody" style="font-size:13px;line-height:1.8"></div>
         <button class="btn btn-primary" id="diskDetailClose" style="margin-top:12px">关闭</button>

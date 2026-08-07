@@ -262,7 +262,7 @@ input, select, button, textarea { font-family: inherit; }
 }
 .float-back:hover { background: var(--primary-hover); box-shadow: 0 8px 24px rgba(99, 102, 241, 0.5); }
 .float-back.show { display: inline-flex; }
-body:has(.disk-modal-overlay.show) .float-back { display: none !important; }
+body:has(.modal-overlay.show) .float-back { display: none !important; }
 
 /* ─── 右侧浮动菜单（按钮自身膨胀展开） ─── */
 .float-menu-container {
@@ -455,12 +455,12 @@ body:has(.disk-modal-overlay.show) .float-back { display: none !important; }
 .disk-file-link:hover { opacity: 0.8; text-decoration: underline; }
 
 /* 下载弹窗 */
-.disk-dl-overlay { position: fixed; inset: 0; background: var(--overlay); z-index: 1000; display: none; align-items: center; justify-content: center; }
-.disk-dl-overlay.show { display: flex; }
-.disk-dl-popup { background: var(--card); border-radius: 12px; padding: 20px; width: 280px; box-shadow: var(--shadow-lg); animation: modalIn 0.2s ease; }
-.disk-dl-popup .dlp-title { font-size: 14px; font-weight: 600; margin-bottom: 14px; color: var(--text); }
-.disk-dl-popup .btn { width: 100%; justify-content: center; }
-.disk-dl-popup .btn + .btn { margin-top: 8px; }
+.dl-overlay { position: fixed; inset: 0; background: var(--overlay); z-index: 1000; display: none; align-items: center; justify-content: center; }
+.dl-overlay.show { display: flex; }
+.dl-popup { background: var(--card); border-radius: 12px; padding: 20px; width: 280px; box-shadow: var(--shadow-lg); animation: modalIn 0.2s ease; }
+.dl-popup .dlp-title { font-size: 14px; font-weight: 600; margin-bottom: 14px; color: var(--text); }
+.dl-popup .btn { width: 100%; justify-content: center; }
+.dl-popup .btn + .btn { margin-top: 8px; }
 
 /* ─── 系统监控看板 ─── */
 .sm-host-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 12px; }
@@ -543,29 +543,29 @@ body:has(.disk-modal-overlay.show) .float-back { display: none !important; }
 }
 
 /* ─── 弹层 modal ─── */
-.disk-modal-overlay {
+.modal-overlay {
   display: none; position: fixed; inset: 0; background: var(--overlay); z-index: 200;
   align-items: center; justify-content: center; padding: 20px;
 }
-.disk-modal-overlay.show { display: flex; }
-.disk-modal {
+.modal-overlay.show { display: flex; }
+.modal {
   background: var(--card); border-radius: 12px; width: 100%; max-width: 480px;
   max-height: 90vh; overflow: hidden; display: flex; flex-direction: column;
   box-shadow: var(--shadow-lg); animation: modalIn 0.2s ease;
 }
 @keyframes modalIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
-.disk-modal-header {
+.modal-header {
   padding: 14px 18px; border-bottom: 1px solid var(--border);
   display: flex; align-items: center; justify-content: space-between;
 }
-.disk-modal-header h3 { font-size: 16px; font-weight: 600; }
-.disk-modal-close {
+.modal-header h3 { font-size: 16px; font-weight: 600; }
+.modal-close {
   background: none; border: none; font-size: 18px; cursor: pointer; color: var(--text-muted);
   padding: 4px 8px; border-radius: 6px; transition: background 0.2s;
 }
-.disk-modal-close:hover { background: var(--bg); }
-.disk-modal-body { padding: 18px; overflow-y: auto; flex: 1; }
-.disk-modal-footer {
+.modal-close:hover { background: var(--bg); }
+.modal-body { padding: 18px; overflow-y: auto; flex: 1; }
+.modal-footer {
   padding: 12px 18px; border-top: 1px solid var(--border);
   display: flex; gap: 8px; justify-content: flex-end;
 }
@@ -775,13 +775,13 @@ input[type="checkbox"] { accent-color: var(--primary); width: 16px; height: 16px
 </div>
 
 <!-- 工具卡片编辑弹层（改名/改图标/隐藏）-->
-<div class="disk-modal-overlay" id="toolEditOverlay">
-  <div class="disk-modal" style="max-width:420px">
-    <div class="disk-modal-header">
+<div class="modal-overlay" id="toolEditOverlay">
+  <div class="modal" style="max-width:420px">
+    <div class="modal-header">
       <h3>编辑工具</h3>
-      <button class="disk-modal-close" onclick="closeToolEdit()">✕</button>
+      <button class="modal-close" onclick="closeToolEdit()">✕</button>
     </div>
-    <div class="disk-modal-body">
+    <div class="modal-body">
       <div class="form-group">
         <label>名称</label>
         <input type="text" id="toolEditName" autocomplete="off" spellcheck="false">
@@ -798,7 +798,7 @@ input[type="checkbox"] { accent-color: var(--primary); width: 16px; height: 16px
         </label>
       </div>
     </div>
-    <div class="disk-modal-footer">
+    <div class="modal-footer">
       <button class="btn btn-outline" onclick="closeToolEdit()">取消</button>
       <button class="btn btn-primary" id="toolEditSave">保存</button>
     </div>

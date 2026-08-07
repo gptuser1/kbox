@@ -27,33 +27,33 @@ export function render(): string {
   </div>
 </div>
 
-<div class="disk-modal-overlay" id="configModalOverlay">
-  <div class="disk-modal" style="max-width:520px">
-    <div class="disk-modal-header">
+<div class="modal-overlay" id="configModalOverlay">
+  <div class="modal" style="max-width:520px">
+    <div class="modal-header">
       <h3 id="configModalTitle">编辑配置</h3>
-      <button class="disk-modal-close" onclick="closeConfigModal()">✕</button>
+      <button class="modal-close" onclick="closeConfigModal()">✕</button>
     </div>
-    <div class="disk-modal-body">
+    <div class="modal-body">
       <div class="form-group">
         <label id="configModalLabel"></label>
         <input type="text" id="configModalInput" autocomplete="off" spellcheck="false">
         <div class="input-desc" id="configModalHint"></div>
       </div>
     </div>
-    <div class="disk-modal-footer">
+    <div class="modal-footer">
       <button class="btn btn-outline" onclick="closeConfigModal()">取消</button>
       <button class="btn btn-primary" id="configModalSave">保存</button>
     </div>
   </div>
 </div>
 
-<div class="disk-modal-overlay" id="configPickOverlay">
-  <div class="disk-modal" style="max-width:440px">
-    <div class="disk-modal-header">
+<div class="modal-overlay" id="configPickOverlay">
+  <div class="modal" style="max-width:440px">
+    <div class="modal-header">
       <h3>选择配置项</h3>
-      <button class="disk-modal-close" onclick="closeConfigPick()">✕</button>
+      <button class="modal-close" onclick="closeConfigPick()">✕</button>
     </div>
-    <div class="disk-modal-body" id="configPickBody"></div>
+    <div class="modal-body" id="configPickBody"></div>
   </div>
 </div>
 `;

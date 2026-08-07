@@ -72,14 +72,14 @@ function renderJsTool(): string {
       </div>
       <div class="result-box" id="jsTmpResult"></div>
     </div>
-    <div class="disk-modal-overlay" id="jsModalOverlay">
-      <div class="disk-modal" style="max-width:680px">
-        <div class="disk-modal-header">
+    <div class="modal-overlay" id="jsModalOverlay">
+      <div class="modal" style="max-width:680px">
+        <div class="modal-header">
           <h3 id="jsModalTitle">新建脚本</h3>
-          <button class="disk-modal-close" onclick="closeJsModal()">✕</button>
+          <button class="modal-close" onclick="closeJsModal()">✕</button>
         </div>
-        <div class="disk-modal-body" id="jsModalBody"></div>
-        <div class="disk-modal-footer">
+        <div class="modal-body" id="jsModalBody"></div>
+        <div class="modal-footer">
           <button class="btn btn-primary" id="jsSaveBtn">保存</button>
           <button class="btn btn-outline" onclick="closeJsModal()">取消</button>
         </div>
