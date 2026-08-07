@@ -400,14 +400,15 @@ body:has(.disk-modal-overlay.show) .float-back { display: none !important; }
 .input-required { color: var(--danger); }
 
 /* ─── 云盘 ─── */
-.disk-stats { display: flex; gap: 16px; flex-wrap: wrap; margin-bottom: 20px; }
-.disk-stat-card { background: var(--card); border-radius: 10px; padding: 14px 18px; box-shadow: var(--shadow); flex: 1; min-width: 140px; }
-.disk-stat-card .stat-label { font-size: 12px; color: var(--text-muted); margin-bottom: 4px; }
-.disk-stat-card .stat-value { font-size: 20px; font-weight: 700; }
-.disk-stat-card .stat-sub { font-size: 11px; color: var(--text-muted); margin-top: 2px; }
-.disk-usage-bar { height: 6px; background: var(--input-bg); border-radius: 3px; overflow: hidden; margin-top: 8px; }
-.disk-usage-fill { height: 100%; background: var(--primary); transition: width 0.3s; }
-.disk-usage-fill.warn { background: var(--danger); }
+/* 紧凑统计信息 */
+.disk-stats { display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 12px; }
+.disk-stat-item { display: flex; flex-direction: column; min-width: 70px; }
+.ds-label { font-size: 11px; color: var(--text-muted); line-height: 1.3; }
+.ds-val { font-size: 15px; font-weight: 600; line-height: 1.4; }
+.ds-sub { font-size: 10px; color: var(--text-muted); margin-left: 2px; }
+.ds-bar { height: 3px; background: var(--input-bg); border-radius: 2px; margin-top: 4px; overflow: hidden; width: 100px; }
+.ds-fill { height: 100%; background: var(--primary); transition: width 0.3s; }
+.ds-fill.warn { background: var(--danger); }
 
 .disk-upload { background: var(--card); border-radius: 12px; padding: 14px 16px; box-shadow: var(--shadow); }
 .disk-upload.dragover { border: 2px dashed var(--primary); }
@@ -429,25 +430,33 @@ body:has(.disk-modal-overlay.show) .float-back { display: none !important; }
 .disk-upload-progress .progress-fill { height: 100%; background: var(--primary); transition: width 0.3s; }
 
 /* ─── 文件列表（表格） ─── */
-.file-table { width: 100%; border-collapse: collapse; font-size: 13px; background: var(--card); border-radius: 10px; overflow: hidden; box-shadow: var(--shadow); }
+.file-table { width: 100%; table-layout: fixed; border-collapse: collapse; font-size: 13px; background: var(--card); border-radius: 10px; overflow: hidden; box-shadow: var(--shadow); }
 .file-table th, .file-table td { padding: 10px 12px; text-align: left; border-bottom: 1px solid var(--border); vertical-align: middle; }
 .file-table th { background: var(--bg); color: var(--text-secondary); font-weight: 600; font-size: 12px; white-space: nowrap; }
 .file-table tr:last-child td { border-bottom: none; }
 .file-table tr:hover td { background: var(--bg); }
-.file-table .file-icon-cell { font-size: 18px; width: 36px; padding-right: 0; }
-.file-table .file-name-cell { max-width: 280px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
-.file-table .file-size-cell { white-space: nowrap; color: var(--text-secondary); width: 80px; }
-.file-table .file-date-cell { white-space: nowrap; color: var(--text-muted); font-size: 12px; width: 130px; }
-.file-table .file-actions-cell { white-space: nowrap; width: 120px; text-align: right; }
+.fth-icon { width: 36px; }
+.fth-name { width: auto; }
+.fth-size { width: 80px; }
+.fth-date { width: 130px; }
+.fth-actions { width: 120px; text-align: right; }
+.ftd-icon { font-size: 18px; width: 36px; text-align: center; }
+.ftd-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 500; }
+.ftd-name span { display: block; overflow: hidden; text-overflow: ellipsis; }
+.ftd-size { color: var(--text-secondary); font-size: 12px; }
+.ftd-date { color: var(--text-muted); font-size: 12px; }
+.ftd-actions { text-align: right; white-space: nowrap; }
+.ftd-actions .dl-btn { padding: 4px 12px; border: 1px solid var(--border); border-radius: 6px; background: var(--card); color: var(--text-secondary); cursor: pointer; font-size: 12px; transition: all 0.15s; }
+.ftd-actions .dl-btn:hover { border-color: var(--primary); color: var(--primary); }
+.ftd-actions .dl-btn.dl-del:hover { border-color: var(--danger); color: var(--danger); }
 
-/* 下载下拉菜单 */
-.dl-wrap { position: relative; display: inline-block; }
-.dl-btn { padding: 5px 14px; border: 1px solid var(--border); border-radius: 6px; background: var(--card); color: var(--text); cursor: pointer; font-size: 12px; transition: all 0.15s; display: inline-flex; align-items: center; gap: 4px; }
-.dl-btn:hover { border-color: var(--primary); color: var(--primary); }
-.dl-menu { position: absolute; right: 0; top: 100%; margin-top: 4px; min-width: 130px; background: var(--fm-bg); border: 1px solid var(--fm-border); border-radius: 8px; box-shadow: var(--fm-shadow); padding: 4px; z-index: 10; display: none; }
-.dl-menu.show { display: block; }
-.dl-menu-item { padding: 7px 12px; border-radius: 6px; font-size: 13px; cursor: pointer; color: var(--text); transition: background 0.1s; white-space: nowrap; }
-.dl-menu-item:hover { background: var(--fm-hover); }
+/* 下载弹窗 */
+.disk-dl-overlay { position: fixed; inset: 0; background: var(--overlay); z-index: 1000; display: none; align-items: center; justify-content: center; }
+.disk-dl-overlay.show { display: flex; }
+.disk-dl-popup { background: var(--card); border-radius: 12px; padding: 20px; width: 280px; box-shadow: var(--shadow-lg); animation: modalIn 0.2s ease; }
+.disk-dl-popup .dlp-title { font-size: 14px; font-weight: 600; margin-bottom: 14px; color: var(--text); }
+.disk-dl-popup .btn { width: 100%; justify-content: center; }
+.disk-dl-popup .btn + .btn { margin-top: 8px; }
 
 @media (max-width: 640px) {
   .token-bar { padding: 12px 16px; gap: 8px; }

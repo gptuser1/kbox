@@ -3,8 +3,8 @@
 // 即使本模块出错，只影响本工具，不波及壳与其他工具。
 import { $, esc, toast, api, formatDate } from '../shared.js';
 
-const DISK_CHUNK_SIZE = 1.4 * 1024 * 1024; // 1.4MB，与后端一致
-const DISK_MAX_SIZE = 10 * 1024 * 1024; // 10MB
+const DISK_CHUNK_SIZE = 1.4 * 1024 * 1024;
+const DISK_MAX_SIZE = 10 * 1024 * 1024;
 
 function fileIcon(mime: string): string {
   if (!mime) return '📄';
@@ -30,6 +30,9 @@ export function render(): string {
   return `
     <h2>☁️ 微型云盘</h2>
     <div class="disk-stats" id="diskStats"></div>
+    <div class="section-title">文件列表</div>
+    <div id="diskFileList"></div>
+    <div class="section-title" style="margin-top:20px">上传文件</div>
     <div class="disk-upload">
       <div class="disk-drop-zone" id="diskDropZone">
         <span class="drop-icon">📁</span>
@@ -44,15 +47,13 @@ export function render(): string {
       </div>
       <div class="disk-upload-progress" id="diskProgress"></div>
     </div>
-    <div class="section-title">文件列表</div>
-    <div class="file-list" id="diskFileList"></div>
-    <details class="disk-api-docs" style="margin-top:24px">
-      <summary style="cursor:pointer;font-size:14px;font-weight:600;color:var(--text-secondary);padding:12px;background:var(--card);border-radius:8px;box-shadow:var(--shadow)">📋 API 接口文档</summary>
-      <div style="padding:16px;background:var(--card);border-radius:8px;margin-top:8px;box-shadow:var(--shadow);font-size:13px;line-height:1.8;color:var(--text-secondary);overflow-x:auto">
+    <details class="disk-api-docs" style="margin-top:16px">
+      <summary style="cursor:pointer;font-size:13px;font-weight:600;color:var(--text-secondary);padding:10px 14px;background:var(--card);border-radius:8px;box-shadow:var(--shadow)">📋 API 接口文档</summary>
+      <div style="padding:14px;background:var(--card);border-radius:8px;margin-top:6px;box-shadow:var(--shadow);font-size:12px;line-height:1.8;color:var(--text-secondary);overflow-x:auto">
         <p style="color:var(--text);font-weight:600">所有接口需鉴权，支持两种方式：</p>
         <p>① Header: <code>Authorization: Bearer &lt;token&gt;</code></p>
         <p>② Query: <code>?token=&lt;token&gt;</code>（仅下载链接推荐）</p>
-        <hr style="border:none;border-top:1px solid var(--border);margin:12px 0">
+        <hr style="border:none;border-top:1px solid var(--border);margin:10px 0">
         <p><b>GET</b> <code>/api/tools/disk/stats</code> — 容量统计</p>
         <p><b>GET</b> <code>/api/tools/disk/files</code> — 文件列表</p>
         <p><b>POST</b> <code>/api/tools/disk/files</code> — 创建文件记录<br>
@@ -63,6 +64,15 @@ export function render(): string {
         <p><b>DELETE</b> <code>/api/tools/disk/files/:id</code> — 删除文件</p>
       </div>
     </details>
+    <!-- 下载弹窗 -->
+    <div class="disk-dl-overlay" id="diskDlOverlay">
+      <div class="disk-dl-popup" id="diskDlPopup">
+        <div class="dlp-title">下载文件</div>
+        <button class="btn btn-primary" id="diskDlDirectBtn">⬇ 直接下载</button>
+        <button class="btn btn-outline" id="diskDlCopyBtn">🔗 复制链接</button>
+        <button class="btn btn-outline" id="diskDlCancelBtn" style="font-size:12px">取消</button>
+      </div>
+    </div>
   `;
 }
 
@@ -76,17 +86,23 @@ export function mount(): void {
   const uploadActions = $('diskUploadActions');
   const uploadBtn = $('diskUploadBtn') as HTMLButtonElement;
   const clearBtn = $('diskClearBtn') as HTMLButtonElement;
+  const dlOverlay = $('diskDlOverlay');
+  const dlPopup = $('diskDlPopup');
+  const dlDirectBtn = $('diskDlDirectBtn') as HTMLButtonElement;
+  const dlCopyBtn = $('diskDlCopyBtn') as HTMLButtonElement;
+  const dlCancelBtn = $('diskDlCancelBtn') as HTMLButtonElement;
 
   let pendingFiles: File[] = [];
+  let dlFileId: number = 0;
 
   async function loadStats() {
     try {
       const s = await api('/api/tools/disk/stats');
       const usagePct = s.max_db_size > 0 ? Math.min(100, (s.db_size / s.max_db_size) * 100) : 0;
       statsBox.innerHTML =
-        '<div class="disk-stat-card"><div class="stat-label">文件数</div><div class="stat-value">' + s.file_count + '</div></div>' +
-        '<div class="disk-stat-card"><div class="stat-label">文件大小</div><div class="stat-value">' + formatSize(s.total_size) + '</div></div>' +
-        '<div class="disk-stat-card"><div class="stat-label">存储占用</div><div class="stat-value">' + formatSize(s.db_size) + '</div><div class="stat-sub">上限 ' + formatSize(s.max_db_size) + '</div><div class="disk-usage-bar"><div class="disk-usage-fill ' + (usagePct > 80 ? 'warn' : '') + '" style="width:' + usagePct + '%"></div></div></div>';
+        '<div class="disk-stat-item"><span class="ds-label">文件数</span><span class="ds-val">' + s.file_count + '</span></div>' +
+        '<div class="disk-stat-item"><span class="ds-label">大小</span><span class="ds-val">' + formatSize(s.total_size) + '</span></div>' +
+        '<div class="disk-stat-item"><span class="ds-label">存储</span><span class="ds-val">' + formatSize(s.db_size) + '</span><span class="ds-sub">/ ' + formatSize(s.max_db_size) + '</span><div class="ds-bar"><div class="ds-fill ' + (usagePct > 80 ? 'warn' : '') + '" style="width:' + usagePct + '%"></div></div></div>';
     } catch (e: any) {
       if (e.message === 'UNAUTHORIZED') return;
       statsBox.innerHTML = '<div class="empty">统计加载失败</div>';
@@ -94,64 +110,61 @@ export function mount(): void {
   }
 
   async function loadFiles() {
-    fileList.innerHTML = '<div class="empty">加载中…</div>';
+    fileList.innerHTML = '<div class="empty" style="padding:20px 0">加载中…</div>';
     try {
       const data = await api('/api/tools/disk/files');
       const files = data.files || [];
       if (!files.length) {
-        fileList.innerHTML = '<div class="empty">暂无文件</div>';
+        fileList.innerHTML = '<div class="empty" style="padding:20px 0">暂无文件</div>';
         return;
       }
       fileList.innerHTML =
         '<table class="file-table">' +
         '<thead><tr>' +
-        '<th></th><th>文件名</th><th>大小</th><th>上传时间</th><th></th>' +
+        '<th class="fth-icon"></th><th class="fth-name">文件名</th><th class="fth-size">大小</th><th class="fth-date">上传时间</th><th class="fth-actions"></th>' +
         '</tr></thead><tbody>' +
         files.map((f: any) =>
           '<tr>' +
-          '<td class="file-icon-cell">' + fileIcon(f.mime_type) + '</td>' +
-          '<td class="file-name-cell" title="' + esc(f.name) + '">' + esc(f.name) + '</td>' +
-          '<td class="file-size-cell">' + formatSize(f.size) + '</td>' +
-          '<td class="file-date-cell">' + formatDate(f.created_at) + '</td>' +
-          '<td class="file-actions-cell">' +
-          '<div class="dl-wrap" data-id="' + f.id + '" data-name="' + esc(f.name) + '">' +
-          '<button class="dl-btn" onclick="event.stopPropagation();toggleDlMenu(this)">下载 ▾</button>' +
-          '<div class="dl-menu"><div class="dl-menu-item" onclick="doDirectDl(' + f.id + ')">直接下载</div><div class="dl-menu-item" onclick="doCopyLink(' + f.id + ')">复制链接</div></div>' +
-          '</div>' +
-          ' <button class="btn btn-outline btn-sm" onclick="deleteFile(' + f.id + ',\'' + esc(f.name) + '\')" style="color:var(--danger);padding:5px 10px;font-size:12px">删除</button>' +
+          '<td class="ftd-icon">' + fileIcon(f.mime_type) + '</td>' +
+          '<td class="ftd-name" title="' + esc(f.name) + '"><span>' + esc(f.name) + '</span></td>' +
+          '<td class="ftd-size">' + formatSize(f.size) + '</td>' +
+          '<td class="ftd-date">' + formatDate(f.created_at) + '</td>' +
+          '<td class="ftd-actions">' +
+          '<button class="dl-btn" onclick="event.stopPropagation();openDlPopup(' + f.id + ')">下载</button>' +
+          ' <button class="dl-btn dl-del" onclick="deleteFile(' + f.id + ',\'' + esc(f.name) + '\')">删除</button>' +
           '</td>' +
           '</tr>'
         ).join('') +
         '</tbody></table>';
     } catch (e: any) {
       if (e.message === 'UNAUTHORIZED') return;
-      fileList.innerHTML = '<div class="empty">加载失败：' + esc(e.message) + '</div>';
+      fileList.innerHTML = '<div class="empty" style="padding:20px 0;color:var(--danger)">加载失败：' + esc(e.message) + '</div>';
     }
   }
 
-  // 下载下拉菜单切换
-  (window as any).toggleDlMenu = function(btn: HTMLElement) {
-    const wrap = btn.closest('.dl-wrap') as HTMLElement;
-    if (!wrap) return;
-    // 关闭其他菜单
-    document.querySelectorAll('.dl-menu.show').forEach(m => {
-      if (m.closest('.dl-wrap') !== wrap) m.classList.remove('show');
-    });
-    const menu = wrap.querySelector('.dl-menu') as HTMLElement;
-    menu.classList.toggle('show');
+  // ─── 下载弹窗 ───
+  (window as any).openDlPopup = function(id: number) {
+    dlFileId = id;
+    dlOverlay.classList.add('show');
   };
 
-  // 点击外部关闭所有下载菜单
-  document.addEventListener('click', () => {
-    document.querySelectorAll('.dl-menu.show').forEach(m => m.classList.remove('show'));
-  });
+  function closeDlPopup() {
+    dlOverlay.classList.remove('show');
+  }
 
-  (window as any).doDirectDl = async function(id: number) {
+  dlOverlay.addEventListener('click', (e) => {
+    if (e.target === dlOverlay) closeDlPopup();
+  });
+  dlCancelBtn.addEventListener('click', closeDlPopup);
+
+  dlDirectBtn.addEventListener('click', async () => {
+    if (!dlFileId) return;
+    closeDlPopup();
     try {
-      const data = await api('/api/tools/disk/files/' + id + '/download-token', { method: 'POST' });
+      const data = await api('/api/tools/disk/files/' + dlFileId + '/download-token', { method: 'POST' });
       if (!data.dt) throw new Error('未获取到下载令牌');
       const a = document.createElement('a');
-      a.href = '/api/tools/disk/files/' + id + '/download?dt=' + encodeURIComponent(data.dt);
+      a.href = '/api/tools/disk/files/' + dlFileId + '/download?dt=' + encodeURIComponent(data.dt);
       a.download = '';
       document.body.appendChild(a);
       a.click();
@@ -160,21 +173,24 @@ export function mount(): void {
       if (e.message === 'UNAUTHORIZED') return;
       toast('下载失败：' + e.message, 'error');
     }
-  };
+  });
 
-  (window as any).doCopyLink = async function(id: number) {
+  dlCopyBtn.addEventListener('click', async () => {
+    if (!dlFileId) return;
+    closeDlPopup();
     try {
-      const data = await api('/api/tools/disk/files/' + id + '/download-token', { method: 'POST' });
+      const data = await api('/api/tools/disk/files/' + dlFileId + '/download-token', { method: 'POST' });
       if (!data.dt) throw new Error('未获取到下载令牌');
-      const link = window.location.origin + '/api/tools/disk/files/' + id + '/download?dt=' + encodeURIComponent(data.dt);
+      const link = window.location.origin + '/api/tools/disk/files/' + dlFileId + '/download?dt=' + encodeURIComponent(data.dt);
       await navigator.clipboard.writeText(link);
       toast('下载链接已复制', 'success');
     } catch (e: any) {
       if (e.message === 'UNAUTHORIZED') return;
       toast('复制失败：' + e.message, 'error');
     }
-  };
+  });
 
+  // ─── 删除文件 ───
   (window as any).deleteFile = async function(id: any, name: string) {
     if (!confirm('确认删除「' + name + '」？')) return;
     try {
@@ -188,6 +204,7 @@ export function mount(): void {
     }
   };
 
+  // ─── 上传逻辑 ───
   function addFiles(files: FileList | File[]) {
     const arr = Array.from(files);
     let added = 0;
