@@ -429,6 +429,15 @@ body:has(.disk-modal-overlay.show) .float-back { display: none !important; }
 .disk-upload-progress .progress-bar { flex: 1; height: 4px; background: var(--input-bg); border-radius: 2px; overflow: hidden; }
 .disk-upload-progress .progress-fill { height: 100%; background: var(--primary); transition: width 0.3s; }
 
+/* ─── 通用列表项（配置/股票/新闻/Dispatch 等工具复用） ─── */
+.file-list { display: flex; flex-direction: column; gap: 8px; }
+.file-item { background: var(--card); border-radius: 10px; padding: 12px 14px; box-shadow: var(--shadow); display: flex; align-items: center; gap: 12px; transition: box-shadow 0.2s; }
+.file-item:hover { box-shadow: var(--shadow-lg); }
+.file-info { flex: 1; min-width: 0; }
+.file-name { font-size: 14px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.file-meta { font-size: 12px; color: var(--text-muted); margin-top: 2px; }
+.file-actions { display: flex; gap: 6px; flex-shrink: 0; }
+
 /* ─── 文件列表（表格） ─── */
 .file-table { width: 100%; table-layout: fixed; border-collapse: collapse; font-size: 13px; background: var(--card); border-radius: 10px; overflow: hidden; box-shadow: var(--shadow); }
 .file-table th, .file-table td { padding: 10px 12px; text-align: left; border-bottom: 1px solid var(--border); vertical-align: middle; }
