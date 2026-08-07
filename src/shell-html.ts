@@ -444,20 +444,16 @@ body:has(.disk-modal-overlay.show) .float-back { display: none !important; }
 .file-table th { background: var(--bg); color: var(--text-secondary); font-weight: 600; font-size: 12px; white-space: nowrap; }
 .file-table tr:last-child td { border-bottom: none; }
 .file-table tr:hover td { background: var(--bg); }
-.fth-icon { width: 36px; }
 .fth-name { width: auto; }
-.fth-size { width: 80px; }
-.fth-date { width: 130px; }
-.fth-actions { width: 120px; text-align: right; }
-.ftd-icon { font-size: 18px; width: 36px; text-align: center; }
-.ftd-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 500; }
-.ftd-name span { display: block; overflow: hidden; text-overflow: ellipsis; }
-.ftd-size { color: var(--text-secondary); font-size: 12px; }
-.ftd-date { color: var(--text-muted); font-size: 12px; }
+.fth-actions { width: 140px; text-align: right; }
+.ftd-name { overflow: hidden; }
 .ftd-actions { text-align: right; white-space: nowrap; }
 .ftd-actions .dl-btn { padding: 4px 12px; border: 1px solid var(--border); border-radius: 6px; background: var(--card); color: var(--text-secondary); cursor: pointer; font-size: 12px; transition: all 0.15s; }
 .ftd-actions .dl-btn:hover { border-color: var(--primary); color: var(--primary); }
 .ftd-actions .dl-btn.dl-del:hover { border-color: var(--danger); color: var(--danger); }
+
+.disk-file-link { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--primary); cursor: pointer; font-weight: 500; transition: opacity 0.15s; }
+.disk-file-link:hover { opacity: 0.8; text-decoration: underline; }
 
 /* 下载弹窗 */
 .disk-dl-overlay { position: fixed; inset: 0; background: var(--overlay); z-index: 1000; display: none; align-items: center; justify-content: center; }

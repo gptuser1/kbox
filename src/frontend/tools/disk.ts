@@ -73,6 +73,14 @@ export function render(): string {
         <button class="btn btn-outline" id="diskDlCancelBtn" style="font-size:12px">取消</button>
       </div>
     </div>
+    <!-- 文件详情弹窗 -->
+    <div class="disk-dl-overlay" id="diskDetailOverlay">
+      <div class="disk-dl-popup" id="diskDetailPopup" style="width:320px">
+        <div class="dlp-title" id="diskDetailTitle">文件详情</div>
+        <div id="diskDetailBody" style="font-size:13px;line-height:1.8"></div>
+        <button class="btn btn-primary" id="diskDetailClose" style="margin-top:12px">关闭</button>
+      </div>
+    </div>
   `;
 }
 
@@ -91,6 +99,10 @@ export function mount(): void {
   const dlDirectBtn = $('diskDlDirectBtn') as HTMLButtonElement;
   const dlCopyBtn = $('diskDlCopyBtn') as HTMLButtonElement;
   const dlCancelBtn = $('diskDlCancelBtn') as HTMLButtonElement;
+  const detailOverlay = $('diskDetailOverlay');
+  const detailTitle = $('diskDetailTitle');
+  const detailBody = $('diskDetailBody');
+  const detailCloseBtn = $('diskDetailClose') as HTMLButtonElement;
 
   let pendingFiles: File[] = [];
   let dlFileId: number = 0;
@@ -114,6 +126,8 @@ export function mount(): void {
     try {
       const data = await api('/api/tools/disk/files');
       const files = data.files || [];
+      fileCache = {};
+      for (const f of files) fileCache[f.id] = f;
       if (!files.length) {
         fileList.innerHTML = '<div class="empty" style="padding:20px 0">暂无文件</div>';
         return;
@@ -121,14 +135,11 @@ export function mount(): void {
       fileList.innerHTML =
         '<table class="file-table">' +
         '<thead><tr>' +
-        '<th class="fth-icon"></th><th class="fth-name">文件名</th><th class="fth-size">大小</th><th class="fth-date">上传时间</th><th class="fth-actions"></th>' +
+        '<th class="fth-name">文件名</th><th class="fth-actions"></th>' +
         '</tr></thead><tbody>' +
         files.map((f: any) =>
           '<tr>' +
-          '<td class="ftd-icon">' + fileIcon(f.mime_type) + '</td>' +
-          '<td class="ftd-name" title="' + esc(f.name) + '"><span>' + esc(f.name) + '</span></td>' +
-          '<td class="ftd-size">' + formatSize(f.size) + '</td>' +
-          '<td class="ftd-date">' + formatDate(f.created_at) + '</td>' +
+          '<td class="ftd-name"><span class="disk-file-link" onclick="showFileDetail(' + f.id + ')" title="' + esc(f.name) + '">' + esc(f.name) + '</span></td>' +
           '<td class="ftd-actions">' +
           '<button class="dl-btn" onclick="event.stopPropagation();openDlPopup(' + f.id + ')">下载</button>' +
           ' <button class="dl-btn dl-del" onclick="deleteFile(' + f.id + ',\'' + esc(f.name) + '\')">删除</button>' +
@@ -203,6 +214,31 @@ export function mount(): void {
       toast('删除失败：' + e.message, 'error');
     }
   };
+
+  // ─── 文件详情弹窗 ───
+  let fileCache: Record<number, any> = {};
+
+  (window as any).showFileDetail = function(id: number) {
+    const f = fileCache[id];
+    if (!f) return;
+    detailTitle.textContent = '文件详情';
+    detailBody.innerHTML =
+      '<div><strong>文件名：</strong>' + esc(f.name) + '</div>' +
+      '<div><strong>类型：</strong>' + esc(f.mime_type || '未知') + '</div>' +
+      '<div><strong>大小：</strong>' + formatSize(f.size) + '</div>' +
+      '<div><strong>上传时间：</strong>' + formatDate(f.created_at) + '</div>' +
+      (f.chunk_count ? '<div><strong>分片数：</strong>' + f.chunk_count + '</div>' : '');
+    detailOverlay.classList.add('show');
+  };
+
+  function closeDetailPopup() {
+    detailOverlay.classList.remove('show');
+  }
+
+  detailOverlay.addEventListener('click', (e) => {
+    if (e.target === detailOverlay) closeDetailPopup();
+  });
+  detailCloseBtn.addEventListener('click', closeDetailPopup);
 
   // ─── 上传逻辑 ───
   function addFiles(files: FileList | File[]) {
