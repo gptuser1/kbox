@@ -315,18 +315,24 @@ function renderHistory(history: HistoryPoint[]) {
     return;
   }
 
+  // 静态/累加型指标不参与历史趋势
+  const excludeFromHistory = new Set([
+    'cpu_cores', 'mem_total_mb', 'uptime_seconds', 'net_iface',
+  ]);
+
   // 找出所有数值字段
   const numericFields = new Map<string, string>();
   const knownLabels: Record<string, string> = {
-    cpu_usage: 'CPU 使用率', cpu_temp: 'CPU 温度', cpu_cores: 'CPU 核数',
-    mem_usage: '内存使用率', mem_total_mb: '内存总量', mem_used_mb: '内存已用', swap_usage: 'Swap 使用率',
+    cpu_usage: 'CPU 使用率', cpu_temp: 'CPU 温度',
+    mem_usage: '内存使用率', mem_used_mb: '内存已用', swap_usage: 'Swap 使用率',
     disk_usage: '磁盘使用率', disk_total_kb: '磁盘总量', disk_used_kb: '磁盘已用',
     load_1m: '1分钟负载', load_5m: '5分钟负载', load_15m: '15分钟负载', processes: '进程数',
-    net_rx_bytes: '接收总量', net_tx_bytes: '发送总量', uptime_seconds: '运行时长',
+    net_rx_bytes: '接收总量', net_tx_bytes: '发送总量',
   };
 
   for (const pt of history) {
     for (const [k, v] of Object.entries(pt.data)) {
+      if (excludeFromHistory.has(k)) continue;
       if (v != null && (typeof v === 'number' || (typeof v === 'string' && !isNaN(Number(v))))) {
         if (!numericFields.has(k)) {
           numericFields.set(k, knownLabels[k] || k);
