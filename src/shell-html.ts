@@ -472,6 +472,7 @@ body:has(.disk-modal-overlay.show) .float-back { display: none !important; }
 .sm-dot-online { background: var(--success); box-shadow: 0 0 6px var(--success); }
 .sm-dot-offline { background: var(--text-muted); }
 .sm-card-name { font-size: 15px; font-weight: 600; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sm-extra-badge { font-size: 13px; flex-shrink: 0; }
 .sm-card-status { font-size: 11px; color: var(--text-muted); }
 .sm-card-meta { font-size: 12px; color: var(--text-muted); margin-top: 4px; }
 .sm-card-summary { display: flex; flex-direction: column; gap: 6px; margin-top: 10px; }

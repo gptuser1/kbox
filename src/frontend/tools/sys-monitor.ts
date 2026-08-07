@@ -20,24 +20,26 @@ interface HostListItem {
   id: string;
   hostname: string;
   name: string;
-  firstSeen: string;
-  lastSeen: string;
+  firstSeen: number;
+  lastSeen: number;
   online: boolean;
   summary: MetricItem[];
+  hasExtra: boolean;
 }
 
 interface HostDetail {
   id: string;
   hostname: string;
   name: string;
-  firstSeen: string;
-  lastSeen: string;
+  firstSeen: number;
+  lastSeen: number;
   online: boolean;
   categories: Record<string, CategoryGroup>;
+  extra: string | null;
 }
 
 interface HistoryPoint {
-  timestamp: string;
+  ts: number;
   data: Record<string, any>;
 }
 
@@ -54,10 +56,19 @@ export function render(): string {
         <span id="smStatusBadge" class="sm-status-badge"></span>
         <input type="text" id="smRenameInput" class="sm-rename-input" placeholder="新名称" style="display:none">
         <button class="btn btn-outline btn-sm" id="smRenameBtn">✎ 重命名</button>
+        <button class="btn btn-outline btn-sm" id="smExtraBtn" style="display:none">📝 附加信息</button>
         <button class="btn btn-outline btn-sm" id="smDeleteBtn" style="margin-left:auto;color:var(--danger)">删除</button>
       </div>
       <div id="smMetrics"></div>
       <div id="smHistory"></div>
+    </div>
+    <!-- extra 弹窗 -->
+    <div class="disk-dl-overlay" id="smExtraOverlay">
+      <div class="disk-dl-popup" style="width:400px;max-width:90vw">
+        <div class="dlp-title">📝 附加信息</div>
+        <pre id="smExtraContent" style="white-space:pre-wrap;word-break:break-all;font-size:13px;line-height:1.6;max-height:300px;overflow-y:auto;margin:8px 0"></pre>
+        <button class="btn btn-outline" id="smExtraClose" style="width:100%;font-size:12px">关闭</button>
+      </div>
     </div>
   `;
 }
@@ -100,6 +111,20 @@ export function mount(): void {
     } catch (e: any) {
       toast('删除失败：' + e.message, 'error');
     }
+  });
+
+  // extra 弹窗
+  const extraOverlay = $('smExtraOverlay')!;
+  const extraBtn = $('smExtraBtn')!;
+  extraBtn.addEventListener('click', () => {
+    $('smExtraContent')!.textContent = currentHost?.extra || '';
+    extraOverlay.classList.add('show');
+  });
+  $('smExtraClose')!.addEventListener('click', () => {
+    extraOverlay.classList.remove('show');
+  });
+  extraOverlay.addEventListener('click', (e) => {
+    if (e.target === extraOverlay) extraOverlay.classList.remove('show');
   });
 }
 
@@ -155,10 +180,13 @@ async function loadHosts() {
         }
       }
 
+      const extraBadge = host.hasExtra ? '<span class="sm-extra-badge" title="有附加信息">📝</span>' : '';
+
       html += `<div class="sm-host-card" data-id="${esc(host.id)}">
         <div class="sm-card-header">
           <span class="sm-dot ${statusClass}"></span>
           <span class="sm-card-name">${esc(host.name)}</span>
+          ${extraBadge}
           <span class="sm-card-status">${statusText}</span>
         </div>
         <div class="sm-card-meta">${esc(host.hostname)} · ${ago}</div>
@@ -195,6 +223,10 @@ async function showHostDetail(id: string) {
     const badge = $('smStatusBadge')!;
     badge.className = 'sm-status-badge ' + (data.host.online ? 'sm-badge-online' : 'sm-badge-offline');
     badge.textContent = data.host.online ? '在线' : '离线';
+
+    // extra 按钮
+    const extraBtn = $('smExtraBtn')!;
+    extraBtn.style.display = data.host.extra ? '' : 'none';
 
     // 指标
     const metricsEl = $('smMetrics')!;
@@ -284,8 +316,7 @@ function renderHistory(history: HistoryPoint[]) {
   }
 
   // 找出所有数值字段
-  const numericFields = new Map<string, string>(); // key -> label
-  // 从 schema 猜测标签
+  const numericFields = new Map<string, string>();
   const knownLabels: Record<string, string> = {
     cpu_usage: 'CPU 使用率', cpu_temp: 'CPU 温度', cpu_cores: 'CPU 核数',
     mem_usage: '内存使用率', mem_total_mb: '内存总量', mem_used_mb: '内存已用', swap_usage: 'Swap 使用率',
@@ -314,7 +345,7 @@ function renderHistory(history: HistoryPoint[]) {
 
   for (const [field, label] of numericFields) {
     const values = history
-      .map(pt => ({ ts: pt.timestamp, val: parseFloat(pt.data[field]) }))
+      .map(pt => ({ ts: pt.ts, val: parseFloat(pt.data[field]) }))
       .filter(v => !isNaN(v.val));
 
     if (values.length < 2) continue;
@@ -397,9 +428,8 @@ function formatNum(n: number): string {
   return n.toFixed(1);
 }
 
-function timeAgo(iso: string): string {
-  const ms = Date.now() - new Date(iso).getTime();
-  const sec = Math.floor(ms / 1000);
+function timeAgo(ms: number): string {
+  const sec = Math.floor((Date.now() - ms) / 1000);
   if (sec < 60) return sec + ' 秒前';
   const min = Math.floor(sec / 60);
   if (min < 60) return min + ' 分钟前';
