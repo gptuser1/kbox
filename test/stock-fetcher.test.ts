@@ -106,7 +106,9 @@ describe('parseTencentLine', () => {
     expect(parseTencentLine('not a tencent line')).toBeNull();
     expect(parseTencentLine('v_sh600000="1~2~3~4";')).toBeNull(); // < 33 fields
   });
-});// ─── normalizeCode ───
+});
+
+// ─── normalizeCode ───
 
 describe('normalizeCode', () => {
   it('trims whitespace', () => {

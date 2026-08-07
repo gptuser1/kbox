@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { CRON_ACTIONS, NS_CRON_TASKS, normalizeHours } from '../src/tools/cron-tasks';
+import { CRON_ACTIONS, NS_CRON_TASKS, normalizeHours, genId, nowUnix, currentHourCN } from '../src/tools/cron-tasks';
 
 // ─── 常量验证 ───
 
@@ -47,5 +47,47 @@ describe('normalizeHours', () => {
 
   it('filters floats', () => {
     expect(normalizeHours([8.5, 9.1])).toEqual([]);
+  });
+});
+
+// ─── genId ───
+
+describe('genId', () => {
+  it('returns a non-empty string', () => {
+    expect(genId()).toBeTruthy();
+    expect(typeof genId()).toBe('string');
+  });
+
+  it('returns unique values on consecutive calls', () => {
+    const ids = new Set(Array.from({ length: 100 }, () => genId()));
+    expect(ids.size).toBe(100);
+  });
+
+  it('contains only alphanumeric characters', () => {
+    const id = genId();
+    expect(id).toMatch(/^[0-9a-z]+$/);
+  });
+});
+
+// ─── nowUnix ───
+
+describe('nowUnix', () => {
+  it('returns a number close to current time', () => {
+    const before = Date.now();
+    const actual = nowUnix();
+    const after = Date.now();
+    expect(actual).toBeGreaterThanOrEqual(before);
+    expect(actual).toBeLessThanOrEqual(after);
+  });
+});
+
+// ─── currentHourCN ───
+
+describe('currentHourCN', () => {
+  it('returns an integer between 0 and 23', () => {
+    const h = currentHourCN();
+    expect(Number.isInteger(h)).toBe(true);
+    expect(h).toBeGreaterThanOrEqual(0);
+    expect(h).toBeLessThanOrEqual(23);
   });
 });
