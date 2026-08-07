@@ -274,6 +274,14 @@ body:has(.disk-modal-overlay.show) .float-back { display: none !important; }
   overflow: hidden;
   transition: all 0.45s cubic-bezier(0.34, 1.56, 0.64, 1);
   user-select: none;
+  opacity: 0;
+  transform: scale(0.8);
+  pointer-events: none;
+}
+.float-menu-container.show {
+  opacity: 1;
+  transform: scale(1);
+  pointer-events: auto;
 }
 .float-menu-container.open {
   width: 220px; height: 290px; border-radius: 16px;

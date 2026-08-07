@@ -96,6 +96,7 @@ function confirmLogout() {
     setToken('');
     resetVerifiedState();
     mainContent.classList.remove('active');
+    syncFloatMenuVisibility();
     toast('已退出', 'info');
   }
 }
@@ -110,6 +111,7 @@ async function verifyToken() {
       setToken(t);
       setVerifiedState();
       mainContent.classList.add('active');
+      syncFloatMenuVisibility();
       initTools();
     } else if (res.status === 401) {
       setBtnStatus('✗ 无效', 'err');
@@ -422,12 +424,20 @@ function initTools() {
 })();
 
 // ─── 入口 ───
+function syncFloatMenuVisibility() {
+  const fmc = $('floatMenuBtn');
+  if (!fmc) return;
+  if (mainContent.classList.contains('active')) fmc.classList.add('show');
+  else fmc.classList.remove('show');
+}
+
 initToast($('toastContainer'));
 setUnauthorizedHandler(() => {
   localStorage.removeItem('kbox_token');
   setToken('');
   resetVerifiedState();
   mainContent.classList.remove('active');
+  syncFloatMenuVisibility();
   toast('令牌已失效，请重新验证', 'error');
 });
 initTheme();
@@ -452,6 +462,7 @@ if (savedToken) {
       if (res.ok) {
         setVerifiedState();
         mainContent.classList.add('active');
+        syncFloatMenuVisibility();
         initTools(); // 内部 loadHomeLayout 完成后 hideAppLoader
       } else {
         resetVerifiedState();
