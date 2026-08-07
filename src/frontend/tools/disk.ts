@@ -134,13 +134,16 @@ export function mount(): void {
         return;
       }
       fileList.innerHTML =
-        '<div class="tbl-wrap"><div class="tbl-scroll">' +
+'<div class="tbl-wrap"><div class="tbl-scroll">' +
         '<table class="tbl-table">' +
-        '<thead><tr><th>文件名</th><th class="tbl-th-actions">操作</th></tr></thead>' +
+        '<thead><tr><th>文件名</th><th class="tbl-th-type">类型</th><th class="tbl-th-size">大小</th><th class="tbl-th-time">上传时间</th><th class="tbl-th-actions">操作</th></tr></thead>' +
         '<tbody>' +
         files.map((f: any) =>
           '<tr>' +
           '<td><span class="disk-file-link" onclick="showFileDetail(' + f.id + ')" title="' + esc(f.name) + '">' + esc(f.name) + '</span></td>' +
+          '<td class="tbl-cell-type">' + esc(f.mime_type || '未知') + '</td>' +
+          '<td class="tbl-cell-size">' + formatSize(f.size) + '</td>' +
+          '<td class="tbl-cell-time">' + formatDate(f.created_at) + '</td>' +
           '<td class="tbl-td-actions"><div class="tbl-row-actions">' +
           '<button class="dl-btn" onclick="event.stopPropagation();openDlPopup(' + f.id + ')">下载</button>' +
           '<button class="dl-btn dl-del" onclick="deleteFile(' + f.id + ',\'' + esc(f.name) + '\')">删除</button>' +

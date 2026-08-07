@@ -441,6 +441,12 @@ body:has(.modal-overlay.show) .float-back { display: none !important; }
 .tbl-row-actions .dl-btn { padding: 4px 12px; border: 1px solid var(--border); border-radius: 6px; background: var(--card); color: var(--text-secondary); cursor: pointer; font-size: 12px; transition: all 0.15s; white-space: nowrap; }
 .tbl-row-actions .dl-btn:hover { border-color: var(--primary); color: var(--primary); }
 .tbl-row-actions .dl-btn.dl-del:hover { border-color: var(--danger); color: var(--danger); }
+.tbl-th-type { width: 110px; }
+.tbl-th-size { width: 90px; }
+.tbl-th-time { width: 150px; }
+.tbl-cell-type { font-size: 12px; color: var(--text-muted); }
+.tbl-cell-size { font-family: var(--font-mono, monospace); font-size: 12px; white-space: nowrap; }
+.tbl-cell-time { font-size: 12px; color: var(--text-muted); white-space: nowrap; }
 
 .disk-file-link { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--primary); cursor: pointer; font-weight: 500; transition: opacity 0.15s; }
 .disk-file-link:hover { opacity: 0.8; text-decoration: underline; }
