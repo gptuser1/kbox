@@ -52,10 +52,9 @@ export function render(): string {
     <div id="smDetail" style="display:none">
       <div class="sm-detail-bar">
         <button class="btn btn-outline btn-sm" id="smBackBtn">← 返回</button>
-        <span id="smDetailTitle" class="sm-detail-title"></span>
+        <span id="smDetailTitle" class="sm-detail-title sm-clickable-name"></span>
         <span id="smStatusBadge" class="sm-status-badge"></span>
         <input type="text" id="smRenameInput" class="sm-rename-input" placeholder="新名称" style="display:none">
-        <button class="btn btn-outline btn-sm" id="smRenameBtn">✎ 重命名</button>
         <button class="btn btn-outline btn-sm" id="smExtraBtn" style="display:none">📝 附加信息</button>
         <button class="btn btn-outline btn-sm" id="smDeleteBtn" style="margin-left:auto;color:var(--danger)">删除</button>
       </div>
@@ -83,9 +82,9 @@ export function mount(): void {
     loadHosts();
   });
 
-  const renameBtn = $('smRenameBtn');
+  const titleEl = $('smDetailTitle');
   const renameInput = $('smRenameInput') as HTMLInputElement;
-  renameBtn?.addEventListener('click', () => {
+  titleEl?.addEventListener('click', () => {
     if (renameInput!.style.display === 'none') {
       renameInput!.style.display = '';
       renameInput!.value = currentHost?.name || '';
@@ -96,6 +95,7 @@ export function mount(): void {
   });
   renameInput?.addEventListener('keydown', (e) => {
     if (e.key === 'Enter') doRename(renameInput.value.trim());
+    if (e.key === 'Escape') renameInput.style.display = 'none';
   });
 
   $('smDeleteBtn')?.addEventListener('click', async () => {

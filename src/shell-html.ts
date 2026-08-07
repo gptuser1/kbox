@@ -488,6 +488,8 @@ body:has(.disk-modal-overlay.show) .float-back { display: none !important; }
 /* 详情页 */
 .sm-detail-bar { display: flex; align-items: center; gap: 10px; margin-bottom: 16px; flex-wrap: wrap; }
 .sm-detail-title { font-size: 18px; font-weight: 600; }
+.sm-clickable-name { cursor: pointer; border-bottom: 2px dotted var(--text-muted); transition: border-color 0.15s; }
+.sm-clickable-name:hover { border-color: var(--primary); }
 .sm-status-badge { font-size: 11px; padding: 2px 10px; border-radius: 12px; font-weight: 600; }
 .sm-badge-online { background: var(--success); color: #fff; }
 .sm-badge-offline { background: var(--text-muted); color: #fff; }
