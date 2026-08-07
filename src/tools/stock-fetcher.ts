@@ -148,7 +148,7 @@ async function fetchWithTimeout(url: string, timeoutMs: number = 8000, headers?:
 }
 
 // 解析腾讯行情单行数据
-function parseTencentLine(line: string): PriceData | null {
+export function parseTencentLine(line: string): PriceData | null {
   const match = line.match(/^v_\w+="(.*)";$/);
   if (!match) return null;
 

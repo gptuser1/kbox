@@ -651,7 +651,7 @@ interface WorkflowInput {
   options?: string[];
 }
 
-function parseWorkflowInputs(yamlContent: string): WorkflowInput[] {
+export function parseWorkflowInputs(yamlContent: string): WorkflowInput[] {
   const lines = yamlContent.split('\n');
   let i = 0;
 
