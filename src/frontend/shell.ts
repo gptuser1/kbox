@@ -332,6 +332,7 @@ async function showTool(id: string) {
   toolGrid.style.display = 'none';
   const hgw = $('homeGridWrap'); if (hgw) hgw.style.display = 'none';
   toolViews.innerHTML = '';
+  window.scrollTo(0, 0);
   const view = document.createElement('div');
   view.className = 'tool-view active';
   view.id = 'view-' + id;
@@ -371,7 +372,6 @@ async function showTool(id: string) {
     toast('工具初始化失败：' + errMsg(e), 'error');
     // mount 失败不抛出：壳与其他工具继续可用
   }
-  window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
 function backToGrid() {
@@ -382,7 +382,7 @@ function backToGrid() {
   $('floatMenuBtn')?.classList.remove('open');
   // 回到首页：恢复菜单按钮显示
   const fmb = $('floatMenuBtn'); if (fmb) fmb.style.display = '';
-  window.scrollTo({ top: 0, behavior: 'smooth' });
+  window.scrollTo(0, 0);
 }
 
 // ─── 首屏加载层 ───
