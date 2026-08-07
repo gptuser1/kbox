@@ -60,7 +60,8 @@ async function loadCronTasks(): Promise<void> {
       list.innerHTML = '<div class="empty">暂无任务</div>';
       return;
     }
-    let html = '<table class="data-table"><thead><tr><th>名称</th><th>Action</th><th>触发小时</th><th>启用</th><th>上次执行</th><th>状态</th><th>操作</th></tr></thead><tbody>';
+    let html = '<div class="tbl-wrap"><div class="tbl-scroll"><table class="tbl-table">' +
+      '<thead><tr><th>名称</th><th>Action</th><th>触发小时</th><th>启用</th><th>上次执行</th><th>状态</th><th class="tbl-th-actions">操作</th></tr></thead><tbody>';
     for (const t of data.tasks) {
       const statusBadge = t.lastStatus === 'ok' ? '<span class="badge badge-ok">OK</span>'
         : t.lastStatus === 'error' ? '<span class="badge badge-err">ERR</span>'
@@ -71,13 +72,13 @@ async function loadCronTasks(): Promise<void> {
       const hoursText = hours.length === 0 ? '每小时' : hours.map((h: number) => String(h).padStart(2, '0')).join(',');
       const tid = esc(t.id);
       const actionLabel = t.action ? esc(t.action) : '-';
-      html += '<tr' + errTip + '><td>' + esc(t.name) + '</td><td><code>' + actionLabel + '</code></td><td>' + esc(hoursText) + '</td><td>' + (t.enabled ? '✓' : '✗') + '</td><td>' + esc(lastRun) + '</td><td>' + statusBadge + '</td><td class="row-actions">' +
+      html += '<tr' + errTip + '><td>' + esc(t.name) + '</td><td><code>' + actionLabel + '</code></td><td>' + esc(hoursText) + '</td><td>' + (t.enabled ? '✓' : '✗') + '</td><td>' + esc(lastRun) + '</td><td>' + statusBadge + '</td><td class="tbl-td-actions"><div class="tbl-row-actions">' +
         '<button class="btn btn-outline btn-sm" data-act="run" data-id="' + tid + '">运行</button>' +
         '<button class="btn btn-outline btn-sm" data-act="edit" data-id="' + tid + '">编辑</button>' +
         '<button class="btn btn-sm btn-danger" data-act="delete" data-id="' + tid + '">删除</button>' +
-        '</td></tr>';
+        '</div></td></tr>';
     }
-    html += '</tbody></table>';
+    html += '</tbody></table></div></div>';
     list.innerHTML = html;
   } catch (e: any) {
     if (e.message === 'UNAUTHORIZED') return;

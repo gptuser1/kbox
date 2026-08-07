@@ -134,18 +134,21 @@ export function mount(): void {
         return;
       }
       fileList.innerHTML =
-        '<table class="file-table">' +
+        '<div class="tbl-wrap"><div class="tbl-scroll">' +
+        '<table class="tbl-table">' +
+        '<thead><tr><th>文件名</th><th class="tbl-th-actions">操作</th></tr></thead>' +
         '<tbody>' +
         files.map((f: any) =>
           '<tr>' +
-          '<td class="ftd-name"><span class="disk-file-link" onclick="showFileDetail(' + f.id + ')" title="' + esc(f.name) + '">' + esc(f.name) + '</span></td>' +
-          '<td class="ftd-actions">' +
+          '<td><span class="disk-file-link" onclick="showFileDetail(' + f.id + ')" title="' + esc(f.name) + '">' + esc(f.name) + '</span></td>' +
+          '<td class="tbl-td-actions"><div class="tbl-row-actions">' +
           '<button class="dl-btn" onclick="event.stopPropagation();openDlPopup(' + f.id + ')">下载</button>' +
-          ' <button class="dl-btn dl-del" onclick="deleteFile(' + f.id + ',\'' + esc(f.name) + '\')">删除</button>' +
-          '</td>' +
+          '<button class="dl-btn dl-del" onclick="deleteFile(' + f.id + ',\'' + esc(f.name) + '\')">删除</button>' +
+          '</div></td>' +
           '</tr>'
         ).join('') +
-        '</tbody></table>';
+        '</tbody></table>' +
+        '</div></div>';
     } catch (e: any) {
       if (e.message === 'UNAUTHORIZED') return;
       fileList.innerHTML = '<div class="empty" style="padding:20px 0;color:var(--danger)">加载失败：' + esc(e.message) + '</div>';

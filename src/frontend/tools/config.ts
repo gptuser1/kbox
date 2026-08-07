@@ -8,9 +8,9 @@ export function render(): string {
 <h2>⚙️ 配置管理</h2>
 
 <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:12px;flex-wrap:wrap">
-  <div class="db-tabs" id="configTabs">
-    <button class="db-tab active" data-ctab="global">全局配置</button>
-    <button class="db-tab" data-ctab="tools">工具级</button>
+  <div class="tabs" id="configTabs">
+    <button class="tab active" data-ctab="global">全局配置</button>
+    <button class="tab" data-ctab="tools">工具级</button>
   </div>
   <button class="btn btn-outline btn-sm" id="configSortBtn">调整顺序</button>
 </div>
@@ -102,10 +102,10 @@ export function mount(): void {
   }
 
   if (tabsEl) {
-    tabsEl.querySelectorAll('.db-tab').forEach((btn: Element) => {
+    tabsEl.querySelectorAll('.tab').forEach((btn: Element) => {
       btn.addEventListener('click', () => {
         const tab = btn.getAttribute('data-ctab');
-        tabsEl.querySelectorAll('.db-tab').forEach((b: Element) => b.classList.toggle('active', b === btn));
+        tabsEl.querySelectorAll('.tab').forEach((b: Element) => b.classList.toggle('active', b === btn));
         const isGlobal = tab === 'global';
         if (globalPane) globalPane.style.display = isGlobal ? '' : 'none';
         if (toolsPane) toolsPane.style.display = isGlobal ? 'none' : '';

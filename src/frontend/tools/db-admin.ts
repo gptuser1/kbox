@@ -26,11 +26,11 @@ export function render(): string {
   <div class="db-main" id="dbMain">
     <div class="db-empty-hint" id="dbMainEmpty">点击左侧表名开始浏览，或切换到 SQL 命令 tab 执行任意查询</div>
     <div id="dbMainContent" style="display:none">
-      <div class="db-tabs" id="dbTabs">
-        <button class="db-tab active" data-tab="data">选择数据</button>
-        <button class="db-tab" data-tab="schema">表结构</button>
-        <button class="db-tab" data-tab="sql">SQL 命令</button>
-        <button class="db-tab" data-tab="insert">新建项</button>
+      <div class="tabs" id="dbTabs">
+        <button class="tab active" data-tab="data">选择数据</button>
+        <button class="tab" data-tab="schema">表结构</button>
+        <button class="tab" data-tab="sql">SQL 命令</button>
+        <button class="tab" data-tab="insert">新建项</button>
       </div>
 
       <!-- 选择数据 -->
@@ -41,19 +41,19 @@ export function render(): string {
           <button class="btn btn-outline btn-sm" id="dbFilterBtn">过滤</button>
           <button class="btn btn-outline btn-sm" id="dbFilterClearBtn">清除</button>
         </div>
-        <div class="db-results-wrap">
+        <div class="tbl-wrap">
           <div class="db-results-head">
             <span id="dbDataTitle">数据</span>
             <span id="dbDataMeta"></span>
           </div>
-          <div class="db-results-scroll" id="dbDataScroll"></div>
+          <div class="tbl-scroll" id="dbDataScroll"></div>
           <div class="db-pagination" id="dbPagination"></div>
         </div>
       </div>
 
       <!-- 表结构 -->
       <div class="db-panel" id="dbPanel-schema">
-        <div class="db-results-wrap">
+        <div class="tbl-wrap">
           <div class="db-results-head">
             <span id="dbSchemaTitle">字段</span>
             <span id="dbSchemaMeta"></span>
@@ -78,12 +78,12 @@ export function render(): string {
           <span class="db-meta" id="dbSqlMeta"></span>
         </div>
         <textarea class="db-editor" id="dbSqlEditor" placeholder="-- Ctrl/Cmd + Enter 执行&#10;SELECT * FROM 表名 LIMIT 10;" spellcheck="false"></textarea>
-        <div class="db-results-wrap" id="dbSqlResultsWrap" style="display:none;margin-top:12px">
+        <div class="tbl-wrap" id="dbSqlResultsWrap" style="display:none;margin-top:12px">
           <div class="db-results-head">
             <span id="dbSqlResultsTitle">结果</span>
             <span id="dbSqlResultsMeta"></span>
           </div>
-          <div class="db-results-scroll" id="dbSqlResultsScroll"></div>
+          <div class="tbl-scroll" id="dbSqlResultsScroll"></div>
         </div>
       </div>
 
@@ -363,7 +363,7 @@ export function mount(): void {
 
   function switchTab(tab: string) {
     activeTab = tab;
-    tabsEl.querySelectorAll('.db-tab').forEach((b: any) => {
+    tabsEl.querySelectorAll('.tab').forEach((b: any) => {
       b.classList.toggle('active', b.getAttribute('data-tab') === tab);
     });
     ['data', 'schema', 'sql', 'insert'].forEach(t => {
@@ -373,7 +373,7 @@ export function mount(): void {
     if (tab === 'insert' && activeTable && !insertForm.innerHTML) loadInsertForm();
   }
 
-  tabsEl.querySelectorAll('.db-tab').forEach((b: any) => {
+  tabsEl.querySelectorAll('.tab').forEach((b: any) => {
     b.onclick = () => switchTab(b.getAttribute('data-tab'));
   });
 
@@ -492,14 +492,14 @@ export function mount(): void {
         dataScroll.innerHTML = '<div class="db-empty-hint">无数据</div>';
       } else {
         const pkCols = (schemaCache?.columns || []).filter((c: any) => c.pk).map((c: any) => c.name);
-        dataScroll.innerHTML = '<table class="db-results-table">' +
+        dataScroll.innerHTML = '<table class="tbl-table">' +
           '<thead><tr>' +
             cols.map((c: string) => {
               const sorted = dataState.sort === c;
               const cls = sorted ? 'db-th-sort' + (dataState.order === 'DESC' ? ' desc' : '') : '';
               return '<th class="' + cls + '" data-col="' + escapeAttr(c) + '">' + esc(c) + '</th>';
             }).join('') +
-            '<th class="db-th-actions">操作</th>' +
+            '<th class="tbl-th-actions">操作</th>' +
           '</tr></thead>' +
           '<tbody>' + rows.map((r: any) => {
             const where: any = {};
@@ -511,7 +511,7 @@ export function mount(): void {
             const whereStr = escapeAttr(JSON.stringify(where));
             return '<tr>' +
               cols.map((c: string) => renderCell(r[c])).join('') +
-              '<td class="db-td-actions"><div class="db-row-actions">' +
+              '<td class="tbl-td-actions"><div class="tbl-row-actions">' +
                 '<a data-action="edit" data-where="' + whereStr + '">编辑</a>' +
                 '<a class="db-del" data-action="del" data-where="' + whereStr + '">删除</a>' +
               '</div></td>' +
@@ -531,7 +531,7 @@ export function mount(): void {
             loadData();
           };
         });
-        dataScroll.querySelectorAll('.db-row-actions a').forEach((a: any) => {
+        dataScroll.querySelectorAll('.tbl-row-actions a').forEach((a: any) => {
           a.onclick = (ev: Event) => {
             ev.preventDefault();
             const action = a.getAttribute('data-action');
@@ -692,7 +692,7 @@ export function mount(): void {
         const cols = Object.keys(results[0]);
         sqlResultsTitle.textContent = '结果（' + results.length + ' 行）';
         sqlResultsMeta.textContent = '耗时 ' + duration + (read != null ? ' · 读 ' + read + ' 行' : '');
-        sqlResultsScroll.innerHTML = '<table class="db-results-table">' +
+        sqlResultsScroll.innerHTML = '<table class="tbl-table">' +
           '<thead><tr>' + cols.map(c => '<th>' + esc(c) + '</th>').join('') + '</tr></thead>' +
           '<tbody>' + results.map((r: any) => '<tr>' + cols.map(c => renderCell(r[c])).join('') + '</tr>').join('') + '</tbody>' +
           '</table>';

@@ -30,9 +30,9 @@ export function mount(id?: string): void {
 function renderJsTool(): string {
   return `
     <h2>📜 JS 运行工具</h2>
-    <div class="db-tabs" id="jsTabs" style="margin-bottom:16px">
-      <button class="db-tab active" data-jstab="scripts">脚本</button>
-      <button class="db-tab" data-jstab="playground">临时运行</button>
+    <div class="tabs" id="jsTabs" style="margin-bottom:16px">
+      <button class="tab active" data-jstab="scripts">脚本</button>
+      <button class="tab" data-jstab="playground">临时运行</button>
     </div>
     <div id="jsScriptsPane">
       <div id="jsScriptsList"></div>
@@ -94,10 +94,10 @@ function mountJsTool(): void {
   const scriptsPane = $('jsScriptsPane');
   const playgroundPane = $('jsPlaygroundPane');
   if (tabsEl) {
-    tabsEl.querySelectorAll('.db-tab').forEach((btn: Element) => {
+    tabsEl.querySelectorAll('.tab').forEach((btn: Element) => {
       btn.addEventListener('click', () => {
         const tab = btn.getAttribute('data-jstab');
-        tabsEl.querySelectorAll('.db-tab').forEach((b: Element) => b.classList.toggle('active', b === btn));
+        tabsEl.querySelectorAll('.tab').forEach((b: Element) => b.classList.toggle('active', b === btn));
         const isScripts = tab === 'scripts';
         if (scriptsPane) scriptsPane.style.display = isScripts ? '' : 'none';
         if (playgroundPane) playgroundPane.style.display = isScripts ? 'none' : '';
@@ -140,20 +140,21 @@ async function loadJsScripts(): Promise<void> {
       list.innerHTML = '<div class="empty">暂无脚本</div>';
       return;
     }
-    let html = '<table class="data-table"><thead><tr><th>名称</th><th>已发布</th><th>上次运行</th><th>操作</th></tr></thead><tbody>';
+    let html = '<div class="tbl-wrap"><div class="tbl-scroll"><table class="tbl-table">' +
+      '<thead><tr><th>名称</th><th>已发布</th><th>上次运行</th><th class="tbl-th-actions">操作</th></tr></thead><tbody>';
     for (const s of data.scripts) {
       const lastRun = s.last_run ? new Date(s.last_run.at).toLocaleString('zh-CN') + ' (' + (s.last_run.status === 'ok' ? 'OK' : 'ERR') + ')' : '从未';
       const sid = esc(s.id);
       const pubBtn = s.published
         ? '<button class="btn btn-outline btn-sm" data-act="publish" data-id="' + sid + '" data-pub="0">取消发布</button>'
         : '<button class="btn btn-outline btn-sm" data-act="publish" data-id="' + sid + '" data-pub="1">发布</button>';
-      html += '<tr><td>' + esc(s.icon) + ' ' + esc(s.name) + '</td><td>' + (s.published ? '✓' : '✗') + '</td><td>' + esc(lastRun) + '</td><td class="row-actions">' +
+      html += '<tr><td>' + esc(s.icon) + ' ' + esc(s.name) + '</td><td>' + (s.published ? '✓' : '✗') + '</td><td>' + esc(lastRun) + '</td><td class="tbl-td-actions"><div class="tbl-row-actions">' +
         '<button class="btn btn-outline btn-sm" data-act="run" data-id="' + sid + '">运行</button>' + pubBtn +
         '<button class="btn btn-outline btn-sm" data-act="edit" data-id="' + sid + '">编辑</button>' +
         '<button class="btn btn-sm btn-danger" data-act="delete" data-id="' + sid + '">删除</button>' +
-        '</td></tr>';
+        '</div></td></tr>';
     }
-    html += '</tbody></table>';
+    html += '</tbody></table></div></div>';
     list.innerHTML = html;
   } catch (e: any) {
     if (e.message === 'UNAUTHORIZED') return;
