@@ -168,10 +168,10 @@ export function mount(): void {
       const upDisabled = i === 0 ? ' disabled' : '';
       const downDisabled = i === list.length - 1 ? ' disabled' : '';
       const actions = sortMode
-        ? '<button class="icon-btn"' + upDisabled + ' onclick="moveConfigItem(\\\'global\\\',-1,\\\'' + esc(cfg.key) + '\\\')">↑</button>' +
-          '<button class="icon-btn"' + downDisabled + ' onclick="moveConfigItem(\\\'global\\\',1,\\\'' + esc(cfg.key) + '\\\')">↓</button>'
-        : '<button class="btn btn-outline btn-sm" onclick="editConfig(\\\'app\\\',null,\\\'' + esc(cfg.key) + '\\\')">编辑</button>' +
-          (cfg.hasValue ? '<button class="btn btn-outline btn-sm" style="color:var(--danger)" onclick="clearConfig(\\\'app\\\',null,\\\'' + esc(cfg.key) + '\\\')">清除</button>' : '');
+        ? '<button class="icon-btn"' + upDisabled + ' onclick="moveConfigItem(\'global\',-1,\'' + esc(cfg.key) + '\')">↑</button>' +
+          '<button class="icon-btn"' + downDisabled + ' onclick="moveConfigItem(\'global\',1,\'' + esc(cfg.key) + '\')">↓</button>'
+        : '<button class="btn btn-outline btn-sm" onclick="editConfig(\'app\',null,\'' + esc(cfg.key) + '\')">编辑</button>' +
+          (cfg.hasValue ? '<button class="btn btn-outline btn-sm" style="color:var(--danger)" onclick="clearConfig(\'app\',null,\'' + esc(cfg.key) + '\')">清除</button>' : '');
       return '<div class="file-item">' +
         '<div class="file-info"><div class="file-name">' + esc(cfg.key) + tag + '</div>' +
         '<div class="file-meta">' + esc(cfg.desc) + '</div></div>' +
@@ -194,8 +194,8 @@ export function mount(): void {
       if (overrides.length) {
         chips = overrides.map((o: any) => {
           const valText = o.sensitive ? '●' : (o.value ? esc(o.value) : '●');
-          return '<span class="saved-config" onclick="editConfig(\\\'tool\\\',\\\'' + t.id + '\\\',\\\'' + esc(o.key) + '\\\')">' + esc(o.key) + ': ' + valText +
-            '<span class="del" onclick="event.stopPropagation();clearConfig(\\\'tool\\\',\\\'' + t.id + '\\\',\\\'' + esc(o.key) + '\\\')">✕</span></span>';
+          return '<span class="saved-config" onclick="editConfig(\'tool\',\'' + t.id + '\',\'' + esc(o.key) + '\')">' + esc(o.key) + ': ' + valText +
+            '<span class="del" onclick="event.stopPropagation();clearConfig(\'tool\',\'' + t.id + '\',\'' + esc(o.key) + '\')">✕</span></span>';
         }).join('');
       }
       const existing = new Set(overrides.map((o: any) => o.key));
@@ -203,9 +203,9 @@ export function mount(): void {
       const upDisabled = i === 0 ? ' disabled' : '';
       const downDisabled = i === list.length - 1 ? ' disabled' : '';
       const actions = sortMode
-        ? '<button class="icon-btn"' + upDisabled + ' onclick="moveConfigItem(\\\'tool\\\',-1,\\\'' + esc(t.id) + '\\\')">↑</button>' +
-          '<button class="icon-btn"' + downDisabled + ' onclick="moveConfigItem(\\\'tool\\\',1,\\\'' + esc(t.id) + '\\\')">↓</button>'
-        : (available.length ? '<button class="btn btn-outline btn-sm" onclick="addToolOverride(\\\'' + t.id + '\\\')">+ 添加</button>' : '');
+        ? '<button class="icon-btn"' + upDisabled + ' onclick="moveConfigItem(\'tool\',-1,\'' + esc(t.id) + '\')">↑</button>' +
+          '<button class="icon-btn"' + downDisabled + ' onclick="moveConfigItem(\'tool\',1,\'' + esc(t.id) + '\')">↓</button>'
+        : (available.length ? '<button class="btn btn-outline btn-sm" onclick="addToolOverride(\'' + t.id + '\')">+ 添加</button>' : '');
       return '<div class="file-item" style="display:block;padding:10px 14px">' +
         '<div style="display:flex;align-items:center;gap:8px">' +
         '<div style="font-weight:600;font-size:14px;flex:1">' + esc(t.name) + '</div>' +
@@ -321,7 +321,7 @@ export function mount(): void {
     pickBody.innerHTML = available.map((f: any) => {
       const sensitiveTag = f.sensitive ? ' <span class="badge badge-err">密</span>' : '';
       const defaultTag = f.default ? ' <span style="color:var(--text-muted);font-size:11px">默认 ' + esc(f.default) + '</span>' : '';
-      return '<div class="file-item" style="padding:10px 14px;cursor:pointer" onclick="pickOverride(\\\'' + esc(tool) + '\\\',\\\'' + esc(f.key) + '\\\')">' +
+      return '<div class="file-item" style="padding:10px 14px;cursor:pointer" onclick="pickOverride(\'' + esc(tool) + '\',\'' + esc(f.key) + '\')">' +
         '<div class="file-info"><div class="file-name">' + esc(f.key) + sensitiveTag + '</div>' +
         '<div class="file-meta">' + esc(f.desc) + ' ' + defaultTag + '</div></div></div>';
     }).join('');
