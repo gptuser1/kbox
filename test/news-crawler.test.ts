@@ -19,7 +19,7 @@ describe('decodeHTMLEntities', () => {
   });
 
   it('decodes punctuation-style named entities', () => {
-    expect(decodeHTMLEntities('&nbsp;&ndash;&mdash;')).toBe(' \u2013\u2014');
+    expect(decodeHTMLEntities('&nbsp;&ndash;&mdash;')).toBe('\u00A0\u2013\u2014');
     expect(decodeHTMLEntities('&lsquo;&rsquo;')).toBe('\u2018\u2019');
     expect(decodeHTMLEntities('&ldquo;&rdquo;&hellip;')).toBe('\u201C\u201D\u2026');
     expect(decodeHTMLEntities('&laquo;&raquo;')).toBe('\u00AB\u00BB');

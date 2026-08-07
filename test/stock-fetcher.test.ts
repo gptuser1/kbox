@@ -42,8 +42,13 @@ describe('getMarketStatus (A)', () => {
     expect(getMarketStatus('A', now).status).toBe('open');
   });
 
-  it('returns closed at exactly session end (15:00)', () => {
+  it('returns open at exactly session end (15:00, closed interval)', () => {
     const now = new Date('2026-08-03T07:00:00Z'); // 15:00 CST Mon
+    expect(getMarketStatus('A', now).status).toBe('open');
+  });
+
+  it('returns closed just after session end (15:01)', () => {
+    const now = new Date('2026-08-03T07:01:00Z'); // 15:01 CST Mon
     expect(getMarketStatus('A', now).status).toBe('closed');
   });
 });

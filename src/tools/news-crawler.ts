@@ -40,10 +40,10 @@ export function decodeHTMLEntities(s: string): string {
   return s.replace(/&[#\w]+;/g, (match) => {
     if (map[match]) return map[match]
     if (match.startsWith('&#x')) {
-      return String.fromCharCode(parseInt(match.slice(3, -1), 16))
+      return String.fromCodePoint(parseInt(match.slice(3, -1), 16))
     }
     if (match.startsWith('&#')) {
-      return String.fromCharCode(parseInt(match.slice(2, -1), 10))
+      return String.fromCodePoint(parseInt(match.slice(2, -1), 10))
     }
     return match
   })

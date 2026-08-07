@@ -11,7 +11,7 @@ interface EncryptedPayload {
 }
 
 export function isEncrypted(value: any): boolean {
-  return value && typeof value === 'object' && value.encrypted === true
+  return !!value && typeof value === 'object' && value.encrypted === true
     && typeof value.salt === 'string' && typeof value.iv === 'string' && typeof value.data === 'string';
 }
 

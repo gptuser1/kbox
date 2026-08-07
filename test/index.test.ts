@@ -99,7 +99,7 @@ on:
     expect(parseWorkflowInputs(yaml)).toEqual([
       {
         name: 'region',
-        description: 'region',
+        description: 'Region',
         required: true,
         default: '',
         type: 'choice',
