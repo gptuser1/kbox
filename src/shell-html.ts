@@ -399,16 +399,15 @@ body:has(.disk-modal-overlay.show) .float-back { display: none !important; }
 .input-desc { font-size: 12px; color: var(--text-muted); margin-top: 3px; }
 .input-required { color: var(--danger); }
 
-/* ─── 云盘 ─── */
-/* 紧凑统计信息 */
-.disk-stats { display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 12px; }
-.disk-stat-item { display: flex; flex-direction: column; min-width: 70px; }
-.ds-label { font-size: 11px; color: var(--text-muted); line-height: 1.3; }
-.ds-val { font-size: 15px; font-weight: 600; line-height: 1.4; }
-.ds-sub { font-size: 10px; color: var(--text-muted); margin-left: 2px; }
-.ds-bar { height: 3px; background: var(--input-bg); border-radius: 2px; margin-top: 4px; overflow: hidden; width: 100px; }
-.ds-fill { height: 100%; background: var(--primary); transition: width 0.3s; }
-.ds-fill.warn { background: var(--danger); }
+/* ─── 工具标题行（标题与统计信息同行） ─── */
+.tool-title-row { display: flex; align-items: center; gap: 16px; margin-bottom: 4px; flex-wrap: wrap; }
+.tool-title-row h2 { margin: 0; }
+.ttr-stats { display: flex; align-items: center; gap: 8px; margin-left: auto; font-size: 13px; color: var(--text-secondary); }
+.ttr-storage { white-space: nowrap; font-size: 12px; }
+.ttr-refresh { white-space: nowrap; font-size: 12px; }
+.ttr-bar { width: 60px; height: 6px; background: var(--input-bg); border-radius: 3px; overflow: hidden; }
+.ttr-fill { height: 100%; background: var(--primary); border-radius: 3px; transition: width 0.3s; }
+.ttr-fill.warn { background: var(--danger); }
 
 .disk-upload { background: var(--card); border-radius: 12px; padding: 14px 16px; box-shadow: var(--shadow); }
 .disk-upload.dragover { border: 2px dashed var(--primary); }

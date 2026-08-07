@@ -28,8 +28,10 @@ function formatSize(bytes: number): string {
 
 export function render(): string {
   return `
-    <h2>☁️ 微型云盘</h2>
-    <div class="disk-stats" id="diskStats"></div>
+    <div class="tool-title-row">
+      <h2>☁️ 微型云盘</h2>
+      <div class="ttr-stats" id="diskStats"></div>
+    </div>
     <div class="section-title">文件列表</div>
     <div id="diskFileList"></div>
     <div class="section-title" style="margin-top:20px">上传文件</div>
@@ -112,12 +114,11 @@ export function mount(): void {
       const s = await api('/api/tools/disk/stats');
       const usagePct = s.max_db_size > 0 ? Math.min(100, (s.db_size / s.max_db_size) * 100) : 0;
       statsBox.innerHTML =
-        '<div class="disk-stat-item"><span class="ds-label">文件数</span><span class="ds-val">' + s.file_count + '</span></div>' +
-        '<div class="disk-stat-item"><span class="ds-label">大小</span><span class="ds-val">' + formatSize(s.total_size) + '</span></div>' +
-        '<div class="disk-stat-item"><span class="ds-label">存储</span><span class="ds-val">' + formatSize(s.db_size) + '</span><span class="ds-sub">/ ' + formatSize(s.max_db_size) + '</span><div class="ds-bar"><div class="ds-fill ' + (usagePct > 80 ? 'warn' : '') + '" style="width:' + usagePct + '%"></div></div></div>';
+        '<span class="ttr-storage">存储 ' + formatSize(s.db_size) + ' / ' + formatSize(s.max_db_size) + '</span>' +
+        '<div class="ttr-bar"><div class="ttr-fill' + (usagePct > 80 ? ' warn' : '') + '" style="width:' + usagePct + '%"></div></div>';
     } catch (e: any) {
       if (e.message === 'UNAUTHORIZED') return;
-      statsBox.innerHTML = '<div class="empty">统计加载失败</div>';
+      statsBox.innerHTML = '';
     }
   }
 
@@ -134,9 +135,7 @@ export function mount(): void {
       }
       fileList.innerHTML =
         '<table class="file-table">' +
-        '<thead><tr>' +
-        '<th class="fth-name">文件名</th><th class="fth-actions"></th>' +
-        '</tr></thead><tbody>' +
+        '<tbody>' +
         files.map((f: any) =>
           '<tr>' +
           '<td class="ftd-name"><span class="disk-file-link" onclick="showFileDetail(' + f.id + ')" title="' + esc(f.name) + '">' + esc(f.name) + '</span></td>' +

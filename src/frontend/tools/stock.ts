@@ -5,11 +5,9 @@ import { $, esc, toast, api } from '../shared.js';
 
 export function render(): string {
   return `
-<h2>💰 基金估值</h2>
-
-<div class="disk-stats" id="stockStats">
-  <div class="disk-stat-card"><div class="stat-label">基金数</div><div class="stat-value" id="stockCount">-</div></div>
-  <div class="disk-stat-card"><div class="stat-label">上次刷新</div><div class="stat-value" id="stockLastTime" style="font-size:14px">-</div></div>
+<div class="tool-title-row">
+  <h2>💰 基金估值</h2>
+  <div class="ttr-stats" id="stockStats"><span class="ttr-refresh">上次刷新: <span id="stockLastTime">-</span></span></div>
 </div>
 
 <div style="display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap">
@@ -117,7 +115,6 @@ export function mount(): void {
     try {
       const data = await api('/api/tools/stock/funds');
       fundsCache = data.results || [];
-      $('stockCount').textContent = String(fundsCache.length);
       $('stockLastTime').textContent = fundsCache[0]?.estimated_time || '-';
       if (!fundsCache.length) {
         list.innerHTML = '<div class="empty">暂无基金，点击「添加基金」开始</div>';
