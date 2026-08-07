@@ -9,3 +9,7 @@ not_found_handling = "none"
 
 [triggers]
 crons = ["5 * * * *"]
+
+[observability.logs]
+enabled = true
+invocation_logs = true
