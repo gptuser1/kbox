@@ -19,4 +19,5 @@ export const TOOL_REGISTRY: ToolMeta[] = [
   { id: 'js',       name: 'JS 运行工具',    icon: '📜', desc: '运行自定义 JS 脚本' },
   { id: 'cron',     name: '定时任务',       icon: '⏰', desc: '定时执行任务' },
   { id: 'config',   name: '配置管理',       icon: '⚙️', desc: '管理 API 密钥与工具配置' },
+  { id: 'sys-monitor', name: '系统监控',   icon: '📊', desc: '多主机系统状态监控看板' },
 ];

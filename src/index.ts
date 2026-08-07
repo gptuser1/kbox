@@ -5,6 +5,7 @@ import stock from './tools/stock';
 import news from './tools/news';
 import dbAdmin from './tools/db-admin';
 import jsRunner from './tools/js-runner';
+import sysMonitor from './tools/sys-monitor';
 import { createKv } from './kv';
 import { runCronTasks, listTasks, createTask, updateTask, deleteTask, triggerTask } from './tools/cron-tasks';
 import { getConfig, getAppConfig, getToolConfig, setAppConfig, deleteAppConfig, getConfigSchema, listToolOverrides, setToolConfig, deleteToolConfig, ConfigField } from './config';
@@ -105,6 +106,9 @@ app.route('/api/tools/db-admin', dbAdmin);
 // ─── JS 运行工具 ───
 app.route('/api/tools/js', jsRunner);
 
+// ─── 系统监控工具 ───
+app.route('/api/tools/sys-monitor', sysMonitor);
+
 // ─── Cron 任务管理（软定时） ───
 app.get('/api/cron-tasks', async (c) => {
   try {
@@ -199,6 +203,7 @@ const TOOL_LIST = [
   { id: 'db-admin',  name: 'DB 管理' },
   { id: 'js',        name: 'JS 运行工具' },
   { id: 'cron',      name: 'Cron 任务' },
+  { id: 'sys-monitor', name: '系统监控' },
 ];
 
 // 敏感值脱敏：用多个 * 号代替明文
