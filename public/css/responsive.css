@@ -1,0 +1,30 @@
+/* ─── 响应式：小屏 ─── */
+@media (max-width: 640px) {
+  .token-bar { padding: 12px 16px; gap: 8px; }
+  .token-bar .logo { font-size: 17px; }
+  .token-bar .token-group { gap: 6px; }
+  .token-bar .token-group input { width: 140px; font-size: 13px; padding: 8px 10px; }
+  .token-bar .btn-verify { padding: 8px 14px; font-size: 13px; }
+  .container { padding: 24px 16px 60px; }
+  .tool-grid { grid-template-columns: 1fr; }
+  .form-row { flex-direction: column; align-items: stretch; }
+  .float-menu-container { right: 16px; bottom: 16px; }
+  .float-menu-container.open { width: 200px; height: 270px; }
+}
+@media (max-width: 400px) {
+  .token-bar { flex-wrap: wrap; }
+  .token-bar .token-group { width: 100%; }
+}
+
+/* ─── DB 管理响应式 ─── */
+@media (max-width: 768px) {
+  .db-layout { grid-template-columns: 1fr; gap: 10px; }
+  .db-sidebar { position: static; max-height: none; overflow: visible; padding: 6px 8px; }
+  .db-sidebar:not(.collapsed) { max-height: 60vh; overflow-y: auto; }
+  .db-topbar select { min-width: 0; flex: 1; }
+  .tbl-scroll { max-height: 50vh; }
+  .db-cols-head { display: none; }
+  .db-col-row { grid-template-columns: 1fr 1fr; gap: 6px; }
+  .db-col-row > *:nth-child(n) { grid-column: span 1; }
+  .db-col-row .db-col-attrs, .db-col-row .db-col-del { grid-column: span 2; }
+}

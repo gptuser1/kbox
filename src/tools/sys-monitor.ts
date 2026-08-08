@@ -1,5 +1,6 @@
 import { Hono } from 'hono';
 import { createKv } from '../kv';
+import { getConfig } from '../config';
 
 type Bindings = {
   D1_API_TOKEN: string;
@@ -11,8 +12,21 @@ type Variables = {
 };
 
 const NS_HOSTS = 'sys_monitor:hosts';
-const HISTORY_MAX = 10;
-const ONLINE_THRESHOLD_MIN = 30;
+const DEFAULT_HISTORY_MAX = 10;
+const DEFAULT_ONLINE_TIMEOUT_MIN = 30;
+
+// 从工具级配置读取，带默认值
+async function historyMax(c: any): Promise<number> {
+  const val = await getConfig(c, 'sys-monitor', 'sys_monitor_history_max');
+  const n = parseInt(val || '', 10);
+  return (!isNaN(n) && n > 0) ? n : DEFAULT_HISTORY_MAX;
+}
+
+async function onlineTimeoutMin(c: any): Promise<number> {
+  const val = await getConfig(c, 'sys-monitor', 'sys_monitor_online_timeout');
+  const n = parseInt(val || '', 10);
+  return (!isNaN(n) && n > 0) ? n : DEFAULT_ONLINE_TIMEOUT_MIN;
+}
 
 // ─── 指标 Schema 定义 ───
 // 服务端预定义所有可解析的指标，知道每个字段属于哪个分类、什么类型、什么单位
@@ -69,7 +83,7 @@ interface HostRecord {
   lastSeen: number;  // ms unix 时间戳
   data: Record<string, any>; // 最新合并的指标数据
   extra: string | null; // 最近一次 extra，只保留最新值，无历史
-  history: HistoryEntry[]; // FIFO 数组，最大 HISTORY_MAX 条
+  history: HistoryEntry[]; // FIFO 数组，按配置最大数量限制
 }
 
 const app = new Hono<{ Bindings: Bindings; Variables: Variables }>();
@@ -121,8 +135,9 @@ export function extractSummary(data: Record<string, any>): { key: string; label:
   return summary;
 }
 
-export function isOnline(lastSeen: number): boolean {
-  return Date.now() - lastSeen < ONLINE_THRESHOLD_MIN * 60 * 1000;
+export async function isOnline(c: any, lastSeen: number): Promise<boolean> {
+  const timeout = await onlineTimeoutMin(c);
+  return Date.now() - lastSeen < timeout * 60 * 1000;
 }
 
 // ─── 客户端上报 ───
@@ -179,8 +194,9 @@ app.post('/report', async (c) => {
 
   // 添加历史记录（FIFO）
   host.history.push({ ts, data: reportData });
-  if (host.history.length > HISTORY_MAX) {
-    host.history = host.history.slice(-HISTORY_MAX);
+  const maxHistory = await historyMax(c);
+  if (host.history.length > maxHistory) {
+    host.history = host.history.slice(-maxHistory);
   }
 
   await k.set(NS_HOSTS, hostname, host);
@@ -193,16 +209,16 @@ app.get('/hosts', async (c) => {
   const k = kv(c);
   try {
     const items = await k.list<HostRecord>(NS_HOSTS);
-    const hosts = items.map(item => ({
+    const hosts = (await Promise.all(items.map(async (item) => ({
       id: item.key,
       hostname: item.value.hostname,
       name: item.value.name,
       firstSeen: item.value.firstSeen,
       lastSeen: item.value.lastSeen,
-      online: isOnline(item.value.lastSeen),
+      online: await isOnline(c, item.value.lastSeen),
       summary: extractSummary(item.value.data),
       hasExtra: !!item.value.extra,
-    }));
+    }))));
     hosts.sort((a, b) => b.lastSeen - a.lastSeen);
     return c.json({ hosts });
   } catch (e) {
@@ -228,7 +244,7 @@ app.get('/hosts/:id', async (c) => {
       name: host.name,
       firstSeen: host.firstSeen,
       lastSeen: host.lastSeen,
-      online: isOnline(host.lastSeen),
+      online: await isOnline(c, host.lastSeen),
       categories: parseMetrics(host.data),
       extra: host.extra,
     },

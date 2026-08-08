@@ -22,6 +22,8 @@ const APP_CONFIG_SCHEMA: ConfigField[] = [
     { key: 'disk_d1_base',  desc: '云盘 D1 REST API 地址', sensitive: false, placeholder: 'https://ocean.klinux.dpdns.org', tools: ['disk'] },
 
   { key: 'disk_d1_token', desc: '云盘 D1 REST API Token', sensitive: true,  placeholder: '留空则使用全局主令牌', tools: ['disk'] },
+  { key: 'sys_monitor_history_max', desc: '系统监控最大上报历史数量', sensitive: false, default: '10', tools: ['sys-monitor'] },
+  { key: 'sys_monitor_online_timeout', desc: '系统监控在线超时时间（分钟）', sensitive: false, default: '30', tools: ['sys-monitor'] },
   { key: 'share_token', desc: '分享端点口令', sensitive: true, placeholder: '留空则禁用分享端点' },
 ];
 

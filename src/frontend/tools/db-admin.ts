@@ -297,57 +297,69 @@ export function mount(): void {
 
   function escapeAttr(s: any) { return esc(s == null ? '' : String(s)); }
 
-  function isTextType(colType: string): boolean {
-    const t = (colType || '').toUpperCase();
-    return t.startsWith('TEXT') || t.startsWith('VARCHAR') || t.startsWith('CHAR') || t.startsWith('CLOB') || t.startsWith('BLOB') || t.includes('JSON');
-  }
-
   function renderDbField(col: any, value: string, placeholder: string, disabled: boolean): string {
     const colName = escapeAttr(col.name);
-    const colType = col.type || '';
-    const useTextarea = isTextType(colType) && !disabled;
     const val = escapeAttr(value);
     const ph = escapeAttr(placeholder);
     const disabledAttr = disabled ? ' disabled' : '';
-    const taClass = useTextarea ? ' db-field-ta' : '';
     if (disabled) {
       return '<input data-col="' + colName + '" value="' + val + '" placeholder="' + ph + '"' + disabledAttr + '>';
     }
-    if (useTextarea) {
-      return '<div class="db-field-wrap"><textarea data-col="' + colName + '" class="db-field-input' + taClass + '" placeholder="' + ph + '" rows="4">' + val + '</textarea><button type="button" class="db-field-expand" onclick="toggleDbField(this)" title="切换为单行">⛶</button></div>';
-    }
-    return '<div class="db-field-wrap"><input data-col="' + colName + '" class="db-field-input" value="' + val + '" placeholder="' + ph + '"' + disabledAttr + '><button type="button" class="db-field-expand" onclick="toggleDbField(this)" title="展开多行编辑">⛶</button></div>';
+    return '<div class="db-field-wrap"><input data-col="' + colName + '" class="db-field-input" value="' + val + '" placeholder="' + ph + '"><button type="button" class="db-field-expand" onclick="toggleDbField(this)" title="展开多行编辑">⛶</button></div>';
   }
 
   (window as any).toggleDbField = function(btn: HTMLElement) {
     const wrap = btn.parentNode as HTMLElement;
     if (!wrap || !wrap.classList.contains('db-field-wrap')) return;
-    const field = wrap.querySelector('.db-field-input') as HTMLInputElement | HTMLTextAreaElement | null;
+    const field = wrap.querySelector('.db-field-input') as HTMLInputElement;
     if (!field) return;
     const col = field.getAttribute('data-col') || '';
     const val = field.value;
     const ph = field.getAttribute('placeholder') || '';
-    const isTextarea = field.tagName === 'TEXTAREA';
-    if (isTextarea) {
-      const inp = document.createElement('input');
-      inp.className = 'db-field-input';
-      inp.setAttribute('data-col', col);
-      inp.value = val;
-      inp.placeholder = ph;
-      wrap.insertBefore(inp, btn);
-      field.remove();
-      btn.title = '展开多行编辑';
-    } else {
-      const ta = document.createElement('textarea');
-      ta.className = 'db-field-input db-field-ta';
-      ta.setAttribute('data-col', col);
-      ta.value = val;
-      ta.placeholder = ph;
-      ta.rows = 4;
-      wrap.insertBefore(ta, btn);
-      field.remove();
-      btn.title = '切换为单行';
+
+    // 移除已存在的弹窗
+    const existing = document.querySelector('.db-field-popup');
+    if (existing) existing.remove();
+
+    // 创建弹窗
+    const overlay = document.createElement('div');
+    overlay.className = 'db-field-popup';
+    overlay.innerHTML = '<div class="db-field-popup-content">' +
+      '<div class="db-field-popup-header">' +
+        '<span class="db-field-popup-title">编辑 — ' + esc(col) + '</span>' +
+        '<button type="button" class="db-field-popup-close" title="完成">✓</button>' +
+      '</div>' +
+      '<textarea class="db-field-popup-textarea" placeholder="' + esc(ph) + '">' + esc(val) + '</textarea>' +
+    '</div>';
+
+    document.body.appendChild(overlay);
+
+    const textarea = overlay.querySelector('.db-field-popup-textarea') as HTMLTextAreaElement;
+    const closeBtn = overlay.querySelector('.db-field-popup-close') as HTMLElement;
+
+    // 双向同步：弹窗文本域 → 原输入框
+    textarea.addEventListener('input', () => {
+      field.value = textarea.value;
+    });
+
+    // 关闭弹窗
+    function closePopup() {
+      field.value = textarea.value; // 最终同步
+      overlay.remove();
     }
+    closeBtn.addEventListener('click', closePopup);
+    overlay.addEventListener('click', (e) => {
+      if (e.target === overlay) closePopup();
+    });
+
+    // 快捷键：Ctrl+Enter 或 Escape 关闭
+    textarea.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') { closePopup(); }
+      if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { closePopup(); }
+    });
+
+    // 自动聚焦
+    setTimeout(() => textarea.focus(), 50);
   };
 
   function renderCell(v: any): string {

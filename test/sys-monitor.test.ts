@@ -1,5 +1,12 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { METRIC_SCHEMA, SCHEMA_MAP, parseMetrics, extractSummary, isOnline } from '../src/tools/sys-monitor';
+
+// Mock getConfig to return null (fall back to default), so isOnline uses default 30min timeout
+vi.mock('../src/config', () => ({
+  getConfig: vi.fn().mockResolvedValue(null),
+}));
+
+const mockC = { env: { D1_API_TOKEN: 'test', D1_API_BASE: 'http://test' } };
 
 describe('METRIC_SCHEMA', () => {
   it('has 18 metric definitions', () => {
@@ -85,15 +92,15 @@ describe('extractSummary', () => {
 // ─── isOnline ───
 
 describe('isOnline', () => {
-  it('returns true for recent lastSeen', () => {
-    expect(isOnline(Date.now() - 1000)).toBe(true);
+  it('returns true for recent lastSeen', async () => {
+    await expect(isOnline(mockC, Date.now() - 1000)).resolves.toBe(true);
   });
 
-  it('returns false for old lastSeen (over 30min)', () => {
-    expect(isOnline(Date.now() - 31 * 60 * 1000)).toBe(false);
+  it('returns false for old lastSeen (over 30min)', async () => {
+    await expect(isOnline(mockC, Date.now() - 31 * 60 * 1000)).resolves.toBe(false);
   });
 
-  it('returns true at exactly 29min', () => {
-    expect(isOnline(Date.now() - 29 * 60 * 1000)).toBe(true);
+  it('returns true at exactly 29min', async () => {
+    await expect(isOnline(mockC, Date.now() - 29 * 60 * 1000)).resolves.toBe(true);
   });
 });

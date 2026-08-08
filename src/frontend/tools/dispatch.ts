@@ -33,6 +33,17 @@ export function render(): string {
     <div id="dispatchRunSection" style="display:none;margin-top:16px">
       <div class="section-title">执行状态</div>
       <div id="dispatchRunCard"></div>
+      <div id="dispatchLogBtnRow" style="display:none;margin-top:8px">
+        <button class="btn btn-outline btn-sm" id="dispatchLogBtn">📋 查看日志</button>
+      </div>
+    </div>
+    <div id="dispatchLogSection" style="display:none;margin-top:12px">
+      <div class="section-title">Job 日志</div>
+      <div id="dispatchJobsList"></div>
+      <div id="dispatchLogContent" style="display:none">
+        <div class="section-title" id="dispatchLogJobTitle"></div>
+        <pre class="wf-log-box" id="dispatchLogText"></pre>
+      </div>
     </div>
   `;
 }
@@ -63,6 +74,13 @@ export function mount(): void {
   const savedConfigsBox = $('dispatchSavedConfigs');
   const runSection = $('dispatchRunSection');
   const runCard = $('dispatchRunCard');
+  const logBtnRow = $('dispatchLogBtnRow');
+  const logBtn = $('dispatchLogBtn') as HTMLButtonElement;
+  const logSection = $('dispatchLogSection');
+  const jobsList = $('dispatchJobsList');
+  const logContent = $('dispatchLogContent');
+  const logJobTitle = $('dispatchLogJobTitle');
+  const logText = $('dispatchLogText');
 
   let selectedWf: string | null = null;
   let selectedWfPath: string | null = null;
@@ -75,6 +93,9 @@ export function mount(): void {
   let pollOwner = '';
   let pollRepo = '';
   let pollWf = '';
+
+  // 日志查看状态
+  let currentRun: any = null;
 
   function runStatusText(status: string, conclusion: string): string {
     if (status === 'queued') return '⏳ 排队中';
@@ -99,7 +120,8 @@ export function mount(): void {
   }
 
   function renderRunCard(run: any, isLive: boolean) {
-    if (!run) { runCard.innerHTML = '<div class="empty">暂无执行记录</div>'; return; }
+    if (!run) { runCard.innerHTML = '<div class="empty">暂无执行记录</div>'; logBtnRow.style.display = 'none'; logSection.style.display = 'none'; return; }
+    currentRun = run;
     const tag = isLive ? '<span style="font-size:11px;color:var(--primary);margin-left:6px">实时</span>' : '<span style="font-size:11px;color:var(--text-muted);margin-left:6px">上次</span>';
     const color = runStatusColor(run.status, run.conclusion);
     const created = run.created_at ? formatDate(run.created_at.replace('T', ' ').replace('Z', '')) : '';
@@ -113,6 +135,13 @@ export function mount(): void {
         '</div>' +
         '<div style="font-size:12px;color:var(--text-muted);margin-top:6px">#' + run.id + branch + ' · ' + created + url + '</div>' +
       '</div>';
+    // 已完成 run 显示日志按钮
+    if (run.status === 'completed' && run.id) {
+      logBtnRow.style.display = '';
+    } else {
+      logBtnRow.style.display = 'none';
+      logSection.style.display = 'none';
+    }
   }
 
   async function fetchRuns() {
@@ -149,6 +178,73 @@ export function mount(): void {
   function stopPoll() {
     if (runPollTimer) { clearInterval(runPollTimer); runPollTimer = null; }
   }
+
+  // ─── 日志查看 ───
+  async function fetchJobs() {
+    if (!currentRun || !pollOwner || !pollRepo) return;
+    logSection.style.display = '';
+    jobsList.innerHTML = '<div class="empty">加载 jobs 中…</div>';
+    logContent.style.display = 'none';
+    try {
+      const data = await api('/api/tools/workflow-run-jobs?owner=' + encodeURIComponent(pollOwner) + '&repo=' + encodeURIComponent(pollRepo) + '&run_id=' + currentRun.id);
+      const jobs = data.jobs || [];
+      if (!jobs.length) {
+        jobsList.innerHTML = '<div class="empty">该 run 无 job 记录</div>';
+        return;
+      }
+      let html = '';
+      for (const j of jobs) {
+        const statusColor = j.conclusion === 'success' ? 'var(--success)' : j.conclusion === 'failure' ? 'var(--danger)' : j.status === 'in_progress' ? 'var(--primary)' : 'var(--text-muted)';
+        const statusIcon = j.conclusion === 'success' ? '✅' : j.conclusion === 'failure' ? '❌' : j.status === 'in_progress' ? '🔄' : '⏳';
+        html += '<div class="wf-log-job" data-job-id="' + j.id + '" data-job-name="' + esc(j.name) + '">' +
+          '<span class="wf-log-job-icon">' + statusIcon + '</span>' +
+          '<span class="wf-log-job-name">' + esc(j.name) + '</span>' +
+          '<span class="wf-log-job-status" style="color:' + statusColor + '">' + esc(j.conclusion || j.status) + '</span>' +
+          '<span class="wf-log-job-arrow">▸</span>' +
+        '</div>';
+      }
+      jobsList.innerHTML = html;
+      // 点击 job 加载日志
+      jobsList.querySelectorAll('.wf-log-job').forEach((el: any) => {
+        el.onclick = () => {
+          const jobId = el.getAttribute('data-job-id');
+          const jobName = el.getAttribute('data-job-name');
+          if (jobId) fetchJobLog(jobId, jobName);
+          // 高亮当前
+          jobsList.querySelectorAll('.wf-log-job').forEach((x: any) => x.classList.remove('active'));
+          el.classList.add('active');
+        };
+      });
+    } catch (e: any) {
+      if (e.message === 'UNAUTHORIZED') return;
+      jobsList.innerHTML = '<div class="empty">加载 jobs 失败：' + esc(e.message) + '</div>';
+    }
+  }
+
+  async function fetchJobLog(jobId: string, jobName: string) {
+    logContent.style.display = '';
+    logJobTitle.textContent = '日志 — ' + esc(jobName);
+    logText.textContent = '加载中…';
+    try {
+      const data = await api('/api/tools/workflow-run-logs?owner=' + encodeURIComponent(pollOwner) + '&repo=' + encodeURIComponent(pollRepo) + '&job_id=' + encodeURIComponent(jobId));
+      logText.textContent = data.log || '(空日志)';
+    } catch (e: any) {
+      if (e.message === 'UNAUTHORIZED') return;
+      logText.textContent = '加载日志失败：' + (e.message || '未知错误');
+    }
+  }
+
+  logBtn.onclick = () => {
+    if (logSection.style.display === '' && logSection.style.display !== 'none') {
+      // 已展开则折叠
+      logSection.style.display = 'none';
+      logBtn.textContent = '📋 查看日志';
+    } else {
+      logSection.style.display = '';
+      logBtn.textContent = '📋 隐藏日志';
+      fetchJobs();
+    }
+  };
 
   // 渲染分支最新 commit 信息
   const commitInfoEl = $('dispatchCommitInfo');
