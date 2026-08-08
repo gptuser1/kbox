@@ -334,19 +334,27 @@ export function mount(): void {
       '</div>' +
     '</div>';
 
+    overlay.classList.add('show');
     document.body.appendChild(overlay);
 
     const textarea = overlay.querySelector('.db-field-textarea') as HTMLTextAreaElement;
     const closeBtn = overlay.querySelector('.db-field-close') as HTMLElement;
 
-    // 双向同步：弹窗文本域 → 原输入框
-    textarea.addEventListener('input', () => {
-      field.value = textarea.value;
-    });
-
-    // 关闭弹窗
+    // 关闭弹窗：将 input 替换为 textarea 以保留换行
     function closePopup() {
-      field.value = textarea.value; // 最终同步
+      const fullVal = textarea.value;
+      // 替换原 input 为 textarea，使其能保存换行
+      const ta = document.createElement('textarea');
+      ta.className = field.className;
+      ta.rows = 1;
+      ta.value = fullVal;
+      for (const attr of field.attributes) {
+        if (attr.name !== 'class' && attr.name !== 'value' && attr.name !== 'style') {
+          ta.setAttribute(attr.name, attr.value);
+        }
+      }
+      ta.style.cssText = field.style.cssText;
+      field.parentNode!.replaceChild(ta, field);
       overlay.remove();
     }
     closeBtn.addEventListener('click', closePopup);
