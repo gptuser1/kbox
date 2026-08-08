@@ -177,18 +177,19 @@ export function mount(): void {
   (window as any).closeStockModal = closeStockModal;
   modalOverlay.onclick = (e) => { if (e.target === modalOverlay) closeStockModal(); };
 
-  modalDeleteBtn.onclick = async () => {
+  modalDeleteBtn.onclick = () => {
     if (!editingId) return;
-    if (!confirm('确定删除此基金？')) return;
-    try {
-      await api('/api/tools/stock/funds/' + editingId, { method: 'DELETE' });
-      toast('已删除', 'success');
-      closeStockModal();
-      loadFunds();
-    } catch (e: any) {
-      if (e.message === 'UNAUTHORIZED') return;
-      toast('删除失败：' + e.message, 'error');
-    }
+    (window as any).showConfirm('确定删除此基金？', async () => {
+      try {
+        await api('/api/tools/stock/funds/' + editingId, { method: 'DELETE' });
+        toast('已删除', 'success');
+        closeStockModal();
+        loadFunds();
+      } catch (e: any) {
+        if (e.message === 'UNAUTHORIZED') return;
+        toast('删除失败：' + e.message, 'error');
+      }
+    });
   };
 
   modalExportBtn.onclick = () => {

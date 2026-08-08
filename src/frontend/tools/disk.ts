@@ -67,20 +67,27 @@ export function render(): string {
       </div>
     </details>
     <!-- 下载弹窗 -->
-    <div class="dl-overlay" id="diskDlOverlay">
-      <div class="dl-popup" id="diskDlPopup">
-        <div class="dlp-title">下载文件</div>
-        <button class="btn btn-primary" id="diskDlDirectBtn">⬇ 直接下载</button>
-        <button class="btn btn-outline" id="diskDlCopyBtn">🔗 复制链接</button>
-        <button class="btn btn-outline" id="diskDlCancelBtn" style="font-size:12px">取消</button>
+    <div class="modal-overlay" id="diskDlOverlay">
+      <div class="modal" style="max-width:320px">
+        <div class="modal-header">
+          <h3>下载文件</h3>
+          <button class="modal-close" id="diskDlCloseBtn">✕</button>
+        </div>
+        <div class="modal-body" style="display:flex;flex-direction:column;gap:8px">
+          <button class="btn btn-primary" id="diskDlDirectBtn">⬇ 直接下载</button>
+          <button class="btn btn-outline" id="diskDlCopyBtn">🔗 复制链接</button>
+          <button class="btn btn-outline" id="diskDlCancelBtn" style="font-size:12px">取消</button>
+        </div>
       </div>
     </div>
     <!-- 文件详情弹窗 -->
-    <div class="dl-overlay" id="diskDetailOverlay">
-      <div class="dl-popup" id="diskDetailPopup" style="width:320px">
-        <div class="dlp-title" id="diskDetailTitle">文件详情</div>
-        <div id="diskDetailBody" style="font-size:13px;line-height:1.8"></div>
-        <button class="btn btn-primary" id="diskDetailClose" style="margin-top:12px">关闭</button>
+    <div class="modal-overlay" id="diskDetailOverlay">
+      <div class="modal" style="max-width:380px">
+        <div class="modal-header">
+          <h3 id="diskDetailTitle">文件详情</h3>
+          <button class="modal-close" id="diskDetailClose">✕</button>
+        </div>
+        <div class="modal-body" id="diskDetailBody" style="font-size:13px;line-height:1.8"></div>
       </div>
     </div>
   `;
@@ -97,10 +104,10 @@ export function mount(): void {
   const uploadBtn = $('diskUploadBtn') as HTMLButtonElement;
   const clearBtn = $('diskClearBtn') as HTMLButtonElement;
   const dlOverlay = $('diskDlOverlay');
-  const dlPopup = $('diskDlPopup');
   const dlDirectBtn = $('diskDlDirectBtn') as HTMLButtonElement;
   const dlCopyBtn = $('diskDlCopyBtn') as HTMLButtonElement;
   const dlCancelBtn = $('diskDlCancelBtn') as HTMLButtonElement;
+  const dlCloseBtn = $('diskDlCloseBtn') as HTMLButtonElement;
   const detailOverlay = $('diskDetailOverlay');
   const detailTitle = $('diskDetailTitle');
   const detailBody = $('diskDetailBody');
@@ -145,8 +152,8 @@ export function mount(): void {
           '<td class="tbl-cell-size">' + formatSize(f.size) + '</td>' +
           '<td class="tbl-cell-time">' + formatDate(f.created_at) + '</td>' +
           '<td class="tbl-td-actions"><div class="tbl-row-actions">' +
-          '<button class="dl-btn" onclick="event.stopPropagation();openDlPopup(' + f.id + ')">下载</button>' +
-          '<button class="dl-btn dl-del" onclick="deleteFile(' + f.id + ',\'' + esc(f.name) + '\')">删除</button>' +
+          '<button class="tbl-action-btn" onclick="event.stopPropagation();openDlPopup(' + f.id + ')">下载</button>' +
+          '<button class="tbl-action-btn danger" onclick="deleteFile(' + f.id + ',\'' + esc(f.name) + '\')">删除</button>' +
           '</div></td>' +
           '</tr>'
         ).join('') +
@@ -172,6 +179,7 @@ export function mount(): void {
     if (e.target === dlOverlay) closeDlPopup();
   });
   dlCancelBtn.addEventListener('click', closeDlPopup);
+  dlCloseBtn.addEventListener('click', closeDlPopup);
 
   dlDirectBtn.addEventListener('click', async () => {
     if (!dlFileId) return;
@@ -207,17 +215,18 @@ export function mount(): void {
   });
 
   // ─── 删除文件 ───
-  (window as any).deleteFile = async function(id: any, name: string) {
-    if (!confirm('确认删除「' + name + '」？')) return;
-    try {
-      await api('/api/tools/disk/files/' + id, { method: 'DELETE' });
-      toast('已删除', 'success');
-      loadStats();
-      loadFiles();
-    } catch (e: any) {
-      if (e.message === 'UNAUTHORIZED') return;
-      toast('删除失败：' + e.message, 'error');
-    }
+  (window as any).deleteFile = function(id: any, name: string) {
+    (window as any).showConfirm('确认删除「' + name + '」？', async () => {
+      try {
+        await api('/api/tools/disk/files/' + id, { method: 'DELETE' });
+        toast('已删除', 'success');
+        loadStats();
+        loadFiles();
+      } catch (e: any) {
+        if (e.message === 'UNAUTHORIZED') return;
+        toast('删除失败：' + e.message, 'error');
+      }
+    });
   };
 
   // ─── 文件详情弹窗 ───

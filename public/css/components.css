@@ -321,9 +321,9 @@ input[type="checkbox"] { accent-color: var(--primary); width: 16px; height: 16px
 .tbl-table .tbl-row-actions .btn { font-size: 12px; padding: 4px 10px; white-space: nowrap; }
 
 /* ─── 文件列表表格列宽 ─── */
-.tbl-row-actions .dl-btn { padding: 4px 12px; border: 1px solid var(--border); border-radius: 6px; background: var(--card); color: var(--text-secondary); cursor: pointer; font-size: 12px; transition: all 0.15s; white-space: nowrap; }
-.tbl-row-actions .dl-btn:hover { border-color: var(--primary); color: var(--primary); }
-.tbl-row-actions .dl-btn.dl-del:hover { border-color: var(--danger); color: var(--danger); }
+.tbl-row-actions .tbl-action-btn { padding: 4px 12px; border: 1px solid var(--border); border-radius: 6px; background: var(--card); color: var(--text-secondary); cursor: pointer; font-size: 12px; transition: all 0.15s; white-space: nowrap; }
+.tbl-row-actions .tbl-action-btn:hover { border-color: var(--primary); color: var(--primary); }
+.tbl-row-actions .tbl-action-btn.danger:hover { border-color: var(--danger); color: var(--danger); }
 .tbl-th-type { width: 110px; }
 .tbl-th-size { width: 90px; }
 .tbl-th-time { width: 150px; }
@@ -332,14 +332,6 @@ input[type="checkbox"] { accent-color: var(--primary); width: 16px; height: 16px
 .tbl-cell-time { font-size: 12px; color: var(--text-muted); white-space: nowrap; }
 .disk-file-link { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--primary); cursor: pointer; font-weight: 500; transition: opacity 0.15s; }
 .disk-file-link:hover { opacity: 0.8; text-decoration: underline; }
-
-/* ─── 下载弹窗 ─── */
-.dl-overlay { position: fixed; inset: 0; background: var(--overlay); z-index: 1000; display: none; align-items: center; justify-content: center; }
-.dl-overlay.show { display: flex; }
-.dl-popup { background: var(--card); border-radius: 12px; padding: 20px; width: 280px; box-shadow: var(--shadow-lg); animation: modalIn 0.2s ease; }
-.dl-popup .dlp-title { font-size: 14px; font-weight: 600; margin-bottom: 14px; color: var(--text); }
-.dl-popup .btn { width: 100%; justify-content: center; }
-.dl-popup .btn + .btn { margin-top: 8px; }
 
 /* ─── 系统监控看板 ─── */
 .sm-host-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 12px; }
@@ -517,33 +509,9 @@ input[type="checkbox"] { accent-color: var(--primary); width: 16px; height: 16px
 }
 .db-field-expand:hover { background: var(--bg); color: var(--primary); }
 
-/* DB 字段展开弹窗 */
-.db-field-popup {
-  position: fixed; inset: 0; background: var(--overlay); z-index: 1000;
-  display: flex; align-items: center; justify-content: center;
-  animation: modalIn 0.2s ease;
-  padding: 24px;
-}
-.db-field-popup-content {
-  background: var(--card); border-radius: 12px; box-shadow: var(--shadow-lg);
-  width: 100%; max-width: min(94vw, 1600px);
-  height: 56vh; max-height: 700px;
-  display: flex; flex-direction: column; overflow: hidden;
-}
-.db-field-popup-header {
-  display: flex; align-items: center; justify-content: space-between;
-  padding: 14px 18px; border-bottom: 1px solid var(--border);
-  flex-shrink: 0;
-}
-.db-field-popup-title { font-size: 15px; font-weight: 600; color: var(--text); }
-.db-field-popup-close {
-  background: var(--primary); color: #fff; border: none; border-radius: 6px;
-  width: 32px; height: 32px; cursor: pointer; font-size: 18px; font-weight: 700;
-  display: flex; align-items: center; justify-content: center;
-  transition: opacity 0.15s;
-}
-.db-field-popup-close:hover { opacity: 0.85; }
-.db-field-popup-textarea {
+/* DB 字段展开弹窗（使用共享 modal-overlay/modal，仅定制 textarea） */
+.db-field-modal .modal { max-height: 56vh; }
+.db-field-textarea {
   width: 100%; flex: 1; min-height: 0;
   padding: 16px; border: none; outline: none; resize: none;
   background: var(--input-bg); color: var(--text); font-size: 14px;

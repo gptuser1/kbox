@@ -62,11 +62,15 @@ export function render(): string {
       <div id="smHistory"></div>
     </div>
     <!-- extra 弹窗 -->
-    <div class="dl-overlay" id="smExtraOverlay">
-      <div class="dl-popup" style="width:400px;max-width:90vw">
-        <div class="dlp-title">📝 附加信息</div>
-        <pre id="smExtraContent" style="white-space:pre-wrap;word-break:break-all;font-size:13px;line-height:1.6;max-height:300px;overflow-y:auto;margin:8px 0"></pre>
-        <button class="btn btn-outline" id="smExtraClose" style="width:100%;font-size:12px">关闭</button>
+    <div class="modal-overlay" id="smExtraOverlay">
+      <div class="modal" style="max-width:480px">
+        <div class="modal-header">
+          <h3>📝 附加信息</h3>
+          <button class="modal-close" id="smExtraClose">✕</button>
+        </div>
+        <div class="modal-body">
+          <pre id="smExtraContent" style="white-space:pre-wrap;word-break:break-all;font-size:13px;line-height:1.6;max-height:50vh;overflow-y:auto;margin:0"></pre>
+        </div>
       </div>
     </div>
   `;
@@ -98,19 +102,20 @@ export function mount(): void {
     if (e.key === 'Escape') renameInput.style.display = 'none';
   });
 
-  $('smDeleteBtn')?.addEventListener('click', async () => {
+  $('smDeleteBtn')?.addEventListener('click', () => {
     if (!currentHost) return;
-    if (!confirm(`确定删除主机「${currentHost.name}」及其所有历史数据？`)) return;
-    try {
-      await api(`/api/tools/sys-monitor/hosts/${encodeURIComponent(currentHost.id)}`, { method: 'DELETE' });
-      toast('已删除', 'success');
-      $('smDetail')!.style.display = 'none';
-      $('smHostList')!.style.display = '';
-      currentHost = null;
-      loadHosts();
-    } catch (e: any) {
-      toast('删除失败：' + e.message, 'error');
-    }
+    (window as any).showConfirm(`确定删除主机「${currentHost.name}」及其所有历史数据？`, async () => {
+      try {
+        await api(`/api/tools/sys-monitor/hosts/${encodeURIComponent(currentHost.id)}`, { method: 'DELETE' });
+        toast('已删除', 'success');
+        $('smDetail')!.style.display = 'none';
+        $('smHostList')!.style.display = '';
+        currentHost = null;
+        loadHosts();
+      } catch (e: any) {
+        toast('删除失败：' + e.message, 'error');
+      }
+    });
   });
 
   // extra 弹窗

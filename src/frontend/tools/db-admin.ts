@@ -318,24 +318,26 @@ export function mount(): void {
     const ph = field.getAttribute('placeholder') || '';
 
     // 移除已存在的弹窗
-    const existing = document.querySelector('.db-field-popup');
+    const existing = document.querySelector('.modal-overlay.db-field-modal');
     if (existing) existing.remove();
 
     // 创建弹窗
     const overlay = document.createElement('div');
-    overlay.className = 'db-field-popup';
-    overlay.innerHTML = '<div class="db-field-popup-content">' +
-      '<div class="db-field-popup-header">' +
-        '<span class="db-field-popup-title">编辑 — ' + esc(col) + '</span>' +
-        '<button type="button" class="db-field-popup-close" title="完成">✓</button>' +
+    overlay.className = 'modal-overlay db-field-modal';
+    overlay.innerHTML = '<div class="modal" style="max-width:min(94vw, 1600px)">' +
+      '<div class="modal-header">' +
+        '<h3>编辑 — ' + esc(col) + '</h3>' +
+        '<button type="button" class="modal-close db-field-close" title="完成">✓</button>' +
       '</div>' +
-      '<textarea class="db-field-popup-textarea" placeholder="' + esc(ph) + '">' + esc(val) + '</textarea>' +
+      '<div class="modal-body" style="display:flex;flex:1;padding:0;overflow:hidden">' +
+        '<textarea class="db-field-textarea" placeholder="' + esc(ph) + '">' + esc(val) + '</textarea>' +
+      '</div>' +
     '</div>';
 
     document.body.appendChild(overlay);
 
-    const textarea = overlay.querySelector('.db-field-popup-textarea') as HTMLTextAreaElement;
-    const closeBtn = overlay.querySelector('.db-field-popup-close') as HTMLElement;
+    const textarea = overlay.querySelector('.db-field-textarea') as HTMLTextAreaElement;
+    const closeBtn = overlay.querySelector('.db-field-close') as HTMLElement;
 
     // 双向同步：弹窗文本域 → 原输入框
     textarea.addEventListener('input', () => {
@@ -662,21 +664,22 @@ export function mount(): void {
     navigator.clipboard.writeText(sql).then(() => toast('DDL 已复制', 'success')).catch(() => toast('复制失败', 'error'));
   };
 
-  dropTableBtn.onclick = async () => {
+  dropTableBtn.onclick = () => {
     if (!activeConnId || !activeTable) return;
-    if (!confirm('确认删除表 `' + activeTable + '`？此操作不可恢复！')) return;
-    try {
-      await api('/api/tools/db-admin/connections/' + activeConnId + '/tables/' + encodeURIComponent(activeTable), { method: 'DELETE' });
-      toast('表已删除', 'success');
-      activeTable = '';
-      schemaCache = null;
-      mainContent.style.display = 'none';
-      mainEmpty.style.display = 'block';
-      loadTables();
-    } catch (e: any) {
-      if (e.message === 'UNAUTHORIZED') return;
-      toast('删除失败：' + e.message, 'error');
-    }
+    (window as any).showConfirm('确认删除表 `' + activeTable + '`？此操作不可恢复！', async () => {
+      try {
+        await api('/api/tools/db-admin/connections/' + activeConnId + '/tables/' + encodeURIComponent(activeTable), { method: 'DELETE' });
+        toast('表已删除', 'success');
+        activeTable = '';
+        schemaCache = null;
+        mainContent.style.display = 'none';
+        mainEmpty.style.display = 'block';
+        loadTables();
+      } catch (e: any) {
+        if (e.message === 'UNAUTHORIZED') return;
+        toast('删除失败：' + e.message, 'error');
+      }
+    });
   };
 
   // ─── SQL 命令 ───
@@ -903,17 +906,18 @@ export function mount(): void {
     }
   };
 
-  async function deleteRow(where: any) {
-    if (!confirm('确认删除此行？')) return;
-    try {
-      const params = new URLSearchParams(where);
-      await api('/api/tools/db-admin/connections/' + activeConnId + '/tables/' + encodeURIComponent(activeTable) + '/row?' + params.toString(), { method: 'DELETE' });
-      toast('已删除', 'success');
-      loadData();
-    } catch (e: any) {
-      if (e.message === 'UNAUTHORIZED') return;
-      toast('删除失败：' + e.message, 'error');
-    }
+  function deleteRow(where: any) {
+    (window as any).showConfirm('确认删除此行？', async () => {
+      try {
+        const params = new URLSearchParams(where);
+        await api('/api/tools/db-admin/connections/' + activeConnId + '/tables/' + encodeURIComponent(activeTable) + '/row?' + params.toString(), { method: 'DELETE' });
+        toast('已删除', 'success');
+        loadData();
+      } catch (e: any) {
+        if (e.message === 'UNAUTHORIZED') return;
+        toast('删除失败：' + e.message, 'error');
+      }
+    });
   }
 
   // ─── 新建表（可视化列编辑器，自动生成 SQL） ───
@@ -1100,19 +1104,20 @@ export function mount(): void {
     });
   }
 
-  connDeleteBtn.onclick = async () => {
+  connDeleteBtn.onclick = () => {
     if (!editingConnId) return;
-    if (!confirm('确认删除此连接？')) return;
-    try {
-      await api('/api/tools/db-admin/connections/' + editingConnId, { method: 'DELETE' });
-      toast('已删除', 'success');
-      resetConnForm();
-      loadConnectionsList();
-      loadConnSelect();
-    } catch (e: any) {
-      if (e.message === 'UNAUTHORIZED') return;
-      toast('删除失败：' + e.message, 'error');
-    }
+    (window as any).showConfirm('确认删除此连接？', async () => {
+      try {
+        await api('/api/tools/db-admin/connections/' + editingConnId, { method: 'DELETE' });
+        toast('已删除', 'success');
+        resetConnForm();
+        loadConnectionsList();
+        loadConnSelect();
+      } catch (e: any) {
+        if (e.message === 'UNAUTHORIZED') return;
+        toast('删除失败：' + e.message, 'error');
+      }
+    });
   };
 
   connTestBtn.onclick = async () => {

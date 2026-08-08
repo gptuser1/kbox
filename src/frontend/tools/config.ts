@@ -338,19 +338,20 @@ export function mount(): void {
     openModal('tool', tool, key);
   };
 
-  (window as any).clearConfig = async function (scope: string, tool: string | null, key: string) {
-    if (!confirm('确认清除 ' + key + '？')) return;
-    try {
-      const url = scope === 'app'
-        ? '/api/config/' + encodeURIComponent(key)
-        : '/api/config/tools/' + encodeURIComponent(tool!) + '/' + encodeURIComponent(key);
-      await api(url, { method: 'PUT', body: JSON.stringify({ value: '' }), headers: { 'Content-Type': 'application/json' } });
-      toast('已清除', 'success');
-      loadAll();
-    } catch (e: any) {
-      if (e.message === 'UNAUTHORIZED') return;
-      toast('清除失败：' + e.message, 'error');
-    }
+  (window as any).clearConfig = function (scope: string, tool: string | null, key: string) {
+    (window as any).showConfirm('确认清除 ' + key + '？', async () => {
+      try {
+        const url = scope === 'app'
+          ? '/api/config/' + encodeURIComponent(key)
+          : '/api/config/tools/' + encodeURIComponent(tool!) + '/' + encodeURIComponent(key);
+        await api(url, { method: 'PUT', body: JSON.stringify({ value: '' }), headers: { 'Content-Type': 'application/json' } });
+        toast('已清除', 'success');
+        loadAll();
+      } catch (e: any) {
+        if (e.message === 'UNAUTHORIZED') return;
+        toast('清除失败：' + e.message, 'error');
+      }
+    });
   };
 
   modalSave.onclick = async () => {

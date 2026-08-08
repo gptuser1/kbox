@@ -305,17 +305,18 @@ function notifyScriptsChanged(): void {
   }
 };
 
-(window as any).deleteJsScript = async function (id: string) {
-  if (!confirm('确认删除该脚本？')) return;
-  try {
-    await api('/api/tools/js/scripts/' + id, { method: 'DELETE' });
-    toast('已删除', 'success');
-    loadJsScripts();
-    notifyScriptsChanged();
-  } catch (e: any) {
-    if (e.message === 'UNAUTHORIZED') return;
-    toast('删除失败：' + e.message, 'error');
-  }
+(window as any).deleteJsScript = function (id: string) {
+  (window as any).showConfirm('确认删除该脚本？', async () => {
+    try {
+      await api('/api/tools/js/scripts/' + id, { method: 'DELETE' });
+      toast('已删除', 'success');
+      loadJsScripts();
+      notifyScriptsChanged();
+    } catch (e: any) {
+      if (e.message === 'UNAUTHORIZED') return;
+      toast('删除失败：' + e.message, 'error');
+    }
+  });
 };
 
 async function saveAsScript(): Promise<void> {

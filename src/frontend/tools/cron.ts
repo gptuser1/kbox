@@ -99,16 +99,17 @@ async function loadCronTasks(): Promise<void> {
   loadCronTasks();
 };
 
-(window as any).deleteCronTask = async function (id: string) {
-  if (!confirm('确认删除该任务？')) return;
-  try {
-    await api('/api/cron-tasks/' + id, { method: 'DELETE' });
-    toast('已删除', 'success');
-    loadCronTasks();
-  } catch (e: any) {
-    if (e.message === 'UNAUTHORIZED') return;
-    toast('删除失败：' + e.message, 'error');
-  }
+(window as any).deleteCronTask = function (id: string) {
+  (window as any).showConfirm('确认删除该任务？', async () => {
+    try {
+      await api('/api/cron-tasks/' + id, { method: 'DELETE' });
+      toast('已删除', 'success');
+      loadCronTasks();
+    } catch (e: any) {
+      if (e.message === 'UNAUTHORIZED') return;
+      toast('删除失败：' + e.message, 'error');
+    }
+  });
 };
 
 (window as any).closeCronModal = function () {

@@ -106,6 +106,21 @@ export function renderShellHTML(): string {
   </div>
 </div>
 
+<!-- 通用确认弹窗（替代浏览器原生 confirm）-->
+<div class="modal-overlay" id="confirmOverlay">
+  <div class="modal" style="max-width:400px">
+    <div class="modal-header">
+      <h3 id="confirmTitle">确认</h3>
+      <button class="modal-close" id="confirmCloseBtn">✕</button>
+    </div>
+    <div class="modal-body" id="confirmBody"></div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" id="confirmCancelBtn">取消</button>
+      <button class="btn btn-danger" id="confirmOkBtn">确认</button>
+    </div>
+  </div>
+</div>
+
 <script type="module" src="/js/shell.js"></script>
 </body>
 </html>`;

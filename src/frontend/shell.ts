@@ -91,14 +91,14 @@ function resetVerifiedState() {
   verifyBtn.onclick = verifyToken;
 }
 function confirmLogout() {
-  if (confirm('是否退出？')) {
+  (window as any).showConfirm('是否退出？', () => {
     localStorage.removeItem('kbox_token');
     setToken('');
     resetVerifiedState();
     mainContent.classList.remove('active');
     syncFloatMenuVisibility();
     toast('已退出', 'info');
-  }
+  });
 }
 async function verifyToken() {
   const t = tokenInput.value.trim();
@@ -444,6 +444,29 @@ initTheme();
 bindFloatMenu();
 verifyBtn.onclick = verifyToken;
 tokenInput.addEventListener('keydown', e => { if (e.key === 'Enter') verifyToken(); });
+
+// ─── 通用确认弹窗 ───
+let confirmCallback: (() => void) | null = null;
+(window as any).showConfirm = function(message: string, onConfirm: () => void, title?: string) {
+  if (title) ($('confirmTitle') as HTMLElement).textContent = title;
+  ($('confirmBody') as HTMLElement).textContent = message;
+  confirmCallback = onConfirm;
+  $('confirmOverlay').classList.add('show');
+};
+(window as any).closeConfirmModal = function() {
+  $('confirmOverlay').classList.remove('show');
+  confirmCallback = null;
+};
+
+$('confirmOverlay')?.addEventListener('click', (e) => {
+  if (e.target === $('confirmOverlay')) (window as any).closeConfirmModal();
+});
+$('confirmCloseBtn')?.addEventListener('click', () => (window as any).closeConfirmModal());
+$('confirmCancelBtn')?.addEventListener('click', () => (window as any).closeConfirmModal());
+$('confirmOkBtn')?.addEventListener('click', () => {
+  if (confirmCallback) confirmCallback();
+  (window as any).closeConfirmModal();
+});
 
 // 暴露给 inline onclick
 (window as any).showTool = showTool;
