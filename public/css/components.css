@@ -386,15 +386,18 @@ input[type="checkbox"] { accent-color: var(--primary); width: 16px; height: 16px
 .sm-progress-fill.sm-warn { background: #f59e0b; }
 .sm-progress-fill.sm-crit { background: var(--danger); }
 
-/* 历史图表 */
-.sm-chart-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 12px; }
+/* 历史图表（light-chart.js） */
+.sm-chart-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 12px; }
 .sm-chart-card { background: var(--card); border-radius: 10px; padding: 12px 14px; box-shadow: var(--shadow); }
-.sm-chart-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+.sm-chart-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; }
 .sm-chart-label { font-size: 12px; font-weight: 600; color: var(--text-secondary); }
 .sm-chart-range { font-size: 10px; color: var(--text-muted); font-variant-numeric: tabular-nums; }
-.sm-sparkline { width: 100%; height: 40px; display: block; }
-.sm-spark-area { fill: var(--primary); fill-opacity: 0.12; }
-.sm-spark-line { fill: none; stroke: var(--primary); stroke-width: 1.5; stroke-linejoin: round; stroke-linecap: round; }
+.sm-chart-body { width: 100%; }
+.sm-chart-body svg { width: 100%; height: 130px; display: block; }
+.sm-chart-body svg text { fill: var(--text-muted); font-size: 10px; }
+.sm-chart-body svg line { stroke: var(--border); }
+.sm-chart-body svg circle { fill: var(--primary); }
+.sm-chart-body svg path { stroke: var(--primary); stroke-width: 2; fill: none; }
 
 /* ─── 云盘上传 ─── */
 .disk-upload { background: var(--card); border-radius: 12px; padding: 14px 16px; box-shadow: var(--shadow); }

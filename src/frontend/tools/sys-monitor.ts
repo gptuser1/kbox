@@ -312,7 +312,7 @@ function renderMetricCard(m: MetricItem): string {
   </div>`;
 }
 
-// ─── 历史趋势 ───
+// ─── 历史趋势（使用 light-chart.js） ───
 function renderHistory(history: HistoryPoint[]) {
   const el = $('smHistory')!;
   if (history.length === 0) {
@@ -351,48 +351,49 @@ function renderHistory(history: HistoryPoint[]) {
     return;
   }
 
+  // 格式化时间标签
+  const times = history.map(pt => {
+    const d = new Date(pt.ts);
+    return String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0');
+  });
+
   let html = '<div class="section-title" style="margin-top:20px">历史趋势</div>';
   html += '<div class="sm-chart-grid">';
 
   for (const [field, label] of numericFields) {
     const values = history
-      .map(pt => ({ ts: pt.ts, val: parseFloat(pt.data[field]) }))
-      .filter(v => !isNaN(v.val));
+      .map(pt => parseFloat(pt.data[field]))
+      .filter(v => !isNaN(v));
 
     if (values.length < 2) continue;
 
-    const max = Math.max(...values.map(v => v.val));
-    const min = Math.min(...values.map(v => v.val));
-    const range = max - min || 1;
+    const max = Math.max(...values);
+    const min = Math.min(...values);
 
-    // 生成 SVG 折线图
-    const w = 100;
-    const h = 40;
-    const step = w / (values.length - 1);
-    let pathD = '';
-    let areaD = '';
-    values.forEach((v, i) => {
-      const x = i * step;
-      const y = h - ((v.val - min) / range) * h;
-      if (i === 0) {
-        pathD += `M${x},${y}`;
-        areaD += `M${x},${h} L${x},${y}`;
-      } else {
-        pathD += ` L${x},${y}`;
-        areaD += ` L${x},${y}`;
-      }
-    });
-    areaD += ` L${w},${h} Z`;
+    // 标签太多时采样，避免拥挤
+    let labels = times;
+    if (labels.length > 10) {
+      const step = Math.ceil(labels.length / 8);
+      labels = times.map((t, i) => i % step === 0 ? t : '');
+    }
+
+    // 使用 light-chart.js 生成 SVG
+    let svg = (window as any).chart.line({ labels, data: values }) as string;
+    if (!svg) continue;
+
+    // 替换颜色以匹配主题
+    svg = svg
+      .replace(/stroke="black"/g, 'stroke="var(--text-muted)"')
+      .replace(/stroke="#ddd"/g, 'stroke="var(--border)"')
+      .replace(/stroke="steelblue"/g, 'stroke="var(--primary)"')
+      .replace(/fill="steelblue"/g, 'fill="var(--primary)"');
 
     html += `<div class="sm-chart-card">
       <div class="sm-chart-head">
         <span class="sm-chart-label">${esc(label)}</span>
         <span class="sm-chart-range">${formatNum(min)} ~ ${formatNum(max)}</span>
       </div>
-      <svg class="sm-sparkline" viewBox="0 0 ${w} ${h}" preserveAspectRatio="none">
-        <path d="${areaD}" class="sm-spark-area"/>
-        <path d="${pathD}" class="sm-spark-line"/>
-      </svg>
+      <div class="sm-chart-body">${svg}</div>
     </div>`;
   }
 

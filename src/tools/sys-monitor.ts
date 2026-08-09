@@ -12,7 +12,7 @@ type Variables = {
 };
 
 const NS_HOSTS = 'sys_monitor:hosts';
-const DEFAULT_HISTORY_MAX = 10;
+const DEFAULT_HISTORY_MAX = 60;
 const DEFAULT_ONLINE_TIMEOUT_MIN = 30;
 
 // 从工具级配置读取，带默认值

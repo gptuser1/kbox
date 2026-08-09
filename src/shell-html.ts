@@ -121,6 +121,7 @@ export function renderShellHTML(): string {
   </div>
 </div>
 
+<script src="/lib/light-chart.min.js"></script>
 <script type="module" src="/js/shell.js"></script>
 </body>
 </html>`;
