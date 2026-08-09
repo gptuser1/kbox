@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { getConfigSchema } from '../src/config';
+import { getConfigSchema } from '../src/services/config';
 
 describe('getConfigSchema', () => {
   it('returns all config fields', () => {

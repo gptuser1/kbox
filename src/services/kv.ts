@@ -1,4 +1,4 @@
-import { createDb, DbError } from './db';
+import { createDb, DbError } from '../abstraction/d1';
 
 // 表结构：namespace + key 联合主键，value 存 JSON 字符串
 

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { encrypt, decrypt, isEncrypted } from '../src/crypto';
+import { encrypt, decrypt, isEncrypted } from '../src/services/crypto';
 
 describe('isEncrypted', () => {
   it('returns true for a well-formed encrypted payload', () => {

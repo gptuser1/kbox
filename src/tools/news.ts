@@ -1,6 +1,6 @@
 import { Hono } from 'hono';
-import { createDb, DbError } from '../db';
-import { createKv } from '../kv';
+import { createDb, DbError } from '../abstraction/d1';
+import { createKv } from '../services/kv';
 import { crawlAll } from './news-crawler';
 import { summarizeArticles, extractKeywordsViaLLM, dedupeArticlesByLLM, type KeywordStat } from './news-llm';
 

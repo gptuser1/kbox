@@ -1,5 +1,5 @@
-import { DbError } from '../../db';
-import { createKv } from '../../kv';
+import { DbError } from '../../abstraction/d1';
+import { createKv } from '../../services/kv';
 
 export type Bindings = {
   D1_API_TOKEN: string;

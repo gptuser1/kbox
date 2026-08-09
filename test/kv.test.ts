@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { localtimeNow, _resetKvState } from '../src/kv';
+import { localtimeNow, _resetKvState } from '../src/services/kv';
 
 describe('localtimeNow', () => {
   it('returns a CST timestamp string in YYYY-MM-DD HH:mm:ss format', () => {

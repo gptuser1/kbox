@@ -1,8 +1,8 @@
 // GitHub Workflow Dispatch 路由：工作流列表、触发、运行状态、配置 CRUD
 
 import { Hono } from 'hono';
-import { getConfig } from '../config';
-import { createKv } from '../kv';
+import { getConfig } from '../services/config';
+import { createKv } from '../services/kv';
 
 type Bindings = {
   D1_API_TOKEN: string;

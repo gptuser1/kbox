@@ -1,7 +1,7 @@
 import { Hono } from 'hono';
-import { createDb, DbError } from '../db';
-import { createKv } from '../kv';
-import { getConfig } from '../config';
+import { createDb, DbError } from '../abstraction/d1';
+import { createKv } from '../services/kv';
+import { getConfig } from '../services/config';
 
 type Bindings = {
   D1_API_TOKEN: string;

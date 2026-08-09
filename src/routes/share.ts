@@ -1,8 +1,8 @@
 // Share Text 端点（公开只读，简单 token 认证）
 
 import { Hono } from 'hono';
-import { getConfig } from '../config';
-import { createKv } from '../kv';
+import { getConfig } from '../services/config';
+import { createKv } from '../services/kv';
 
 type Bindings = {
   D1_API_TOKEN: string;

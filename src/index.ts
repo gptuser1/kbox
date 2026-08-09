@@ -1,7 +1,7 @@
 // kbox 入口：创建 Hono app，注册中间件与路由
 import { Hono } from 'hono';
 import { renderShellHTML } from './shell-html';
-import { authMiddleware } from './middleware/auth';
+import { authMiddleware } from './services/auth';
 import disk from './tools/cloud-disk';
 import stock from './tools/stock';
 import news from './tools/news';

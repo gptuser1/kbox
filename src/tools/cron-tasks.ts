@@ -1,4 +1,4 @@
-import { createKv } from '../kv';
+import { createKv } from '../services/kv';
 import { runCron as runNewsCrawl } from './news';
 
 export const NS_CRON_TASKS = 'cron_tasks';

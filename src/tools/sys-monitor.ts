@@ -1,6 +1,6 @@
 import { Hono } from 'hono';
-import { createKv } from '../kv';
-import { getConfig } from '../config';
+import { createKv } from '../services/kv';
+import { getConfig } from '../services/config';
 
 type Bindings = {
   D1_API_TOKEN: string;
