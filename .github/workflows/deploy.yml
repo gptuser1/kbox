@@ -15,6 +15,9 @@ jobs:
 
       - run: npm install --legacy-peer-deps
 
+      - name: Typecheck (backend + frontend)
+        run: npm run typecheck
+
       - name: Build frontend (esbuild ESM modules)
         run: npm run build:frontend
 

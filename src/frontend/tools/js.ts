@@ -3,6 +3,7 @@
 // 即使本模块出错，只影响本工具，不波及壳与其他工具。
 // script:xxx 复用本模块：shell 传入 id='script:<scriptId>' 时渲染轻量运行视图。
 import { $, esc, toast, api } from '../shared.js';
+import type { FrontendPlugin } from '../shared.js';
 
 // ─── 判断是否为 script:xxx 运行视图 ───
 function isScriptView(id?: string): boolean {
@@ -444,3 +445,6 @@ function mountScriptRunView(scriptId: string | null): void {
     }
   };
 }
+
+// 编译期校验：确保本模块符合 FrontendPlugin 接口
+const _typeCheck: FrontendPlugin = { render, mount };

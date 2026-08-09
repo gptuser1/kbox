@@ -2,6 +2,7 @@
 // 独立模块，由 shell 在点击时动态 import('/js/tools/dispatch.js') 加载。
 // 即使本模块出错，只影响本工具，不波及壳与其他工具。
 import { $, esc, toast, api, formatDate } from '../shared.js';
+import type { FrontendPlugin } from '../shared.js';
 
 export function render(): string {
   return `
@@ -235,7 +236,7 @@ export function mount(): void {
   }
 
   logBtn.onclick = () => {
-    if (logSection.style.display === '' && logSection.style.display !== 'none') {
+    if (logSection.style.display !== 'none') {
       // 已展开则折叠
       logSection.style.display = 'none';
       logBtn.textContent = '📋 查看日志';
@@ -511,3 +512,6 @@ export function mount(): void {
 
   renderSavedConfigs();
 }
+
+// 编译期校验：确保本模块符合 FrontendPlugin 接口
+const _typeCheck: FrontendPlugin = { render, mount };

@@ -1,13 +1,12 @@
 // 壳：浏览器端全局逻辑。令牌/主题/菜单/首页网格/工具懒加载调度。
 // 关键：showTool 动态 import 工具模块并 try-catch 包裹——单工具 JS 出错只 toast，
 // 不影响壳和其他工具，实现故障隔离。
-import { $, esc, toast, api, setToken, setUnauthorizedHandler, initToast } from './shared.js';
+import { $, esc, toast, api, setToken, setUnauthorizedHandler, initToast, eventBus } from './shared.js';
+import type { FrontendPlugin } from './shared.js';
 import { TOOL_REGISTRY } from './registry.js';
 
-export interface ToolModule {
-  render(id?: string): string;
-  mount(id?: string): void;
-}
+// 前端工具模块统一接口，由 shared.ts 的 FrontendPlugin 强制约束
+export type ToolModule = FrontendPlugin;
 
 // ─── 全局状态 ───
 const THEME_KEY = 'kbox_theme';
@@ -473,6 +472,8 @@ $('confirmOkBtn')?.addEventListener('click', () => {
 (window as any).backToGrid = backToGrid;
 
 // 监听工具发出的脚本变更事件（js 工具发布/删除脚本后触发首页刷新，避免工具直接依赖壳内部函数）
+// 通过 eventBus 订阅；同时兼容旧的 window 事件（过渡期）
+eventBus.on('kbox:scripts-changed', () => loadPublishedScripts());
 window.addEventListener('kbox:scripts-changed', () => loadPublishedScripts());
 
 // 自动验证已保存的令牌

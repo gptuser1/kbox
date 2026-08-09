@@ -2,6 +2,7 @@
 // 独立模块，由 shell 在点击时动态 import('/js/tools/config.js') 加载。
 // 即使本模块出错，只影响本工具，不波及壳与其他工具。
 import { $, esc, toast, api } from '../shared.js';
+import type { FrontendPlugin } from '../shared.js';
 
 export function render(): string {
   return `
@@ -377,3 +378,6 @@ export function mount(): void {
 
   loadAll();
 }
+
+// 编译期校验：确保本模块符合 FrontendPlugin 接口
+const _typeCheck: FrontendPlugin = { render, mount };

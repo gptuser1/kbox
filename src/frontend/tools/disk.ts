@@ -2,6 +2,7 @@
 // 独立模块，由 shell 在点击时动态 import('/js/tools/disk.js') 加载。
 // 即使本模块出错，只影响本工具，不波及壳与其他工具。
 import { $, esc, toast, api, formatDate } from '../shared.js';
+import type { FrontendPlugin } from '../shared.js';
 
 const DISK_CHUNK_SIZE = 1.4 * 1024 * 1024;
 const DISK_MAX_SIZE = 10 * 1024 * 1024;
@@ -371,3 +372,6 @@ export function mount(): void {
   loadStats();
   loadFiles();
 }
+
+// 编译期校验：确保本模块符合 FrontendPlugin 接口
+const _typeCheck: FrontendPlugin = { render, mount };

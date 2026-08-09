@@ -1,5 +1,6 @@
 // 工具：系统状态监控
 import { $, esc, toast, api } from '../shared.js';
+import type { FrontendPlugin } from '../shared.js';
 
 // light-chart.js 全局声明（单文件，零依赖，在 HTML 中以 <script> 加载）
 declare const chart: {
@@ -455,3 +456,6 @@ function timeAgo(ms: number): string {
   const day = Math.floor(hr / 24);
   return day + ' 天前';
 }
+
+// 编译期校验：确保本模块符合 FrontendPlugin 接口
+const _typeCheck: FrontendPlugin = { render, mount };
