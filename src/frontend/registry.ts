@@ -1,7 +1,7 @@
 // 本文件由 script/gen-registry.mjs 从 src/plugins/*/manifest.ts 自动生成。
 // 请勿手动编辑——修改 manifest.ts 后运行 npm run gen:registry 重新生成。
 // name/icon 为默认值，用户 home_layout.overrides 会覆盖。
-// render/mount 由 shell 在点击工具时动态 import('/js/tools/<id>.js') 懒加载，
+// render/mount 由 shell 在点击工具时动态 import('/js/plugins/<id>.js') 懒加载，
 // 从而实现单工具故障隔离（一个工具 JS 出错不影响主页和其他工具）。
 
 export interface ToolMeta {

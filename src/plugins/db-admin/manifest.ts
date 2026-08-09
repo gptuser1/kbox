@@ -8,6 +8,6 @@ export const manifest: PluginManifest = {
   version: '1.0.0',
   entry: {
     frontend: 'db-admin',
-    backend: '/api/tools/db-admin',
+    backend: '/api/plugins/db-admin',
   },
 };

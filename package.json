@@ -5,7 +5,7 @@
   "scripts": {
     "gen:registry": "node script/gen-registry.mjs",
     "typecheck:frontend": "tsc -p src/frontend/tsconfig.json --noEmit",
-    "build:frontend": "npm run gen:registry && npm run typecheck:frontend && esbuild src/frontend/shell.ts src/frontend/shared.ts src/frontend/registry.ts src/frontend/tools/*.ts --format=esm --target=es2022 --outdir=public/js --outbase=src/frontend --allow-overwrite --log-level=warning",
+    "build:frontend": "npm run gen:registry && npm run typecheck:frontend && esbuild src/frontend/shell.ts src/frontend/shared.ts src/frontend/registry.ts src/frontend/plugins/*.ts --format=esm --target=es2022 --outdir=public/js --outbase=src/frontend --allow-overwrite --log-level=warning",
     "dev": "npm run build:frontend && wrangler dev",
     "deploy": "npm run build:frontend && wrangler deploy",
     "typecheck": "tsc --noEmit && npm run typecheck:frontend",

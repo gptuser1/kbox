@@ -230,9 +230,24 @@ input[type="checkbox"] { accent-color: var(--primary); width: 16px; height: 16px
 .wf-log-box {
   background: var(--input-bg); color: var(--text); border: 1px solid var(--border);
   border-radius: 8px; padding: 14px; font-family: var(--font-mono, monospace);
-  font-size: 12px; line-height: 1.6; white-space: pre-wrap; word-break: break-all;
+  font-size: 12px; line-height: 1.6; white-space: normal; word-break: break-all;
   max-height: 60vh; overflow: auto; margin: 0;
 }
+.wf-log-box .log-line { white-space: pre-wrap; min-height: 1em; }
+.wf-log-box .log-empty { color: var(--text-muted); padding: 8px 0; }
+.wf-log-box .log-ts { color: var(--text-muted); opacity: 0.65; }
+.wf-log-box .log-group { margin: 6px 0; border-left: 2px solid var(--border); padding-left: 10px; }
+.wf-log-box .log-group > summary { cursor: pointer; color: var(--primary); font-weight: 600; padding: 2px 0; list-style: none; white-space: pre-wrap; }
+.wf-log-box .log-group > summary::-webkit-details-marker { display: none; }
+.wf-log-box .log-group > summary::before { content: '▸ '; display: inline-block; transition: transform 0.15s; }
+.wf-log-box .log-group[open] > summary::before { transform: rotate(90deg); }
+.wf-log-box .log-cmd { padding: 4px 8px; margin: 3px 0; border-radius: 4px; font-weight: 500; white-space: pre-wrap; }
+.wf-log-box .log-cmd-icon { font-weight: bold; margin-right: 6px; }
+.wf-log-box .log-cmd-error { background: rgba(239,68,68,0.12); color: var(--danger); border-left: 3px solid var(--danger); }
+.wf-log-box .log-cmd-warning { background: rgba(234,179,8,0.12); color: #eab308; border-left: 3px solid #eab308; }
+.wf-log-box .log-cmd-notice { background: rgba(59,130,246,0.12); color: var(--primary); border-left: 3px solid var(--primary); }
+.wf-log-box .log-cmd-section { background: var(--bg); color: var(--text); font-weight: 600; border-left: 3px solid var(--border); }
+[data-theme="dark"] .wf-log-box .log-cmd-warning { color: #facc15; }
 
 /* ─── 结果框 ─── */
 .result-box { padding: 14px 16px; border-radius: 10px; font-size: 14px; margin-top: 16px; display: none; }

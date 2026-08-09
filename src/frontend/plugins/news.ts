@@ -1,5 +1,5 @@
 // 工具：AI 新闻锐评
-// 独立模块，由 shell 在点击时动态 import('/js/tools/news.js') 加载。
+// 独立模块，由 shell 在点击时动态 import('/js/plugins/news.js') 加载。
 // 即使本模块出错，只影响本工具，不波及壳与其他工具。
 import { $, esc, toast, api } from '../shared.js';
 import type { FrontendPlugin } from '../shared.js';
@@ -52,7 +52,7 @@ export function mount(): void {
   async function loadTop() {
     list.innerHTML = '<div class="empty">加载中…</div>';
     try {
-      const data = await api('/api/tools/news/top');
+      const data = await api('/api/plugins/news/top');
       const keywords = data.keywords || [];
       if (!keywords.length) {
         list.innerHTML = '<div class="empty">暂无统计，点击「🎯 生成 Top 10」生成</div>';
@@ -89,7 +89,7 @@ export function mount(): void {
   async function loadAllNews() {
     list.innerHTML = '<div class="empty">加载中…</div>';
     try {
-      const data = await api('/api/tools/news/list?limit=60');
+      const data = await api('/api/plugins/news/list?limit=60');
       const items = data.results || [];
       if (!items.length) {
         list.innerHTML = '<div class="empty">暂无新闻，点击「立即抓取」开始</div>';
@@ -134,7 +134,7 @@ export function mount(): void {
     resultBox.className = 'result-box';
     resultBox.textContent = '⏳ 正在抓取新闻并由 AI 写锐评，可能需要 30-60 秒…';
     try {
-      const data = await api('/api/tools/news/trigger', { method: 'POST' });
+      const data = await api('/api/plugins/news/trigger', { method: 'POST' });
       if (data.success) {
         resultBox.className = 'result-box show success';
         resultBox.textContent = '✓ 抓取完成：新增 ' + data.articles_count + ' 条' + (data.error ? ' · ' + data.error : '');
@@ -159,7 +159,7 @@ export function mount(): void {
     resultBox.className = 'result-box';
     resultBox.textContent = '⏳ 正在基于当前新闻生成 Top 10 关键词…';
     try {
-      const data = await api('/api/tools/news/top/refresh', { method: 'POST' });
+      const data = await api('/api/plugins/news/top/refresh', { method: 'POST' });
       if (data.success) {
         resultBox.className = 'result-box show success';
         resultBox.textContent = '✓ 生成完成：' + data.count + ' 个关键词' + (data.generated_at ? ' · ' + formatNewsTime(data.generated_at) : '');

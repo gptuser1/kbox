@@ -1,5 +1,5 @@
 // 工具：配置管理
-// 独立模块，由 shell 在点击时动态 import('/js/tools/config.js') 加载。
+// 独立模块，由 shell 在点击时动态 import('/js/plugins/config.js') 加载。
 // 即使本模块出错，只影响本工具，不波及壳与其他工具。
 import { $, esc, toast, api } from '../shared.js';
 import type { FrontendPlugin } from '../shared.js';
@@ -11,7 +11,7 @@ export function render(): string {
 <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:12px;flex-wrap:wrap">
   <div class="tabs" id="configTabs">
     <button class="tab active" data-ctab="global">全局配置</button>
-    <button class="tab" data-ctab="tools">工具级</button>
+    <button class="tab" data-ctab="tools">插件级</button>
   </div>
   <button class="btn btn-outline btn-sm" id="configSortBtn">调整顺序</button>
 </div>
@@ -200,7 +200,7 @@ export function mount(): void {
         }).join('');
       }
       const existing = new Set(overrides.map((o: any) => o.key));
-      const available = schema.filter((f: any) => !existing.has(f.key) && (!f.tools || f.tools.includes(t.id)));
+      const available = schema.filter((f: any) => !existing.has(f.key) && (!f.plugins || f.plugins.includes(t.id)));
       const upDisabled = i === 0 ? ' disabled' : '';
       const downDisabled = i === list.length - 1 ? ' disabled' : '';
       const actions = sortMode
@@ -221,7 +221,7 @@ export function mount(): void {
     try {
       await api('/api/preferences/config_order', {
         method: 'PUT',
-        body: JSON.stringify({ value: { app: globalOrder, tools: toolOrder } }),
+        body: JSON.stringify({ value: { app: globalOrder, plugins: toolOrder } }),
         headers: { 'Content-Type': 'application/json' },
       });
     } catch (e: any) { if (e.message !== 'UNAUTHORIZED') toast('顺序保存失败', 'error'); }
@@ -256,11 +256,11 @@ export function mount(): void {
         api('/api/config'),
       ]);
       schema = schemaData.schema || [];
-      tools = schemaData.tools || [];
+      tools = schemaData.plugins || [];
       globalConfigs = globalData.configs || [];
 
       const results = await Promise.all(
-        tools.map((t: any) => api('/api/config/tools/' + t.id).catch(() => ({ overrides: [] })))
+        tools.map((t: any) => api('/api/config/plugins/' + t.id).catch(() => ({ overrides: [] })))
       );
       toolOverrides = {};
       tools.forEach((t: any, i: number) => {
@@ -271,7 +271,7 @@ export function mount(): void {
         const orderData = await api('/api/preferences/config_order');
         if (orderData.value) {
           if (Array.isArray(orderData.value.app)) globalOrder = orderData.value.app;
-          if (Array.isArray(orderData.value.tools)) toolOrder = orderData.value.tools;
+          if (Array.isArray(orderData.value.plugins)) toolOrder = orderData.value.plugins;
         }
       } catch { /* 无偏好则用默认顺序 */ }
 
@@ -317,7 +317,7 @@ export function mount(): void {
   (window as any).addToolOverride = function (tool: string) {
     const overrides = toolOverrides[tool] || [];
     const existing = new Set(overrides.map((o: any) => o.key));
-    const available = schema.filter((f: any) => !existing.has(f.key) && (!f.tools || f.tools.includes(tool)));
+    const available = schema.filter((f: any) => !existing.has(f.key) && (!f.plugins || f.plugins.includes(tool)));
     if (!available.length) { toast('已无可添加的配置项', 'info'); return; }
     pickBody.innerHTML = available.map((f: any) => {
       const sensitiveTag = f.sensitive ? ' <span class="badge badge-err">密</span>' : '';
@@ -344,7 +344,7 @@ export function mount(): void {
       try {
         const url = scope === 'app'
           ? '/api/config/' + encodeURIComponent(key)
-          : '/api/config/tools/' + encodeURIComponent(tool!) + '/' + encodeURIComponent(key);
+          : '/api/config/plugins/' + encodeURIComponent(tool!) + '/' + encodeURIComponent(key);
         await api(url, { method: 'PUT', body: JSON.stringify({ value: '' }), headers: { 'Content-Type': 'application/json' } });
         toast('已清除', 'success');
         loadAll();
@@ -363,7 +363,7 @@ export function mount(): void {
     try {
       const url = scope === 'app'
         ? '/api/config/' + encodeURIComponent(key)
-        : '/api/config/tools/' + encodeURIComponent(tool!) + '/' + encodeURIComponent(key);
+        : '/api/config/plugins/' + encodeURIComponent(tool!) + '/' + encodeURIComponent(key);
       await api(url, { method: 'PUT', body: JSON.stringify({ value }), headers: { 'Content-Type': 'application/json' } });
       toast('已保存', 'success');
       (window as any).closeConfigModal();

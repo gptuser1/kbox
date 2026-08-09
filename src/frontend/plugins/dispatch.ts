@@ -1,5 +1,5 @@
 // 工具：GitHub Actions 触发
-// 独立模块，由 shell 在点击时动态 import('/js/tools/dispatch.js') 加载。
+// 独立模块，由 shell 在点击时动态 import('/js/plugins/dispatch.js') 加载。
 // 即使本模块出错，只影响本工具，不波及壳与其他工具。
 import { $, esc, toast, api, formatDate } from '../shared.js';
 import type { FrontendPlugin } from '../shared.js';
@@ -57,6 +57,90 @@ function parseRepo(input: string): string | null {
   if (m) return m[1] + '/' + m[2];
   if (/^[\w.-]+\/[\w.-]+$/.test(input)) return input;
   return null;
+}
+
+// ─── GitHub Actions 日志格式化 ───
+// 解析 ANSI 颜色码、##[group]/##[error] 等命令标记、时间戳前缀，输出带样式的 HTML。
+
+// ANSI 前景色码 → CSS color（GitHub Actions 常用色）
+const ANSI_COLORS: Record<string, string> = {
+  '30': '#6b7280', '31': '#ef4444', '32': '#22c55e', '33': '#eab308',
+  '34': '#3b82f6', '35': '#a855f7', '36': '#06b6d4', '37': '#e5e7eb',
+  '90': '#9ca3af', '91': '#f87171', '92': '#4ade80', '93': '#facc15',
+  '94': '#60a5fa', '95': '#c084fc', '96': '#22d3ee', '97': '#f3f4f6',
+};
+
+// 渲染带 ANSI 颜色码的文本为 HTML（已 HTML 转义，span 包裹带色段）
+function renderAnsi(text: string): string {
+  const regex = /\u001b\[([\d;]*)m/g;
+  const out: string[] = [];
+  let last = 0;
+  let color = '';
+  let bold = false;
+  const flush = (end: number) => {
+    if (end <= last) return;
+    const seg = esc(text.slice(last, end));
+    if (!seg) return;
+    const styles: string[] = [];
+    if (color) styles.push('color:' + color);
+    if (bold) styles.push('font-weight:600');
+    out.push(styles.length ? '<span style="' + styles.join(';') + '">' + seg + '</span>' : seg);
+  };
+  let m: RegExpExecArray | null;
+  while ((m = regex.exec(text)) !== null) {
+    flush(m.index);
+    const codes = m[1] === '' ? ['0'] : m[1].split(';');
+    for (const c of codes) {
+      if (c === '0') { color = ''; bold = false; }
+      else if (ANSI_COLORS[c]) color = ANSI_COLORS[c];
+      else if (c === '1') bold = true;
+    }
+    last = regex.lastIndex;
+  }
+  flush(text.length);
+  return out.join('');
+}
+
+// 格式化整段 job 日志为 HTML：折叠 group、高亮 error/warning、时间戳淡显、解析 ANSI
+function formatJobLog(raw: string): string {
+  if (!raw) return '<div class="log-empty">（空日志）</div>';
+  const lines = raw.split('\n');
+  const out: string[] = [];
+  let inGroup = false;
+  const closeGroup = () => { if (inGroup) { out.push('</details>'); inGroup = false; } };
+  for (const line of lines) {
+    // \r 用于进度条覆盖，取最后一次状态
+    const crParts = line.split('\r');
+    const content = crParts[crParts.length - 1];
+    // 时间戳前缀：2026-08-09T04:19:50.3761360Z
+    let ts = '';
+    let body = content;
+    const tsMatch = body.match(/^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d+Z)\s(.*)$/);
+    if (tsMatch) {
+      ts = '<span class="log-ts">' + esc(tsMatch[1]) + '</span> ';
+      body = tsMatch[2];
+    }
+    // GitHub Actions 命令标记 ##[group]/##[endgroup]/##[error]/##[warning]/##[notice]/##[section]
+    const cmdMatch = body.match(/^##\[(\w+)\](.*)$/);
+    if (cmdMatch) {
+      const cmd = cmdMatch[1].toLowerCase();
+      const arg = cmdMatch[2];
+      if (cmd === 'group') {
+        closeGroup();
+        out.push('<details class="log-group"><summary>' + ts + esc(arg) + '</summary>');
+        inGroup = true;
+        continue;
+      }
+      if (cmd === 'endgroup') { closeGroup(); continue; }
+      const icons: Record<string, string> = { error: '✖', warning: '⚠', notice: 'ℹ', section: '▸' };
+      const icon = icons[cmd] || '•';
+      out.push('<div class="log-cmd log-cmd-' + esc(cmd) + '">' + ts + '<span class="log-cmd-icon">' + icon + '</span>' + renderAnsi(arg) + '</div>');
+      continue;
+    }
+    out.push('<div class="log-line">' + ts + renderAnsi(body) + '</div>');
+  }
+  closeGroup();
+  return out.join('');
 }
 
 export function mount(): void {
@@ -148,7 +232,7 @@ export function mount(): void {
   async function fetchRuns() {
     if (!pollOwner || !pollRepo || !pollWf) return;
     try {
-      const data = await api('/api/tools/workflow-runs?owner=' + encodeURIComponent(pollOwner) + '&repo=' + encodeURIComponent(pollRepo) + '&workflow_id=' + encodeURIComponent(pollWf) + '&per_page=5');
+      const data = await api('/api/plugins/workflow-runs?owner=' + encodeURIComponent(pollOwner) + '&repo=' + encodeURIComponent(pollRepo) + '&workflow_id=' + encodeURIComponent(pollWf) + '&per_page=5');
       const runs = data.runs || [];
       runSection.style.display = '';
       if (!runs.length) { renderRunCard(null, false); stopPoll(); return; }
@@ -187,7 +271,7 @@ export function mount(): void {
     jobsList.innerHTML = '<div class="empty">加载 jobs 中…</div>';
     logContent.style.display = 'none';
     try {
-      const data = await api('/api/tools/workflow-run-jobs?owner=' + encodeURIComponent(pollOwner) + '&repo=' + encodeURIComponent(pollRepo) + '&run_id=' + currentRun.id);
+      const data = await api('/api/plugins/workflow-run-jobs?owner=' + encodeURIComponent(pollOwner) + '&repo=' + encodeURIComponent(pollRepo) + '&run_id=' + currentRun.id);
       const jobs = data.jobs || [];
       if (!jobs.length) {
         jobsList.innerHTML = '<div class="empty">该 run 无 job 记录</div>';
@@ -227,8 +311,8 @@ export function mount(): void {
     logJobTitle.textContent = '日志 — ' + esc(jobName);
     logText.textContent = '加载中…';
     try {
-      const data = await api('/api/tools/workflow-run-logs?owner=' + encodeURIComponent(pollOwner) + '&repo=' + encodeURIComponent(pollRepo) + '&job_id=' + encodeURIComponent(jobId));
-      logText.textContent = data.log || '(空日志)';
+      const data = await api('/api/plugins/workflow-run-logs?owner=' + encodeURIComponent(pollOwner) + '&repo=' + encodeURIComponent(pollRepo) + '&job_id=' + encodeURIComponent(jobId));
+      logText.innerHTML = formatJobLog(data.log);
     } catch (e: any) {
       if (e.message === 'UNAUTHORIZED') return;
       logText.textContent = '加载日志失败：' + (e.message || '未知错误');
@@ -269,7 +353,7 @@ export function mount(): void {
 
   async function renderSavedConfigs() {
     try {
-      const data = await api('/api/tools/dispatch-configs');
+      const data = await api('/api/plugins/dispatch-configs');
       savedConfigs = data.configs || [];
     } catch (e: any) {
       if (e.message === 'UNAUTHORIZED') return;
@@ -313,7 +397,7 @@ export function mount(): void {
     const c = savedConfigs[i];
     if (!c || !c.id) return;
     try {
-      await api('/api/tools/dispatch-configs/' + encodeURIComponent(c.id), { method: 'DELETE' });
+      await api('/api/plugins/dispatch-configs/' + encodeURIComponent(c.id), { method: 'DELETE' });
       toast('已删除', 'success');
       renderSavedConfigs();
     } catch (err: any) {
@@ -347,9 +431,9 @@ export function mount(): void {
     try {
       const defaultBranch = 'main';
       const [wfData, branchData, commitData] = await Promise.all([
-        api('/api/tools/workflows?owner=' + encodeURIComponent(owner) + '&repo=' + encodeURIComponent(repoName)),
-        api('/api/tools/branches?owner=' + encodeURIComponent(owner) + '&repo=' + encodeURIComponent(repoName)),
-        api('/api/tools/branch-commit?owner=' + encodeURIComponent(owner) + '&repo=' + encodeURIComponent(repoName) + '&branch=' + encodeURIComponent(defaultBranch)),
+        api('/api/plugins/workflows?owner=' + encodeURIComponent(owner) + '&repo=' + encodeURIComponent(repoName)),
+        api('/api/plugins/branches?owner=' + encodeURIComponent(owner) + '&repo=' + encodeURIComponent(repoName)),
+        api('/api/plugins/branch-commit?owner=' + encodeURIComponent(owner) + '&repo=' + encodeURIComponent(repoName) + '&branch=' + encodeURIComponent(defaultBranch)),
       ]);
 
       const branches = branchData.branches || [];
@@ -364,7 +448,7 @@ export function mount(): void {
 
       branchSelect.onchange = () => {
         const selectedBranch = branchSelect.value;
-        api('/api/tools/branch-commit?owner=' + encodeURIComponent(owner) + '&repo=' + encodeURIComponent(repoName) + '&branch=' + encodeURIComponent(selectedBranch))
+        api('/api/plugins/branch-commit?owner=' + encodeURIComponent(owner) + '&repo=' + encodeURIComponent(repoName) + '&branch=' + encodeURIComponent(selectedBranch))
           .then((d: any) => renderCommitInfo(d.commit))
           .catch(() => {});
       };
@@ -390,7 +474,7 @@ export function mount(): void {
           inputsTitle.textContent = '输入参数';
 
           const [owner2, repoName2] = repoInput.value.split('/');
-          api('/api/tools/workflow-inputs?owner=' + encodeURIComponent(owner2) + '&repo=' + encodeURIComponent(repoName2) + '&path=' + encodeURIComponent(selectedWfPath))
+          api('/api/plugins/workflow-inputs?owner=' + encodeURIComponent(owner2) + '&repo=' + encodeURIComponent(repoName2) + '&path=' + encodeURIComponent(selectedWfPath))
             .then((inputData: any) => {
               wfInputs = inputData.inputs || [];
               renderInputs();
@@ -457,7 +541,7 @@ export function mount(): void {
     resultBox.className = 'result-box';
     try {
       const ref = branchSelect.value || 'main';
-      const data = await api('/api/tools/dispatch', {
+      const data = await api('/api/plugins/dispatch', {
         method: 'POST',
         body: JSON.stringify({ owner, repo: repoName, workflow_id: selectedWf, ref, inputs }),
         headers: { 'Content-Type': 'application/json' },
@@ -497,7 +581,7 @@ export function mount(): void {
       });
     }
     try {
-      await api('/api/tools/dispatch-configs', {
+      await api('/api/plugins/dispatch-configs', {
         method: 'POST',
         body: JSON.stringify({ repo, workflow_id: selectedWf, branch: branchSelect.value || 'main', inputs }),
         headers: { 'Content-Type': 'application/json' },

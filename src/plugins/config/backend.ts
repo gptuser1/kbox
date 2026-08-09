@@ -33,7 +33,7 @@ function maskField(field: ConfigField, value: string | null) {
 
 // GET /api/config/schema — 所有配置项定义
 router.get('/schema', (c) => {
-  return c.json({ schema: getConfigSchema(), tools: TOOL_LIST });
+  return c.json({ schema: getConfigSchema(), plugins: TOOL_LIST });
 });
 
 // GET /api/config — 列出所有全局配置（敏感脱敏）
@@ -41,7 +41,7 @@ router.get('/', async (c) => {
   const schema = getConfigSchema();
   const configs = [];
   for (const field of schema) {
-    if (field.tools) continue;
+    if (field.plugins) continue;
     const raw = await getAppConfig(c, field.key);
     const masked = maskField(field, raw);
     configs.push({
@@ -95,8 +95,8 @@ router.put('/:key', async (c) => {
   }
 });
 
-// GET /api/config/tools/:tool — 列出某工具的所有覆盖配置（敏感脱敏）
-router.get('/tools/:tool', async (c) => {
+// GET /api/config/plugins/:tool — 列出某插件的所有覆盖配置（敏感脱敏）
+router.get('/plugins/:tool', async (c) => {
   const tool = c.req.param('tool');
   if (!TOOL_LIST.find(t => t.id === tool)) {
     return c.json({ error: '未知工具: ' + tool }, 404);
@@ -117,8 +117,8 @@ router.get('/tools/:tool', async (c) => {
   return c.json({ tool, overrides });
 });
 
-// PUT /api/config/tools/:tool/:key — 写入工具级覆盖
-router.put('/tools/:tool/:key', async (c) => {
+// PUT /api/config/plugins/:tool/:key — 写入插件级覆盖
+router.put('/plugins/:tool/:key', async (c) => {
   const tool = c.req.param('tool');
   const key = c.req.param('key');
   if (!TOOL_LIST.find(t => t.id === tool)) {
@@ -144,8 +144,8 @@ router.put('/tools/:tool/:key', async (c) => {
   }
 });
 
-// DELETE /api/config/tools/:tool/:key — 删除工具级覆盖（回退到全局）
-router.delete('/tools/:tool/:key', async (c) => {
+// DELETE /api/config/plugins/:tool/:key — 删除插件级覆盖（回退到全局）
+router.delete('/plugins/:tool/:key', async (c) => {
   const tool = c.req.param('tool');
   const key = c.req.param('key');
   if (!TOOL_LIST.find(t => t.id === tool)) {

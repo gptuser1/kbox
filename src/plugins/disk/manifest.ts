@@ -8,6 +8,6 @@ export const manifest: PluginManifest = {
   version: '1.0.0',
   entry: {
     frontend: 'disk',
-    backend: '/api/tools/disk',
+    backend: '/api/plugins/disk',
   },
 };

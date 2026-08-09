@@ -1,5 +1,5 @@
 // 工具：JS 运行工具
-// 独立模块，由 shell 在点击时动态 import('/js/tools/js.js') 加载。
+// 独立模块，由 shell 在点击时动态 import('/js/plugins/js.js') 加载。
 // 即使本模块出错，只影响本工具，不波及壳与其他工具。
 // script:xxx 复用本模块：shell 传入 id='script:<scriptId>' 时渲染轻量运行视图。
 import { $, esc, toast, api } from '../shared.js';
@@ -136,7 +136,7 @@ async function loadJsScripts(): Promise<void> {
   if (!list) return;
   list.innerHTML = '<div class="empty">加载中…</div>';
   try {
-    const data = await api('/api/tools/js/scripts');
+    const data = await api('/api/plugins/js/scripts');
     if (!data.scripts || data.scripts.length === 0) {
       list.innerHTML = '<div class="empty">暂无脚本</div>';
       return;
@@ -180,36 +180,36 @@ function buildFrontendKbox(logs: string[]) {
     fetch: (url: string, opts?: any) => fetch(url, opts),
     kv: {
       get: async (ns: string, key: string) => {
-        const d = await api('/api/tools/js/kv/' + encodeURIComponent(ns) + '/' + encodeURIComponent(key));
+        const d = await api('/api/plugins/js/kv/' + encodeURIComponent(ns) + '/' + encodeURIComponent(key));
         return d.value;
       },
       set: async (ns: string, key: string, value: any) => {
-        await api('/api/tools/js/kv/' + encodeURIComponent(ns) + '/' + encodeURIComponent(key), {
+        await api('/api/plugins/js/kv/' + encodeURIComponent(ns) + '/' + encodeURIComponent(key), {
           method: 'POST', body: JSON.stringify({ value }), headers: { 'Content-Type': 'application/json' },
         });
       },
       delete: async (ns: string, key: string) => {
-        await api('/api/tools/js/kv/' + encodeURIComponent(ns) + '/' + encodeURIComponent(key), { method: 'DELETE' });
+        await api('/api/plugins/js/kv/' + encodeURIComponent(ns) + '/' + encodeURIComponent(key), { method: 'DELETE' });
       },
       list: async (ns: string) => {
-        const d = await api('/api/tools/js/kv/' + encodeURIComponent(ns));
+        const d = await api('/api/plugins/js/kv/' + encodeURIComponent(ns));
         return d.items || [];
       },
     },
     news: {
       list: async (limit?: number) => {
-        const d = await api('/api/tools/news/list' + (limit ? '?limit=' + limit : ''));
+        const d = await api('/api/plugins/news/list' + (limit ? '?limit=' + limit : ''));
         return d.results || [];
       },
       top: async () => {
-        const d = await api('/api/tools/news/top');
+        const d = await api('/api/plugins/news/top');
         return d.keywords || [];
       },
     },
-    stock: { funds: async () => (await api('/api/tools/stock/funds')).results || [] },
+    stock: { funds: async () => (await api('/api/plugins/stock/funds')).results || [] },
     disk: {
-      files: async () => (await api('/api/tools/disk/files')).files || [],
-      stats: async () => api('/api/tools/disk/stats'),
+      files: async () => (await api('/api/plugins/disk/files')).files || [],
+      stats: async () => api('/api/plugins/disk/stats'),
     },
   };
 }
@@ -275,12 +275,12 @@ function notifyScriptsChanged(): void {
     resultBox.innerHTML = '<div class="empty">运行中…</div>';
   }
   try {
-    const data = await api('/api/tools/js/scripts/' + id);
+    const data = await api('/api/plugins/js/scripts/' + id);
     const script = data.script;
     if (!script) { toast('脚本不存在', 'error'); return; }
     const r = await executeJsCode(script.code, {});
     if (resultBox) resultBox.innerHTML = formatJsResult(r);
-    api('/api/tools/js/scripts/' + id + '/record-run', {
+    api('/api/plugins/js/scripts/' + id + '/record-run', {
       method: 'POST',
       body: JSON.stringify({ status: r.error ? 'error' : 'ok', error: r.error?.message }),
       headers: { 'Content-Type': 'application/json' },
@@ -296,7 +296,7 @@ function notifyScriptsChanged(): void {
 
 (window as any).toggleJsPublish = async function (id: string, publish: boolean) {
   try {
-    await api('/api/tools/js/scripts/' + id + '/publish', { method: 'POST', body: JSON.stringify({ published: publish }), headers: { 'Content-Type': 'application/json' } });
+    await api('/api/plugins/js/scripts/' + id + '/publish', { method: 'POST', body: JSON.stringify({ published: publish }), headers: { 'Content-Type': 'application/json' } });
     toast(publish ? '已发布到首页' : '已取消发布', 'success');
     loadJsScripts();
     notifyScriptsChanged();
@@ -309,7 +309,7 @@ function notifyScriptsChanged(): void {
 (window as any).deleteJsScript = function (id: string) {
   (window as any).showConfirm('确认删除该脚本？', async () => {
     try {
-      await api('/api/tools/js/scripts/' + id, { method: 'DELETE' });
+      await api('/api/plugins/js/scripts/' + id, { method: 'DELETE' });
       toast('已删除', 'success');
       loadJsScripts();
       notifyScriptsChanged();
@@ -326,7 +326,7 @@ async function saveAsScript(): Promise<void> {
   const name = prompt('脚本名称：', '未命名脚本');
   if (name === null) return;
   try {
-    await api('/api/tools/js/scripts', { method: 'POST', body: JSON.stringify({ name: name || '未命名脚本', code, icon: '📝', published: false }), headers: { 'Content-Type': 'application/json' } });
+    await api('/api/plugins/js/scripts', { method: 'POST', body: JSON.stringify({ name: name || '未命名脚本', code, icon: '📝', published: false }), headers: { 'Content-Type': 'application/json' } });
     toast('已保存', 'success');
     loadJsScripts();
   } catch (e: any) {
@@ -348,7 +348,7 @@ async function saveAsScript(): Promise<void> {
   let script: any = null;
   if (id) {
     try {
-      const data = await api('/api/tools/js/scripts/' + id);
+      const data = await api('/api/plugins/js/scripts/' + id);
       script = data.script;
     } catch (e: any) { toast('加载失败：' + e.message, 'error'); return; }
   }
@@ -385,9 +385,9 @@ async function saveAsScript(): Promise<void> {
     };
     try {
       if (script) {
-        await api('/api/tools/js/scripts/' + script.id, { method: 'PUT', body: JSON.stringify(payload), headers: { 'Content-Type': 'application/json' } });
+        await api('/api/plugins/js/scripts/' + script.id, { method: 'PUT', body: JSON.stringify(payload), headers: { 'Content-Type': 'application/json' } });
       } else {
-        await api('/api/tools/js/scripts', { method: 'POST', body: JSON.stringify(payload), headers: { 'Content-Type': 'application/json' } });
+        await api('/api/plugins/js/scripts', { method: 'POST', body: JSON.stringify(payload), headers: { 'Content-Type': 'application/json' } });
       }
       toast('已保存', 'success');
       (window as any).closeJsModal();
@@ -414,7 +414,7 @@ function renderScriptRunView(): string {
 function mountScriptRunView(scriptId: string | null): void {
   if (!scriptId) return;
   // 异步加载脚本元信息填充标题
-  api('/api/tools/js/scripts/' + scriptId).then(data => {
+  api('/api/plugins/js/scripts/' + scriptId).then(data => {
     const s = data.script;
     if (s) {
       const titleEl = $('scriptRunTitle');
@@ -429,12 +429,12 @@ function mountScriptRunView(scriptId: string | null): void {
     resultBox.classList.add('show');
     resultBox.innerHTML = '<div class="empty">运行中…</div>';
     try {
-      const data = await api('/api/tools/js/scripts/' + scriptId);
+      const data = await api('/api/plugins/js/scripts/' + scriptId);
       const script = data.script;
       if (!script) { resultBox.innerHTML = formatJsResult({ logs: [], error: { message: '脚本不存在' } }); return; }
       const r = await executeJsCode(script.code, {});
       resultBox.innerHTML = formatJsResult(r);
-      api('/api/tools/js/scripts/' + scriptId + '/record-run', {
+      api('/api/plugins/js/scripts/' + scriptId + '/record-run', {
         method: 'POST',
         body: JSON.stringify({ status: r.error ? 'error' : 'ok', error: r.error?.message }),
         headers: { 'Content-Type': 'application/json' },

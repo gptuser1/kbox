@@ -8,6 +8,6 @@ export const manifest: PluginManifest = {
   version: '1.0.0',
   entry: {
     frontend: 'sys-monitor',
-    backend: '/api/tools/sys-monitor',
+    backend: '/api/plugins/sys-monitor',
   },
 };

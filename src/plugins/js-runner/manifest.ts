@@ -8,6 +8,6 @@ export const manifest: PluginManifest = {
   version: '1.0.0',
   entry: {
     frontend: 'js',
-    backend: '/api/tools/js',
+    backend: '/api/plugins/js',
   },
 };

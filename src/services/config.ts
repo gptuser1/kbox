@@ -8,7 +8,7 @@ export interface ConfigField {
   default?: string;
   placeholder?: string;
   envName?: string;
-  tools?: string[];
+  plugins?: string[];
 }
 
 const APP_CONFIG_SCHEMA: ConfigField[] = [
@@ -19,11 +19,11 @@ const APP_CONFIG_SCHEMA: ConfigField[] = [
   { key: 'tencent_api_base', desc: '腾讯行情 API',     sensitive: false, default: 'https://qt.gtimg.cn' },
   { key: 'yahoo_api_base',  desc: 'Yahoo 行情 API',    sensitive: false, default: 'https://query1.finance.yahoo.com' },
   { key: 'tavily_api_key',  desc: 'Tavily 搜索 API Key', sensitive: true, placeholder: 'tvly-...', envName: 'TAVILY_API_KEY' },
-    { key: 'disk_d1_base',  desc: '云盘 D1 REST API 地址', sensitive: false, placeholder: 'https://ocean.klinux.dpdns.org', tools: ['disk'] },
+    { key: 'disk_d1_base',  desc: '云盘 D1 REST API 地址', sensitive: false, placeholder: 'https://ocean.klinux.dpdns.org', plugins: ['disk'] },
 
-  { key: 'disk_d1_token', desc: '云盘 D1 REST API Token', sensitive: true,  placeholder: '留空则使用全局主令牌', tools: ['disk'] },
-  { key: 'sys_monitor_history_max', desc: '系统监控最大上报历史数量', sensitive: false, default: '60', tools: ['sys-monitor'] },
-  { key: 'sys_monitor_online_timeout', desc: '系统监控在线超时时间（分钟）', sensitive: false, default: '30', tools: ['sys-monitor'] },
+  { key: 'disk_d1_token', desc: '云盘 D1 REST API Token', sensitive: true,  placeholder: '留空则使用全局主令牌', plugins: ['disk'] },
+  { key: 'sys_monitor_history_max', desc: '系统监控最大上报历史数量', sensitive: false, default: '60', plugins: ['sys-monitor'] },
+  { key: 'sys_monitor_online_timeout', desc: '系统监控在线超时时间（分钟）', sensitive: false, default: '30', plugins: ['sys-monitor'] },
   { key: 'share_token', desc: '分享端点口令', sensitive: true, placeholder: '留空则禁用分享端点' },
 ];
 
@@ -134,7 +134,7 @@ export async function getToolConfig(c: any, tool: string, key: string): Promise<
 export async function setAppConfig(c: any, key: string, value: string) {
   const field = APP_CONFIG_SCHEMA.find(f => f.key === key);
   if (!field) throw new Error('未知配置项: ' + key);
-  if (field.tools) throw new Error('该配置项为工具专用，不可写入全局默认');
+  if (field.plugins) throw new Error('该配置项为插件专用，不可写入全局默认');
   await writeConfig(c, NS_APP, key, value, field.sensitive);
 }
 
@@ -149,7 +149,7 @@ export async function deleteAppConfig(c: any, key: string) {
 export async function setToolConfig(c: any, tool: string, key: string, value: string) {
   const field = APP_CONFIG_SCHEMA.find(f => f.key === key);
   if (!field) throw new Error('未知配置项: ' + key);
-  if (field.tools && !field.tools.includes(tool)) throw new Error('该配置项为 ' + field.tools.join('/') + ' 专用，不可写入 ' + tool);
+  if (field.plugins && !field.plugins.includes(tool)) throw new Error('该配置项为 ' + field.plugins.join('/') + ' 专用，不可写入 ' + tool);
   await writeConfig(c, toolNs(tool), key, value, field.sensitive);
 }
 

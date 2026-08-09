@@ -269,7 +269,7 @@ app.post('/files/:id/download-token', async (c) => {
       dt,
       file_id: fileId,
       expires_in: DOWNLOAD_TOKEN_TTL_SEC,
-      url: `/api/tools/disk/files/${fileId}/download?dt=${dt}`,
+      url: `/api/plugins/disk/files/${fileId}/download?dt=${dt}`,
     });
   } catch (e) {
     if (kv.error()) return c.json({ error: kv.error() }, 503);

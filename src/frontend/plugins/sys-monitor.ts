@@ -112,7 +112,7 @@ export function mount(): void {
     if (!currentHost) return;
     (window as any).showConfirm(`确定删除主机「${currentHost.name}」及其所有历史数据？`, async () => {
       try {
-        await api(`/api/tools/sys-monitor/hosts/${encodeURIComponent(currentHost.id)}`, { method: 'DELETE' });
+        await api(`/api/plugins/sys-monitor/hosts/${encodeURIComponent(currentHost.id)}`, { method: 'DELETE' });
         toast('已删除', 'success');
         $('smDetail')!.style.display = 'none';
         $('smHostList')!.style.display = '';
@@ -142,7 +142,7 @@ export function mount(): void {
 async function doRename(name: string) {
   if (!currentHost || !name) return;
   try {
-    await api(`/api/tools/sys-monitor/hosts/${encodeURIComponent(currentHost.id)}`, {
+    await api(`/api/plugins/sys-monitor/hosts/${encodeURIComponent(currentHost.id)}`, {
       method: 'PUT',
       body: JSON.stringify({ name }),
       headers: { 'Content-Type': 'application/json' },
@@ -163,7 +163,7 @@ async function loadHosts() {
   el.innerHTML = '<div class="tool-loader"><div class="app-loader__bar"></div></div>';
 
   try {
-    const data = await api('/api/tools/sys-monitor/hosts') as { hosts: HostListItem[] };
+    const data = await api('/api/plugins/sys-monitor/hosts') as { hosts: HostListItem[] };
     const hosts = data.hosts || [];
     if (hosts.length === 0) {
       el.innerHTML = '<div class="empty">暂无已注册的主机，请先在客户端运行上报脚本</div>';
@@ -222,7 +222,7 @@ async function loadHosts() {
 // ─── 主机详情 ───
 async function showHostDetail(id: string) {
   try {
-    const data = await api(`/api/tools/sys-monitor/hosts/${encodeURIComponent(id)}`) as { host: HostDetail; history: HistoryPoint[] };
+    const data = await api(`/api/plugins/sys-monitor/hosts/${encodeURIComponent(id)}`) as { host: HostDetail; history: HistoryPoint[] };
     currentHost = data.host;
     $('smHostList')!.style.display = 'none';
     const detail = $('smDetail')!;

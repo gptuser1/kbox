@@ -160,7 +160,7 @@ async function loadHomeLayout() {
 // ─── 已发布脚本（动态注入首页卡片） ───
 async function loadPublishedScripts() {
   try {
-    const data = await api('/api/tools/js/published');
+    const data = await api('/api/plugins/js/published');
     publishedScripts = data.scripts || [];
   } catch {
     publishedScripts = [];
@@ -350,7 +350,7 @@ async function showTool(id: string) {
   let mod = toolModuleCache[realId];
   if (!mod) {
     try {
-      mod = (await import('/js/tools/' + realId + '.js')) as ToolModule;
+      mod = (await import('/js/plugins/' + realId + '.js')) as ToolModule;
       toolModuleCache[realId] = mod;
     } catch (e) {
       toast('工具加载失败：' + errMsg(e), 'error');

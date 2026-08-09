@@ -10,7 +10,7 @@ export interface PluginManifest {
   version: string;        // semver
   entry: {
     frontend: string;     // frontend module path, e.g. 'stock'
-    backend?: string;     // backend route prefix, e.g. '/api/tools/stock'
+    backend?: string;     // backend route prefix, e.g. '/api/plugins/stock'
   };
   config?: ConfigField[]; // config field declarations (optional)
 }

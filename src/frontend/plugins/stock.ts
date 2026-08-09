@@ -1,5 +1,5 @@
 // 工具：基金估值
-// 独立模块，由 shell 在点击时动态 import('/js/tools/stock.js') 加载。
+// 独立模块，由 shell 在点击时动态 import('/js/plugins/stock.js') 加载。
 // 即使本模块出错，只影响本工具，不波及壳与其他工具。
 import { $, esc, toast, api } from '../shared.js';
 import type { FrontendPlugin } from '../shared.js';
@@ -114,7 +114,7 @@ export function mount(): void {
   async function loadFunds() {
     list.innerHTML = '<div class="empty">加载中…</div>';
     try {
-      const data = await api('/api/tools/stock/funds');
+      const data = await api('/api/plugins/stock/funds');
       fundsCache = data.results || [];
       $('stockLastTime').textContent = fundsCache[0]?.estimated_time || '-';
       if (!fundsCache.length) {
@@ -182,7 +182,7 @@ export function mount(): void {
     if (!editingId) return;
     (window as any).showConfirm('确定删除此基金？', async () => {
       try {
-        await api('/api/tools/stock/funds/' + editingId, { method: 'DELETE' });
+        await api('/api/plugins/stock/funds/' + editingId, { method: 'DELETE' });
         toast('已删除', 'success');
         closeStockModal();
         loadFunds();
@@ -294,10 +294,10 @@ export function mount(): void {
     modalSave.disabled = true; modalSave.textContent = '保存中…';
     try {
       if (editingId) {
-        await api('/api/tools/stock/funds/' + editingId, { method: 'PUT', body: JSON.stringify(body), headers: { 'Content-Type': 'application/json' } });
+        await api('/api/plugins/stock/funds/' + editingId, { method: 'PUT', body: JSON.stringify(body), headers: { 'Content-Type': 'application/json' } });
         toast('已更新', 'success');
       } else {
-        await api('/api/tools/stock/funds', { method: 'POST', body: JSON.stringify(body), headers: { 'Content-Type': 'application/json' } });
+        await api('/api/plugins/stock/funds', { method: 'POST', body: JSON.stringify(body), headers: { 'Content-Type': 'application/json' } });
         toast('已添加', 'success');
       }
       closeStockModal();
@@ -315,7 +315,7 @@ export function mount(): void {
     resultBox.className = 'result-box';
     resultBox.textContent = '⏳ 正在抓取行情并计算估值…';
     try {
-      const data = await api('/api/tools/stock/refresh', { method: 'POST' });
+      const data = await api('/api/plugins/stock/refresh', { method: 'POST' });
       const s = data.stats || {};
       resultBox.className = 'result-box show success';
       resultBox.textContent = '✓ 已刷新 ' + (s.updated_funds || 0) + '/' + (s.total_funds || 0) + ' 只基金估值';
@@ -358,7 +358,7 @@ export function mount(): void {
 
     importSubmit.disabled = true; importSubmit.textContent = '导入中…';
     try {
-      const result = await api('/api/tools/stock/funds/batch', {
+      const result = await api('/api/plugins/stock/funds/batch', {
         method: 'POST',
         body: JSON.stringify(data),
         headers: { 'Content-Type': 'application/json' },

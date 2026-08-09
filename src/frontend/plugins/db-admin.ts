@@ -1,5 +1,5 @@
 // 工具：DB 管理
-// 独立模块，由 shell 在点击时动态 import('/js/tools/db-admin.js') 加载。
+// 独立模块，由 shell 在点击时动态 import('/js/plugins/db-admin.js') 加载。
 // 即使本模块出错，只影响本工具，不波及壳与其他工具。
 import { $, esc, toast, api, getToken } from '../shared.js';
 import type { FrontendPlugin } from '../shared.js';
@@ -403,7 +403,7 @@ export function mount(): void {
   // ─── 连接选择 ───
   async function loadConnSelect() {
     try {
-      const data = await api('/api/tools/db-admin/connections');
+      const data = await api('/api/plugins/db-admin/connections');
       connections = data.results || [];
       const prev = activeConnId;
       connSelect.innerHTML = '<option value="">— 选择连接 —</option>' +
@@ -451,7 +451,7 @@ export function mount(): void {
     tablesEmpty.textContent = '加载中…';
     tablesList.innerHTML = '';
     try {
-      const data = await api('/api/tools/db-admin/connections/' + activeConnId + '/tables');
+      const data = await api('/api/plugins/db-admin/connections/' + activeConnId + '/tables');
       const tables = (data.results || []).filter((r: any) => r.name);
       if (tables.length === 0) {
         tablesEmpty.textContent = '该库暂无表，点右上新建';
@@ -504,7 +504,7 @@ export function mount(): void {
       if (dataState.filter) {
         params.set(dataState.filter.col, dataState.filter.val);
       }
-      const data = await api('/api/tools/db-admin/connections/' + activeConnId + '/tables/' + encodeURIComponent(activeTable) + '/data?' + params.toString());
+      const data = await api('/api/plugins/db-admin/connections/' + activeConnId + '/tables/' + encodeURIComponent(activeTable) + '/data?' + params.toString());
       const rows = data.results || [];
       const total = data.count;
       const cols = rows.length > 0 ? Object.keys(rows[0]) : (schemaCache?.columns?.map((c: any) => c.name) || []);
@@ -622,7 +622,7 @@ export function mount(): void {
     }
     schemaMeta.textContent = '加载中…';
     try {
-      const data = await api('/api/tools/db-admin/connections/' + activeConnId + '/tables/' + encodeURIComponent(activeTable) + '/schema');
+      const data = await api('/api/plugins/db-admin/connections/' + activeConnId + '/tables/' + encodeURIComponent(activeTable) + '/schema');
       schemaCache = { ...data, _table: activeTable };
       renderSchema(data);
     } catch (e: any) {
@@ -677,7 +677,7 @@ export function mount(): void {
     if (!activeConnId || !activeTable) return;
     (window as any).showConfirm('确认删除表 `' + activeTable + '`？此操作不可恢复！', async () => {
       try {
-        await api('/api/tools/db-admin/connections/' + activeConnId + '/tables/' + encodeURIComponent(activeTable), { method: 'DELETE' });
+        await api('/api/plugins/db-admin/connections/' + activeConnId + '/tables/' + encodeURIComponent(activeTable), { method: 'DELETE' });
         toast('表已删除', 'success');
         activeTable = '';
         schemaCache = null;
@@ -701,7 +701,7 @@ export function mount(): void {
     sqlMeta.textContent = '执行中…';
     const t0 = performance.now();
     try {
-      const data = await api('/api/tools/db-admin/connections/' + activeConnId + '/query', {
+      const data = await api('/api/plugins/db-admin/connections/' + activeConnId + '/query', {
         method: 'POST',
         body: JSON.stringify({ query: sql, params: [] }),
         headers: { 'Content-Type': 'application/json' },
@@ -763,7 +763,7 @@ export function mount(): void {
     insertForm.innerHTML = '<div class="db-empty-hint">加载字段中…</div>';
     try {
       if (!schemaCache || schemaCache._table !== activeTable) {
-        const data = await api('/api/tools/db-admin/connections/' + activeConnId + '/tables/' + encodeURIComponent(activeTable) + '/schema');
+        const data = await api('/api/plugins/db-admin/connections/' + activeConnId + '/tables/' + encodeURIComponent(activeTable) + '/schema');
         schemaCache = { ...data, _table: activeTable };
       }
       const cols = schemaCache.columns || [];
@@ -797,7 +797,7 @@ export function mount(): void {
     insertSubmitBtn.disabled = true; insertSubmitBtn.textContent = '插入中…';
     insertMeta.textContent = '';
     try {
-      const res = await api('/api/tools/db-admin/connections/' + activeConnId + '/tables/' + encodeURIComponent(activeTable) + '/row', {
+      const res = await api('/api/plugins/db-admin/connections/' + activeConnId + '/tables/' + encodeURIComponent(activeTable) + '/row', {
         method: 'POST',
         body: JSON.stringify({ values }),
         headers: { 'Content-Type': 'application/json' },
@@ -831,11 +831,11 @@ export function mount(): void {
   async function loadRowForm(where: any) {
     try {
       if (!schemaCache || schemaCache._table !== activeTable) {
-        const sd = await api('/api/tools/db-admin/connections/' + activeConnId + '/tables/' + encodeURIComponent(activeTable) + '/schema');
+        const sd = await api('/api/plugins/db-admin/connections/' + activeConnId + '/tables/' + encodeURIComponent(activeTable) + '/schema');
         schemaCache = { ...sd, _table: activeTable };
       }
       const params = new URLSearchParams(where);
-      const data = await api('/api/tools/db-admin/connections/' + activeConnId + '/tables/' + encodeURIComponent(activeTable) + '/row?' + params.toString());
+      const data = await api('/api/plugins/db-admin/connections/' + activeConnId + '/tables/' + encodeURIComponent(activeTable) + '/row?' + params.toString());
       const row = data.row;
       if (!row) {
         rowModalBody.innerHTML = '<div class="db-empty-hint" style="color:#ef4444">行未找到</div>';
@@ -858,7 +858,7 @@ export function mount(): void {
   async function loadInsertFormInModal() {
     try {
       if (!schemaCache || schemaCache._table !== activeTable) {
-        const sd = await api('/api/tools/db-admin/connections/' + activeConnId + '/tables/' + encodeURIComponent(activeTable) + '/schema');
+        const sd = await api('/api/plugins/db-admin/connections/' + activeConnId + '/tables/' + encodeURIComponent(activeTable) + '/schema');
         schemaCache = { ...sd, _table: activeTable };
       }
       const cols = schemaCache.columns || [];
@@ -888,7 +888,7 @@ export function mount(): void {
     rowModalMeta.textContent = '';
     try {
       if (rowEditingState.mode === 'edit') {
-        await api('/api/tools/db-admin/connections/' + activeConnId + '/tables/' + encodeURIComponent(activeTable) + '/row', {
+        await api('/api/plugins/db-admin/connections/' + activeConnId + '/tables/' + encodeURIComponent(activeTable) + '/row', {
           method: 'PUT',
           body: JSON.stringify({ set, where: rowEditingState.where }),
           headers: { 'Content-Type': 'application/json' },
@@ -897,7 +897,7 @@ export function mount(): void {
       } else {
         const values: any = {};
         Object.keys(set).forEach(k => { if (set[k] !== '') values[k] = set[k]; });
-        await api('/api/tools/db-admin/connections/' + activeConnId + '/tables/' + encodeURIComponent(activeTable) + '/row', {
+        await api('/api/plugins/db-admin/connections/' + activeConnId + '/tables/' + encodeURIComponent(activeTable) + '/row', {
           method: 'POST',
           body: JSON.stringify({ values }),
           headers: { 'Content-Type': 'application/json' },
@@ -919,7 +919,7 @@ export function mount(): void {
     (window as any).showConfirm('确认删除此行？', async () => {
       try {
         const params = new URLSearchParams(where);
-        await api('/api/tools/db-admin/connections/' + activeConnId + '/tables/' + encodeURIComponent(activeTable) + '/row?' + params.toString(), { method: 'DELETE' });
+        await api('/api/plugins/db-admin/connections/' + activeConnId + '/tables/' + encodeURIComponent(activeTable) + '/row?' + params.toString(), { method: 'DELETE' });
         toast('已删除', 'success');
         loadData();
       } catch (e: any) {
@@ -1032,7 +1032,7 @@ export function mount(): void {
     if (!fullSql) { showResult(newTableResult, '请至少填写一列的列名', 'error'); return; }
     newTableSubmitBtn.disabled = true; newTableSubmitBtn.textContent = '创建中…';
     try {
-      await api('/api/tools/db-admin/connections/' + activeConnId + '/query', {
+      await api('/api/plugins/db-admin/connections/' + activeConnId + '/query', {
         method: 'POST',
         body: JSON.stringify({ query: fullSql, params: [] }),
         headers: { 'Content-Type': 'application/json' },
@@ -1071,7 +1071,7 @@ export function mount(): void {
   async function loadConnectionsList() {
     connList.innerHTML = '<div class="db-empty-hint">加载中…</div>';
     try {
-      const data = await api('/api/tools/db-admin/connections');
+      const data = await api('/api/plugins/db-admin/connections');
       connections = data.results || [];
       renderConnList();
     } catch (e: any) {
@@ -1117,7 +1117,7 @@ export function mount(): void {
     if (!editingConnId) return;
     (window as any).showConfirm('确认删除此连接？', async () => {
       try {
-        await api('/api/tools/db-admin/connections/' + editingConnId, { method: 'DELETE' });
+        await api('/api/plugins/db-admin/connections/' + editingConnId, { method: 'DELETE' });
         toast('已删除', 'success');
         resetConnForm();
         loadConnectionsList();
@@ -1138,7 +1138,7 @@ export function mount(): void {
     try {
       let result: any;
       if (editingConnId) {
-        result = await api('/api/tools/db-admin/connections/' + editingConnId + '/test', { method: 'POST' });
+        result = await api('/api/plugins/db-admin/connections/' + editingConnId + '/test', { method: 'POST' });
       } else {
         const url = database ? baseUrl.replace(/\/+$/, '') + '/' + database + '/query' : baseUrl.replace(/\/+$/, '') + '/query';
         const res = await fetch(url, {
@@ -1167,11 +1167,11 @@ export function mount(): void {
     connSaveBtn.disabled = true; connSaveBtn.textContent = '保存中…';
     try {
       if (editingConnId) {
-        await api('/api/tools/db-admin/connections/' + editingConnId, {
+        await api('/api/plugins/db-admin/connections/' + editingConnId, {
           method: 'PUT', body: JSON.stringify(body), headers: { 'Content-Type': 'application/json' },
         });
       } else {
-        await api('/api/tools/db-admin/connections', {
+        await api('/api/plugins/db-admin/connections', {
           method: 'POST', body: JSON.stringify(body), headers: { 'Content-Type': 'application/json' },
         });
       }

@@ -1,5 +1,5 @@
 // 工具：微型云盘
-// 独立模块，由 shell 在点击时动态 import('/js/tools/disk.js') 加载。
+// 独立模块，由 shell 在点击时动态 import('/js/plugins/disk.js') 加载。
 // 即使本模块出错，只影响本工具，不波及壳与其他工具。
 import { $, esc, toast, api, formatDate } from '../shared.js';
 import type { FrontendPlugin } from '../shared.js';
@@ -57,14 +57,14 @@ export function render(): string {
         <p>① Header: <code>Authorization: Bearer &lt;token&gt;</code></p>
         <p>② Query: <code>?token=&lt;token&gt;</code>（仅下载链接推荐）</p>
         <hr style="border:none;border-top:1px solid var(--border);margin:10px 0">
-        <p><b>GET</b> <code>/api/tools/disk/stats</code> — 容量统计</p>
-        <p><b>GET</b> <code>/api/tools/disk/files</code> — 文件列表</p>
-        <p><b>POST</b> <code>/api/tools/disk/files</code> — 创建文件记录<br>
+        <p><b>GET</b> <code>/api/plugins/disk/stats</code> — 容量统计</p>
+        <p><b>GET</b> <code>/api/plugins/disk/files</code> — 文件列表</p>
+        <p><b>POST</b> <code>/api/plugins/disk/files</code> — 创建文件记录<br>
         <span style="color:var(--text-muted)">body: { name, size, mime_type }</span></p>
-        <p><b>POST</b> <code>/api/tools/disk/files/:id/chunks</code> — 上传分片<br>
+        <p><b>POST</b> <code>/api/plugins/disk/files/:id/chunks</code> — 上传分片<br>
         <span style="color:var(--text-muted)">body: { chunk_index, content(base64), chunk_size }</span></p>
-        <p><b>GET</b> <code>/api/tools/disk/files/:id/download?token=xxx</code> — 下载文件</p>
-        <p><b>DELETE</b> <code>/api/tools/disk/files/:id</code> — 删除文件</p>
+        <p><b>GET</b> <code>/api/plugins/disk/files/:id/download?token=xxx</code> — 下载文件</p>
+        <p><b>DELETE</b> <code>/api/plugins/disk/files/:id</code> — 删除文件</p>
       </div>
     </details>
     <!-- 下载弹窗 -->
@@ -119,7 +119,7 @@ export function mount(): void {
 
   async function loadStats() {
     try {
-      const s = await api('/api/tools/disk/stats');
+      const s = await api('/api/plugins/disk/stats');
       const usagePct = s.max_db_size > 0 ? Math.min(100, (s.db_size / s.max_db_size) * 100) : 0;
       statsBox.innerHTML =
         '<span class="ttr-storage">存储 ' + formatSize(s.db_size) + ' / ' + formatSize(s.max_db_size) + '</span>' +
@@ -133,7 +133,7 @@ export function mount(): void {
   async function loadFiles() {
     fileList.innerHTML = '<div class="empty" style="padding:20px 0">加载中…</div>';
     try {
-      const data = await api('/api/tools/disk/files');
+      const data = await api('/api/plugins/disk/files');
       const files = data.files || [];
       fileCache = {};
       for (const f of files) fileCache[f.id] = f;
@@ -186,10 +186,10 @@ export function mount(): void {
     if (!dlFileId) return;
     closeDlPopup();
     try {
-      const data = await api('/api/tools/disk/files/' + dlFileId + '/download-token', { method: 'POST' });
+      const data = await api('/api/plugins/disk/files/' + dlFileId + '/download-token', { method: 'POST' });
       if (!data.dt) throw new Error('未获取到下载令牌');
       const a = document.createElement('a');
-      a.href = '/api/tools/disk/files/' + dlFileId + '/download?dt=' + encodeURIComponent(data.dt);
+      a.href = '/api/plugins/disk/files/' + dlFileId + '/download?dt=' + encodeURIComponent(data.dt);
       a.download = '';
       document.body.appendChild(a);
       a.click();
@@ -204,9 +204,9 @@ export function mount(): void {
     if (!dlFileId) return;
     closeDlPopup();
     try {
-      const data = await api('/api/tools/disk/files/' + dlFileId + '/download-token', { method: 'POST' });
+      const data = await api('/api/plugins/disk/files/' + dlFileId + '/download-token', { method: 'POST' });
       if (!data.dt) throw new Error('未获取到下载令牌');
-      const link = window.location.origin + '/api/tools/disk/files/' + dlFileId + '/download?dt=' + encodeURIComponent(data.dt);
+      const link = window.location.origin + '/api/plugins/disk/files/' + dlFileId + '/download?dt=' + encodeURIComponent(data.dt);
       await navigator.clipboard.writeText(link);
       toast('下载链接已复制', 'success');
     } catch (e: any) {
@@ -219,7 +219,7 @@ export function mount(): void {
   (window as any).deleteFile = function(id: any, name: string) {
     (window as any).showConfirm('确认删除「' + name + '」？', async () => {
       try {
-        await api('/api/tools/disk/files/' + id, { method: 'DELETE' });
+        await api('/api/plugins/disk/files/' + id, { method: 'DELETE' });
         toast('已删除', 'success');
         loadStats();
         loadFiles();
@@ -321,7 +321,7 @@ export function mount(): void {
     const status = row.querySelectorAll('span')[1];
 
     try {
-      const createRes = await api('/api/tools/disk/files', {
+      const createRes = await api('/api/plugins/disk/files', {
         method: 'POST',
         body: JSON.stringify({ name: file.name, size: file.size, mime_type: file.type || '' }),
         headers: { 'Content-Type': 'application/json' },
@@ -338,7 +338,7 @@ export function mount(): void {
         for (let j = 0; j < bytes.length; j++) binary += String.fromCharCode(bytes[j]);
         const base64 = btoa(binary);
 
-        await api('/api/tools/disk/files/' + fileId + '/chunks', {
+        await api('/api/plugins/disk/files/' + fileId + '/chunks', {
           method: 'POST',
           body: JSON.stringify({ chunk_index: i, content: base64, chunk_size: end - start }),
           headers: { 'Content-Type': 'application/json' },

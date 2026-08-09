@@ -236,7 +236,7 @@ def build_payload(hostname, opts):
 
 def report(url, token, payload):
     """发送上报请求"""
-    api_url = url.rstrip('/') + '/api/tools/sys-monitor/report'
+    api_url = url.rstrip('/') + '/api/plugins/sys-monitor/report'
     body = json.dumps(payload).encode('utf-8')
 
     req = urllib.request.Request(api_url, data=body, method='POST')
