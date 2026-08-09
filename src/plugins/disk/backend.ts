@@ -1,7 +1,7 @@
 import { Hono } from 'hono';
-import { createDb, DbError } from '../abstraction/d1';
-import { createKv } from '../services/kv';
-import { getConfig } from '../services/config';
+import { createDb, DbError } from '../../abstraction/d1';
+import { createKv } from '../../services/kv';
+import { getConfig } from '../../services/config';
 
 type Bindings = {
   D1_API_TOKEN: string;
@@ -385,5 +385,14 @@ export async function getDiskStats(env: any): Promise<any> {
   } catch { return { file_count: 0, total_size: 0, db_size: 0 }; }
 }
 
-export default app;
 export { MAX_FILE_SIZE, CHUNK_SIZE };
+
+import type { BackendPlugin } from '../../adaptation/types';
+import { manifest } from './manifest';
+
+const diskPlugin: BackendPlugin = {
+  manifest,
+  router: app,
+};
+
+export default diskPlugin;

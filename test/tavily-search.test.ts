@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { buildTrendingQuery } from '../src/tools/tavily-search';
+import { buildTrendingQuery } from '../src/plugins/news/tavily';
 
 describe('buildTrendingQuery', () => {
   it('produces a query in "X月Y日 新闻热点 头条" format', () => {

@@ -1,8 +1,8 @@
 import { describe, it, expect, vi } from 'vitest';
-import { METRIC_SCHEMA, SCHEMA_MAP, parseMetrics, extractSummary, isOnline } from '../src/tools/sys-monitor';
+import { METRIC_SCHEMA, SCHEMA_MAP, parseMetrics, extractSummary, isOnline } from '../src/plugins/sys-monitor/backend';
 
 // Mock getConfig to return null (fall back to default), so isOnline uses default 30min timeout
-vi.mock('../src/config', () => ({
+vi.mock('../src/services/config', () => ({
   getConfig: vi.fn().mockResolvedValue(null),
 }));
 

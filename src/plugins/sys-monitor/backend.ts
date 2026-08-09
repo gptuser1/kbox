@@ -1,6 +1,6 @@
 import { Hono } from 'hono';
-import { createKv } from '../services/kv';
-import { getConfig } from '../services/config';
+import { createKv } from '../../services/kv';
+import { getConfig } from '../../services/config';
 
 type Bindings = {
   D1_API_TOKEN: string;
@@ -283,4 +283,12 @@ app.delete('/hosts/:id', async (c) => {
   return c.json({ ok: true });
 });
 
-export default app;
+import type { BackendPlugin } from '../../adaptation/types';
+import { manifest } from './manifest';
+
+const sysMonitorPlugin: BackendPlugin = {
+  manifest,
+  router: app,
+};
+
+export default sysMonitorPlugin;

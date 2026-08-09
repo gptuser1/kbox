@@ -1,4 +1,4 @@
-import { getConfigByEnv } from '../services/config';
+import { getConfigByEnv } from '../../services/config';
 
 interface Env {
   D1_API_TOKEN: string;

@@ -1,8 +1,10 @@
 import { Hono } from 'hono';
-import { createKv } from '../services/kv';
-import { listNews, getTopKeywords } from './news';
-import { listFunds } from '../plugins/stock/backend';
-import { listDiskFiles, getDiskStats } from './cloud-disk';
+import { createKv } from '../../services/kv';
+import { listNews, getTopKeywords } from '../news/backend';
+import { listFunds } from '../stock/backend';
+import { listDiskFiles, getDiskStats } from '../disk/backend';
+import type { BackendPlugin } from '../../adaptation/types';
+import { manifest } from './manifest';
 
 type Bindings = {
   D1_API_TOKEN: string;
@@ -435,4 +437,9 @@ app.post('/scripts/:id/record-run', async (c) => {
   }
 });
 
-export default app;
+const jsRunnerPlugin: BackendPlugin = {
+  manifest,
+  router: app,
+};
+
+export default jsRunnerPlugin;

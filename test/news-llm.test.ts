@@ -9,7 +9,7 @@ import {
   parseKeywords,
   normalizeKeyword,
   bigramJaccard,
-} from '../src/tools/news-llm';
+} from '../src/plugins/news/llm';
 
 // ─── buildPrompt ───
 

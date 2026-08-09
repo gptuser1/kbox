@@ -1,4 +1,4 @@
-import { searchTrending, type TavilyResult } from './tavily-search'
+import { searchTrending, type TavilyResult } from './tavily'
 
 interface RawArticle {
   title: string

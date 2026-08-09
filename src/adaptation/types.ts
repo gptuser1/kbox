@@ -23,7 +23,7 @@ export interface CronDefinition {
 
 export interface BackendPlugin {
   manifest: PluginManifest;
-  router: Hono;                          // Hono sub-router
+  router: Hono<any, any, any>;           // Hono sub-router
   cron?: CronDefinition[];               // scheduled tasks (optional)
   init?(env: any): Promise<void>;        // init hook (optional)
 }

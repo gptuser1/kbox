@@ -1,20 +1,19 @@
-// kbox 入口：创建 Hono app，注册中间件与路由
+// kbox 入口：创建 Hono app，注册中间件与插件路由
 import { Hono } from 'hono';
 import { renderShellHTML } from './shell-html';
 import { authMiddleware } from './services/auth';
 import { registerPlugin, mountPlugins } from './adaptation/registry';
 import stockPlugin from './plugins/stock/backend';
-import disk from './tools/cloud-disk';
-import news from './tools/news';
-import dbAdmin from './tools/db-admin';
-import jsRunner from './tools/js-runner';
-import sysMonitor from './tools/sys-monitor';
-import { runCronTasks } from './tools/cron-tasks';
-import cronRoutes from './routes/cron';
-import configRoutes from './routes/config';
-import preferencesRoutes from './routes/preferences';
-import dispatchRoutes from './routes/dispatch';
-import shareRoutes from './routes/share';
+import diskPlugin from './plugins/disk/backend';
+import newsPlugin from './plugins/news/backend';
+import dbAdminPlugin from './plugins/db-admin/backend';
+import jsRunnerPlugin from './plugins/js-runner/backend';
+import sysMonitorPlugin from './plugins/sys-monitor/backend';
+import cronPlugin, { runCronTasks } from './plugins/cron/backend';
+import configPlugin from './plugins/config/backend';
+import ghDispatchPlugin from './plugins/gh-dispatch/backend';
+import shareRoutes from './plugins/share/backend';
+import preferencesRoutes from './plugins/preferences/backend';
 
 type Bindings = {
   ACCESS_TOKEN: string;
@@ -77,22 +76,20 @@ app.get('/api/health', (c) => {
   return c.json({ status: 'ok', d1_token: !!c.env.D1_API_TOKEN });
 });
 
-// ─── 插件路由（通过 PluginRegistry 注册）───
+// ─── 注册所有插件 ───
 registerPlugin(stockPlugin);
+registerPlugin(diskPlugin);
+registerPlugin(newsPlugin);
+registerPlugin(dbAdminPlugin);
+registerPlugin(jsRunnerPlugin);
+registerPlugin(sysMonitorPlugin);
+registerPlugin(cronPlugin);
+registerPlugin(configPlugin);
+registerPlugin(ghDispatchPlugin);
 mountPlugins(app);
 
-// ─── 旧式工具路由（待迁移）───
-app.route('/api/tools/disk', disk);
-app.route('/api/tools/news', news);
-app.route('/api/tools/db-admin', dbAdmin);
-app.route('/api/tools/js', jsRunner);
-app.route('/api/tools/sys-monitor', sysMonitor);
-
-// ─── 功能路由 ───
-app.route('/api/cron-tasks', cronRoutes);
-app.route('/api/config', configRoutes);
+// ─── 非插件路由（无前端入口） ───
 app.route('/api/preferences', preferencesRoutes);
-app.route('/api/tools', dispatchRoutes);  // workflows, dispatch, dispatch-configs, branches, etc.
 app.route('/share', shareRoutes);
 
 export default {

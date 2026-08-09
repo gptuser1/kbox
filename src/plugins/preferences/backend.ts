@@ -2,7 +2,7 @@
 // 任意 key → 任意 JSON value。供前端存放各类用户偏好
 
 import { Hono } from 'hono';
-import { createKv } from '../services/kv';
+import { createKv } from '../../services/kv';
 
 type Bindings = {
   D1_API_TOKEN: string;

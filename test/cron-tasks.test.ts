@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { CRON_ACTIONS, NS_CRON_TASKS, normalizeHours, genId, nowUnix, currentHourCN } from '../src/tools/cron-tasks';
+import { CRON_ACTIONS, NS_CRON_TASKS, normalizeHours, genId, nowUnix, currentHourCN } from '../src/plugins/cron/backend';
 
 // ─── 常量验证 ───
 

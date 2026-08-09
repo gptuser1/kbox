@@ -1,7 +1,7 @@
 import { Hono } from 'hono';
 import { DbError } from '../../abstraction/d1';
 import { createKv } from '../../services/kv';
-import { refreshValuations } from '../../tools/stock-fetcher';
+import { refreshValuations } from './stock-fetcher';
 import { getConfig } from '../../services/config';
 import type { BackendPlugin } from '../../adaptation/types';
 import { manifest } from './manifest';

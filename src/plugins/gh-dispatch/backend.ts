@@ -1,8 +1,8 @@
 // GitHub Workflow Dispatch 路由：工作流列表、触发、运行状态、配置 CRUD
 
 import { Hono } from 'hono';
-import { getConfig } from '../services/config';
-import { createKv } from '../services/kv';
+import { getConfig } from '../../services/config';
+import { createKv } from '../../services/kv';
 
 type Bindings = {
   D1_API_TOKEN: string;
@@ -15,7 +15,7 @@ const router = new Hono<{ Bindings: Bindings; Variables: Variables }>();
 
 // ─── 辅助：解析 workflow_dispatch inputs ───
 
-interface WorkflowInput {
+export interface WorkflowInput {
   name: string;
   description: string;
   required: boolean;
@@ -24,7 +24,7 @@ interface WorkflowInput {
   options?: string[];
 }
 
-function parseWorkflowInputs(yamlContent: string): WorkflowInput[] {
+export function parseWorkflowInputs(yamlContent: string): WorkflowInput[] {
   const lines = yamlContent.split('\n');
   let i = 0;
 
@@ -529,4 +529,12 @@ router.get('/workflow-inputs', async (c) => {
   }
 });
 
-export default router;
+import type { BackendPlugin } from '../../adaptation/types';
+import { manifest } from './manifest';
+
+const ghDispatchPlugin: BackendPlugin = {
+  manifest,
+  router,
+};
+
+export default ghDispatchPlugin;

@@ -1,8 +1,10 @@
 import { Hono } from 'hono';
-import { createDb, DbError } from '../abstraction/d1';
-import { createKv } from '../services/kv';
-import { crawlAll } from './news-crawler';
-import { summarizeArticles, extractKeywordsViaLLM, dedupeArticlesByLLM, type KeywordStat } from './news-llm';
+import type { BackendPlugin } from '../../adaptation/types';
+import { manifest } from './manifest';
+import { createDb, DbError } from '../../abstraction/d1';
+import { createKv } from '../../services/kv';
+import { crawlAll } from './crawler';
+import { summarizeArticles, extractKeywordsViaLLM, dedupeArticlesByLLM, type KeywordStat } from './llm';
 
 type Bindings = {
   D1_API_TOKEN: string;
@@ -267,4 +269,9 @@ export async function getTopKeywords(env: any): Promise<{ generated_at: number |
   } catch { return { generated_at: null, keywords: [] }; }
 }
 
-export default app;
+const newsPlugin: BackendPlugin = {
+  manifest,
+  router: app,
+};
+
+export default newsPlugin;

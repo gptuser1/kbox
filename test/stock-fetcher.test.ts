@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { getMarketStatus, parseTencentLine, normalizeCode, toTencentSymbol, toYahooSymbol, getMarketInfo } from '../src/tools/stock-fetcher';
+import { getMarketStatus, parseTencentLine, normalizeCode, toTencentSymbol, toYahooSymbol, getMarketInfo } from '../src/plugins/stock/stock-fetcher';
 
 // ─── getMarketStatus ───
 

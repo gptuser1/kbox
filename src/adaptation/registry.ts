@@ -15,7 +15,7 @@ export function getManifests(): PluginManifest[] {
   return plugins.map(p => p.manifest);
 }
 
-export function mountPlugins(app: Hono): void {
+export function mountPlugins(app: Hono<any, any, any>): void {
   for (const plugin of plugins) {
     const { manifest } = plugin;
     if (manifest.entry.backend) {

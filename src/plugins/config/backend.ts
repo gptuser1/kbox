@@ -1,7 +1,7 @@
 // 配置管理路由：全局配置 + 工具级覆盖配置 CRUD
 
 import { Hono } from 'hono';
-import { getConfig, getAppConfig, getToolConfig, setAppConfig, deleteAppConfig, getConfigSchema, listToolOverrides, setToolConfig, deleteToolConfig, ConfigField } from '../services/config';
+import { getConfig, getAppConfig, getToolConfig, setAppConfig, deleteAppConfig, getConfigSchema, listToolOverrides, setToolConfig, deleteToolConfig, ConfigField } from '../../services/config';
 
 type Bindings = {};
 type Variables = {};
@@ -159,4 +159,12 @@ router.delete('/tools/:tool/:key', async (c) => {
   }
 });
 
-export default router;
+import type { BackendPlugin } from '../../adaptation/types';
+import { manifest } from './manifest';
+
+const configPlugin: BackendPlugin = {
+  manifest,
+  router,
+};
+
+export default configPlugin;

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { isWriteForbidden } from '../src/tools/js-runner';
+import { isWriteForbidden } from '../src/plugins/js-runner/backend';
 
 describe('isWriteForbidden', () => {
   it('blocks system namespaces', () => {

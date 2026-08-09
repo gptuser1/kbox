@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { decodeHTMLEntities } from '../src/tools/news-crawler';
+import { decodeHTMLEntities } from '../src/plugins/news/crawler';
 
 describe('decodeHTMLEntities', () => {
   it('decodes named entities', () => {

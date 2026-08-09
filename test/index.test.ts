@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { parseWorkflowInputs } from '../src/index';
+import { parseWorkflowInputs } from '../src/plugins/gh-dispatch/backend';
 
 describe('parseWorkflowInputs', () => {
   it('returns empty array when workflow_dispatch is absent', () => {
