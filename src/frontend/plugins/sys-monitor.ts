@@ -4,7 +4,7 @@ import type { FrontendPlugin } from '../shared.js';
 
 // light-chart.js 全局声明（单文件，零依赖，在 HTML 中以 <script> 加载）
 declare const chart: {
-  line(opts: { labels: string[]; data: number[] | number[][] }): string;
+  line(opts: { labels: string[]; data: number[] | number[][]; minY?: number; maxY?: number }): string;
 };
 
 interface MetricItem {
@@ -318,6 +318,29 @@ function renderMetricCard(m: MetricItem): string {
   </div>`;
 }
 
+// 计算合适的纵坐标范围（基于数据最大值最小值，不从0开始）
+function niceYRange(_min: number, _max: number): [number, number] {
+  if (_min === _max) {
+    const pad = _min === 0 ? 5 : Math.abs(_min) * 0.5;
+    return [_min - pad, _max + pad];
+  }
+  const padding = (_max - _min) * 0.1;
+  let yMin = _min - padding;
+  let yMax = _max + padding;
+  if (yMin < 0) yMin = 0;
+  const range = yMax - yMin;
+  let step: number;
+  if (range < 1) step = 0.1;
+  else if (range < 5) step = 0.5;
+  else if (range < 20) step = 1;
+  else if (range < 100) step = 5;
+  else if (range < 500) step = 10;
+  else step = 50;
+  yMin = Math.floor(yMin / step) * step;
+  yMax = Math.ceil(yMax / step) * step;
+  return [yMin, yMax];
+}
+
 // ─── 历史趋势（使用 light-chart.js） ───
 function renderHistory(history: HistoryPoint[]) {
   const el = $('smHistory')!;
@@ -383,8 +406,11 @@ function renderHistory(history: HistoryPoint[]) {
       labels = times.map((t, i) => i % step === 0 ? t : '');
     }
 
+    // 计算动态纵坐标范围（不从0开始，基于数据最大值最小值）
+    const [yMin, yMax] = niceYRange(min, max);
+
     // 使用 light-chart.js 生成 SVG
-    let svg = chart.line({ labels, data: values });
+    let svg = chart.line({ labels, data: values, minY: yMin, maxY: yMax });
     if (!svg) continue;
 
     // 替换颜色以匹配主题（circle 已通过 CSS 隐藏，不显示数据点）

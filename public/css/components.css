@@ -408,7 +408,7 @@ input[type="checkbox"] { accent-color: var(--primary); width: 16px; height: 16px
 .sm-chart-label { font-size: 12px; font-weight: 600; color: var(--text-secondary); }
 .sm-chart-range { font-size: 10px; color: var(--text-muted); font-variant-numeric: tabular-nums; }
 .sm-chart-body { width: 100%; }
-.sm-chart-body svg { width: 100%; height: auto; max-height: 180px; display: block; }
+.sm-chart-body svg { width: 100%; height: auto; display: block; }
 .sm-chart-body svg text { fill: var(--text-muted); font-size: 10px; }
 .sm-chart-body svg line { stroke: var(--border); }
 .sm-chart-body svg circle { display: none; }
