@@ -1,8 +1,10 @@
 import { Hono } from 'hono';
-import { DbError } from '../abstraction/d1';
-import { createKv } from '../services/kv';
-import { refreshValuations } from './stock-fetcher';
-import { getConfig } from '../services/config';
+import { DbError } from '../../abstraction/d1';
+import { createKv } from '../../services/kv';
+import { refreshValuations } from '../../tools/stock-fetcher';
+import { getConfig } from '../../services/config';
+import type { BackendPlugin } from '../../adaptation/types';
+import { manifest } from './manifest';
 
 type Bindings = {
   D1_API_TOKEN: string;
@@ -341,4 +343,10 @@ export async function listFunds(env: any): Promise<any[]> {
   } catch { return []; }
 }
 
-export default app;
+// ─── BackendPlugin 导出 ───
+const stockPlugin: BackendPlugin = {
+  manifest,
+  router: app,
+};
+
+export default stockPlugin;

@@ -1,7 +1,7 @@
 import { Hono } from 'hono';
 import { createKv } from '../services/kv';
 import { listNews, getTopKeywords } from './news';
-import { listFunds } from './stock';
+import { listFunds } from '../plugins/stock/backend';
 import { listDiskFiles, getDiskStats } from './cloud-disk';
 
 type Bindings = {

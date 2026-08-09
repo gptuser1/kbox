@@ -2,8 +2,9 @@
 import { Hono } from 'hono';
 import { renderShellHTML } from './shell-html';
 import { authMiddleware } from './services/auth';
+import { registerPlugin, mountPlugins } from './adaptation/registry';
+import stockPlugin from './plugins/stock/backend';
 import disk from './tools/cloud-disk';
-import stock from './tools/stock';
 import news from './tools/news';
 import dbAdmin from './tools/db-admin';
 import jsRunner from './tools/js-runner';
@@ -76,9 +77,12 @@ app.get('/api/health', (c) => {
   return c.json({ status: 'ok', d1_token: !!c.env.D1_API_TOKEN });
 });
 
-// ─── 工具路由 ───
+// ─── 插件路由（通过 PluginRegistry 注册）───
+registerPlugin(stockPlugin);
+mountPlugins(app);
+
+// ─── 旧式工具路由（待迁移）───
 app.route('/api/tools/disk', disk);
-app.route('/api/tools/stock', stock);
 app.route('/api/tools/news', news);
 app.route('/api/tools/db-admin', dbAdmin);
 app.route('/api/tools/js', jsRunner);
