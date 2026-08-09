@@ -1,6 +1,11 @@
 // 工具：系统状态监控
 import { $, esc, toast, api } from '../shared.js';
 
+// light-chart.js 全局声明（单文件，零依赖，在 HTML 中以 <script> 加载）
+declare const chart: {
+  line(opts: { labels: string[]; data: number[] | number[][] }): string;
+};
+
 interface MetricItem {
   key: string;
   label: string;
@@ -378,7 +383,7 @@ function renderHistory(history: HistoryPoint[]) {
     }
 
     // 使用 light-chart.js 生成 SVG
-    let svg = (window as any).chart.line({ labels, data: values }) as string;
+    let svg = chart.line({ labels, data: values });
     if (!svg) continue;
 
     // 替换颜色以匹配主题
