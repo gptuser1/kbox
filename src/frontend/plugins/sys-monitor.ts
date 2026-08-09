@@ -387,12 +387,11 @@ function renderHistory(history: HistoryPoint[]) {
     let svg = chart.line({ labels, data: values });
     if (!svg) continue;
 
-    // 替换颜色以匹配主题
+    // 替换颜色以匹配主题（circle 已通过 CSS 隐藏，不显示数据点）
     svg = svg
       .replace(/stroke="black"/g, 'stroke="var(--text-muted)"')
       .replace(/stroke="#ddd"/g, 'stroke="var(--border)"')
-      .replace(/stroke="steelblue"/g, 'stroke="var(--primary)"')
-      .replace(/fill="steelblue"/g, 'fill="var(--primary)"');
+      .replace(/stroke="steelblue"/g, 'stroke="var(--primary)"');
 
     html += `<div class="sm-chart-card">
       <div class="sm-chart-head">
