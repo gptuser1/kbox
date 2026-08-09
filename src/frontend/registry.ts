@@ -21,4 +21,5 @@ export const TOOL_REGISTRY: ToolMeta[] = [
   { id: 'cron', name: '定时任务', icon: '⏰', desc: '定时执行任务' },
   { id: 'config', name: '配置管理', icon: '⚙️', desc: '管理 API 密钥与工具配置' },
   { id: 'sys-monitor', name: '系统监控', icon: '📊', desc: '多主机系统状态监控看板' },
+  { id: 'qr-transfer', name: 'QR 传输', icon: '📡', desc: '通过 QR 码在设备间传输文件，无需网络' },
 ];

@@ -5,17 +5,19 @@
   "scripts": {
     "gen:registry": "node script/gen-registry.mjs",
     "typecheck:frontend": "tsc -p src/frontend/tsconfig.json --noEmit",
-    "build:frontend": "npm run gen:registry && npm run typecheck:frontend && esbuild src/frontend/shell.ts src/frontend/shared.ts src/frontend/registry.ts src/frontend/plugins/*.ts --format=esm --target=es2022 --outdir=public/js --outbase=src/frontend --allow-overwrite --log-level=warning",
+    "build:frontend": "npm run gen:registry && npm run typecheck:frontend && esbuild src/frontend/shell.ts src/frontend/shared.ts src/frontend/registry.ts src/frontend/plugins/*.ts --format=esm --target=es2022 --outdir=public/js --outbase=src/frontend --allow-overwrite --log-level=warning && esbuild src/frontend/plugins/qr-transfer/main.ts --bundle --format=esm --target=es2022 --outfile=public/js/plugins/qr-transfer.js --log-level=warning",
     "dev": "npm run build:frontend && wrangler dev",
     "deploy": "npm run build:frontend && wrangler deploy",
     "typecheck": "tsc --noEmit && npm run typecheck:frontend",
     "test": "vitest run"
   },
   "dependencies": {
-    "hono": "^4.0.0"
+    "hono": "^4.0.0",
+    "qrcode": "^1.5.4"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^5.0.0",
+    "@types/qrcode": "^1.5.6",
     "esbuild": "^0.28.1",
     "typescript": "^5.0.0",
     "vitest": "^2.1.9",
