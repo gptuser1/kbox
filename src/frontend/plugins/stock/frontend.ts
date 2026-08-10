@@ -1,6 +1,6 @@
-// 工具：基金估值
+// 插件：基金估值
 // 独立模块，由 shell 在点击时动态 import('/js/plugins/stock.js') 加载。
-// 即使本模块出错，只影响本工具，不波及壳与其他工具。
+// 即使本模块出错，只影响本插件，不波及壳与其他插件。
 import { $, esc, toast, api } from '../../shared.js';
 import type { FrontendPlugin } from '../../shared.js';
 
@@ -376,7 +376,7 @@ export function mount(): void {
   };
 
   // 注册浮动菜单项
-  (window as any).setToolMenu([
+  (window as any).setPluginMenu([
     {
       label: '基金',
       html: '<button class="active" onclick="stockRefreshAll()">🔄 刷新全部估值</button>' +

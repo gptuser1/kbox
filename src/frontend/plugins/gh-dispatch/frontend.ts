@@ -1,6 +1,6 @@
-// 工具：GitHub Actions 触发
-// 独立模块，由 shell 在点击时动态 import('/js/plugins/dispatch.js') 加载。
-// 即使本模块出错，只影响本工具，不波及壳与其他工具。
+// 插件：GitHub Actions 触发
+// 独立模块，由 shell 在点击时动态 import('/js/plugins/gh-dispatch.js') 加载。
+// 即使本模块出错，只影响本插件，不波及壳与其他插件。
 import { $, esc, toast, api, formatDate } from '../../shared.js';
 import type { FrontendPlugin } from '../../shared.js';
 

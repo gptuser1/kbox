@@ -28,7 +28,7 @@ export function renderShellHTML(): string {
 
 <div class="toast-container" id="toastContainer"></div>
 
-<!-- 常驻浮动返回按钮：仅在工具子页可见 -->
+<!-- 常驻浮动返回按钮：仅在插件子页可见 -->
 <button class="float-back" id="floatBack" onclick="backToGrid()" title="返回首页" aria-label="返回首页">
   <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
     <path d="M19 12H5"/><path d="M12 19l-7-7 7-7"/>
@@ -64,45 +64,45 @@ export function renderShellHTML(): string {
         <button id="fmExitEditBtn" style="display:none">✓ 完成编辑</button>
       </div>
     </div>
-    <div id="fmToolSections" style="display:none"></div>
+    <div id="fmPluginSections" style="display:none"></div>
   </div>
 </div>
 
-<!-- 主页：工具网格 -->
+<!-- 主页：插件网格 -->
 <div class="container" id="mainContent">
   <div class="home-grid-wrap" id="homeGridWrap">
-    <div class="tool-grid" id="toolGrid"></div>
+    <div class="plugin-grid" id="pluginGrid"></div>
   </div>
-  <div id="toolViews"></div>
+  <div id="pluginViews"></div>
 </div>
 
-<!-- 工具卡片编辑弹层（改名/改图标/隐藏）-->
-<div class="modal-overlay" id="toolEditOverlay">
+<!-- 插件卡片编辑弹层（改名/改图标/隐藏）-->
+<div class="modal-overlay" id="pluginEditOverlay">
   <div class="modal" style="max-width:420px">
     <div class="modal-header">
-      <h3>编辑工具</h3>
-      <button class="modal-close" onclick="closeToolEdit()">✕</button>
+      <h3>编辑插件</h3>
+      <button class="modal-close" onclick="closePluginEdit()">✕</button>
     </div>
     <div class="modal-body">
       <div class="form-group">
         <label>名称</label>
-        <input type="text" id="toolEditName" autocomplete="off" spellcheck="false">
+        <input type="text" id="pluginEditName" autocomplete="off" spellcheck="false">
       </div>
       <div class="form-group">
         <label>图标</label>
-        <div id="toolEditIconPicker" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px"></div>
-        <input type="text" id="toolEditIconInput" placeholder="输入 emoji" autocomplete="off" spellcheck="false">
+        <div id="pluginEditIconPicker" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px"></div>
+        <input type="text" id="pluginEditIconInput" placeholder="输入 emoji" autocomplete="off" spellcheck="false">
       </div>
       <div class="form-group">
         <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
-          <input type="checkbox" id="toolEditHidden" style="width:auto">
-          <span>在首页隐藏此工具（仍可通过 URL 访问）</span>
+          <input type="checkbox" id="pluginEditHidden" style="width:auto">
+          <span>在首页隐藏此插件（仍可通过 URL 访问）</span>
         </label>
       </div>
     </div>
     <div class="modal-footer">
-      <button class="btn btn-outline" onclick="closeToolEdit()">取消</button>
-      <button class="btn btn-primary" id="toolEditSave">保存</button>
+      <button class="btn btn-outline" onclick="closePluginEdit()">取消</button>
+      <button class="btn btn-primary" id="pluginEditSave">保存</button>
     </div>
   </div>
 </div>

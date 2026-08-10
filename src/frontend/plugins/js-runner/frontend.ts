@@ -1,6 +1,6 @@
-// 工具：JS 运行工具
-// 独立模块，由 shell 在点击时动态 import('/js/plugins/js.js') 加载。
-// 即使本模块出错，只影响本工具，不波及壳与其他工具。
+// 插件：JS 运行工具
+// 独立模块，由 shell 在点击时动态 import('/js/plugins/js-runner.js') 加载。
+// 即使本模块出错，只影响本插件，不波及壳与其他插件。
 // script:xxx 复用本模块：shell 传入 id='script:<scriptId>' 时渲染轻量运行视图。
 import { $, esc, toast, api } from '../../shared.js';
 import type { FrontendPlugin } from '../../shared.js';
@@ -27,20 +27,16 @@ export function mount(id?: string): void {
   }
 }
 
-// ═══ 完整 JS 工具视图 ═══
+// ═══ 完整 JS 运行插件视图 ═══
 function renderJsTool(): string {
   return `
-    <h2>📜 JS 运行工具</h2>
+    <h2>📜 JS 运行插件</h2>
     <div class="tabs" id="jsTabs" style="margin-bottom:16px">
       <button class="tab active" data-jstab="scripts">脚本</button>
       <button class="tab" data-jstab="playground">临时运行</button>
     </div>
     <div id="jsScriptsPane">
       <div id="jsScriptsList"></div>
-      <div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap">
-        <button class="btn btn-primary" id="jsNewBtn">+ 新建脚本</button>
-        <button class="btn btn-outline" id="jsRefreshBtn">刷新</button>
-      </div>
       <div class="result-box" id="jsScriptResult"></div>
     </div>
     <div id="jsPlaygroundPane" style="display:none">
@@ -67,10 +63,6 @@ function renderJsTool(): string {
         </div>
       </details>
       <textarea id="jsCodeInput" class="sql-editor" rows="10" placeholder="// 试试：console.log('hello world')" style="margin-top:8px" autocorrect="off" spellcheck="false" autocapitalize="off"></textarea>
-      <div style="display:flex;gap:8px;margin:8px 0;flex-wrap:wrap">
-        <button class="btn btn-primary" id="jsRunTmpBtn">▶ 运行</button>
-        <button class="btn btn-outline" id="jsSaveAsBtn">存为脚本</button>
-      </div>
       <div class="result-box" id="jsTmpResult"></div>
     </div>
     <div class="modal-overlay" id="jsModalOverlay">
@@ -106,14 +98,24 @@ function mountJsTool(): void {
     });
   }
 
-  const newBtn = $('jsNewBtn');
-  const refreshBtn = $('jsRefreshBtn');
-  if (newBtn) newBtn.onclick = () => (window as any).renderJsEditor(null);
-  if (refreshBtn) refreshBtn.onclick = () => loadJsScripts();
-  const runBtn = $('jsRunTmpBtn');
-  if (runBtn) runBtn.onclick = () => runJsTmp();
-  const saveAsBtn = $('jsSaveAsBtn');
-  if (saveAsBtn) saveAsBtn.onclick = () => saveAsScript();
+  // 浮动菜单：注册操作
+  (window as any).__jsNewScript = () => (window as any).renderJsEditor(null);
+  (window as any).__jsRefresh = () => loadJsScripts();
+  (window as any).__jsRunTmp = () => runJsTmp();
+  (window as any).__jsSaveAs = () => saveAsScript();
+  (window as any).setPluginMenu([
+    {
+      label: '脚本',
+      html: '<button onclick="window.__jsNewScript()" class="active">+ 新建脚本</button>' +
+            '<button onclick="window.__jsRefresh()">🔄 刷新</button>',
+    },
+    {
+      label: '临时运行',
+      html: '<button onclick="window.__jsRunTmp()">▶ 运行</button>' +
+            '<button onclick="window.__jsSaveAs()">💾 存为脚本</button>',
+    },
+  ]);
+
   // 事件委托：避免内联 onclick 的引号转义陷阱，刷新列表后无需重新绑定
   const list = $('jsScriptsList');
   if (list) {

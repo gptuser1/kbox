@@ -15,7 +15,7 @@ const NS_HOSTS = 'sys_monitor:hosts';
 const DEFAULT_HISTORY_MAX = 60;
 const DEFAULT_ONLINE_TIMEOUT_MIN = 30;
 
-// 从工具级配置读取，带默认值
+// 从插件级配置读取，带默认值
 async function historyMax(c: any): Promise<number> {
   const val = await getConfig(c, 'sys-monitor', 'sys_monitor_history_max');
   const n = parseInt(val || '', 10);

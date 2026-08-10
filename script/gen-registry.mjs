@@ -9,8 +9,8 @@ import { join } from 'node:path';
 const PLUGINS_DIR = 'src/plugins';
 const REGISTRY_PATH = 'src/frontend/registry.ts';
 
-// 首页工具展示顺序（与历史 registry 保持一致；未列出的追加到末尾）
-const TOOL_ORDER = ['gh-dispatch', 'disk', 'stock', 'news', 'db-admin', 'js-runner', 'cron', 'config', 'sys-monitor'];
+// 首页插件展示顺序（与历史 registry 保持一致；未列出的追加到末尾）
+const PLUGIN_ORDER = ['gh-dispatch', 'disk', 'stock', 'news', 'db-admin', 'js-runner', 'cron', 'config', 'sys-monitor'];
 
 async function loadManifests() {
   const entries = await readdir(PLUGINS_DIR, { withFileTypes: true });
@@ -34,8 +34,8 @@ async function loadManifests() {
 }
 
 function sortByOrder(manifests) {
-  const fallback = TOOL_ORDER.length;
-  const orderMap = new Map(TOOL_ORDER.map((id, i) => [id, i]));
+  const fallback = PLUGIN_ORDER.length;
+  const orderMap = new Map(PLUGIN_ORDER.map((id, i) => [id, i]));
   return manifests.sort((a, b) => {
     const ia = orderMap.has(a.id) ? orderMap.get(a.id) : fallback;
     const ib = orderMap.has(b.id) ? orderMap.get(b.id) : fallback;
@@ -55,17 +55,17 @@ async function main() {
   const content = `// 本文件由 script/gen-registry.mjs 从 src/plugins/*/manifest.ts 自动生成。
 // 请勿手动编辑——修改 manifest.ts 后运行 npm run gen:registry 重新生成。
 // name/icon 为默认值，用户 home_layout.overrides 会覆盖。
-// render/mount 由 shell 在点击工具时动态 import('/js/plugins/<id>.js') 懒加载，
-// 从而实现单工具故障隔离（一个工具 JS 出错不影响主页和其他工具）。
+// render/mount 由 shell 在点击插件时动态 import('/js/plugins/<id>.js') 懒加载，
+// 从而实现单插件故障隔离（一个插件 JS 出错不影响主页和其他插件）。
 
-export interface ToolMeta {
+export interface PluginMeta {
   id: string;
   name: string;
   icon: string;
   desc: string;
 }
 
-export const TOOL_REGISTRY: ToolMeta[] = [
+export const PLUGIN_REGISTRY: PluginMeta[] = [
 ${lines.join('\n')}
 ];
 `;

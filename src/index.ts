@@ -33,7 +33,7 @@ type Variables = {
 
 const app = new Hono<{ Bindings: Bindings; Variables: Variables }>();
 
-// favicon SVG（简约现代风格：圆角方块 + 渐变折线，工具箱主题）
+// favicon SVG（简约现代风格：圆角方块 + 渐变折线，插件主题）
 const FAVICON_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
   <defs>
     <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">

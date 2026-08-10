@@ -1,27 +1,27 @@
-// 壳：浏览器端全局逻辑。令牌/主题/菜单/首页网格/工具懒加载调度。
-// 关键：showTool 动态 import 工具模块并 try-catch 包裹——单工具 JS 出错只 toast，
-// 不影响壳和其他工具，实现故障隔离。
+// 壳：浏览器端全局逻辑。令牌/主题/菜单/首页网格/插件懒加载调度。
+// 关键：showPlugin 动态 import 插件模块并 try-catch 包裹——单插件 JS 出错只 toast，
+// 不影响壳和其他插件，实现故障隔离。
 import { $, esc, toast, api, setToken, setUnauthorizedHandler, initToast, eventBus } from './shared.js';
 import type { FrontendPlugin } from './shared.js';
-import { TOOL_REGISTRY } from './registry.js';
+import { PLUGIN_REGISTRY } from './registry.js';
 
-// 前端工具模块统一接口，由 shared.ts 的 FrontendPlugin 强制约束
-export type ToolModule = FrontendPlugin;
+// 前端插件模块统一接口，由 shared.ts 的 FrontendPlugin 强制约束
+export type PluginModule = FrontendPlugin;
 
 // ─── 全局状态 ───
 const THEME_KEY = 'kbox_theme';
 let homeLayout: { viewMode: string; order: string[]; overrides: Record<string, any> } = { viewMode: 'grid', order: [], overrides: {} };
 let editMode = false;
 let publishedScripts: any[] = [];
-let editingToolId: string | null = null;
-const toolModuleCache: Record<string, ToolModule> = {};
+let editingPluginId: string | null = null;
+const pluginModuleCache: Record<string, PluginModule> = {};
 
 // DOM 引用（script type=module 自带 defer，DOM 已就绪）
 const tokenInput = $('tokenInput') as HTMLInputElement;
 const verifyBtn = $('verifyBtn') as HTMLButtonElement;
 const mainContent = $('mainContent');
-const toolGrid = $('toolGrid');
-const toolViews = $('toolViews');
+const pluginGrid = $('pluginGrid');
+const pluginViews = $('pluginViews');
 
 const EMOJI_CHOICES = ['⚡','☁️','💰','📰','🗄️','⚙️','🔧','📊','📅','🎯','🚀','📦','🔍','📈','💡','🛠️','🌐','📝','🔔','📁'];
 
@@ -76,14 +76,14 @@ function bindFloatMenu() {
 // ─── 浮动返回按钮行为栈 ───
 let floatBackStack: Array<() => void> = [];
 
-// 工具调用：push 一个返回行为，覆盖默认的 backToGrid
+// 插件调用：push 一个返回行为，覆盖默认的 backToGrid
 function pushFloatBack(action: () => void) {
   floatBackStack.push(action);
   const fb = $('floatBack');
   if (fb) fb.onclick = action;
 }
 
-// 工具调用：pop 当前行为，恢复到上一个或默认 backToGrid
+// 插件调用：pop 当前行为，恢复到上一个或默认 backToGrid
 function popFloatBack() {
   floatBackStack.pop();
   const action = floatBackStack.length > 0
@@ -93,52 +93,57 @@ function popFloatBack() {
   if (fb) fb.onclick = action;
 }
 
-// 进入工具时由 showTool 调用，重置栈
+// 进入插件时由 showPlugin 调用，重置栈
 function resetFloatBack() {
   floatBackStack = [];
   const fb = $('floatBack');
   if (fb) fb.onclick = backToGrid;
 }
 
-// ─── 浮动菜单工具化 ───
-interface ToolMenuSection {
+// ─── 浮动菜单（插件注册菜单项） ───
+interface PluginMenuSection {
   label: string;
   html: string;
 }
 
-let toolMenuSections: ToolMenuSection[] = [];
+let pluginMenuSections: PluginMenuSection[] = [];
 
-function renderToolMenu() {
-  const container = $('fmToolSections');
+function renderPluginMenu() {
+  const container = $('fmPluginSections');
   if (!container) return;
-  if (toolMenuSections.length === 0) {
+  if (pluginMenuSections.length === 0) {
     container.style.display = 'none';
+    container.innerHTML = '';
     return;
   }
   container.style.display = '';
-  container.innerHTML = toolMenuSections.map(s =>
+  container.innerHTML = pluginMenuSections.map(s =>
     '<div class="fm-section">' +
     '<div class="fm-label">' + s.label + '</div>' +
     '<div class="fm-btn-group">' + s.html + '</div>' +
     '</div>'
-  ).join('');
+  ).join('') +
+  '<div class="fm-section">' +
+    '<div class="fm-label">页面</div>' +
+    '<div class="fm-btn-group"><button onclick="location.reload()">🔄 刷新页面</button></div>' +
+  '</div>';
 }
 
-function setToolMenu(sections: ToolMenuSection[]) {
-  toolMenuSections = sections;
-  renderToolMenu();
+function setPluginMenu(sections: PluginMenuSection[]) {
+  pluginMenuSections = sections;
+  renderPluginMenu();
 }
 
-function clearToolMenu() {
-  toolMenuSections = [];
-  renderToolMenu();
+function clearPluginMenu() {
+  pluginMenuSections = [];
+  renderPluginMenu();
 }
 
-// 暴露给工具模块（通过 window 或者直接 import）
+// 暴露给插件模块（通过 window 或者直接 import）
 (window as any).pushFloatBack = pushFloatBack;
 (window as any).popFloatBack = popFloatBack;
-(window as any).setToolMenu = setToolMenu;
-(window as any).clearToolMenu = clearToolMenu;
+(window as any).setPluginMenu = setPluginMenu;
+(window as any).clearPluginMenu = clearPluginMenu;
 
 // ─── 令牌 ───
 function setBtnStatus(text: string, cls: string, disabled?: boolean) {
@@ -178,7 +183,7 @@ async function verifyToken() {
       setVerifiedState();
       mainContent.classList.add('active');
       syncFloatMenuVisibility();
-      initTools();
+      initPlugins();
     } else if (res.status === 401) {
       setBtnStatus('✗ 无效', 'err');
       localStorage.removeItem('kbox_token');
@@ -232,46 +237,46 @@ async function loadPublishedScripts() {
   } catch {
     publishedScripts = [];
   }
-  renderToolGrid();
+  renderPluginGrid();
 }
 
-// ─── 工具元数据查询（应用用户覆盖） ───
+// ─── 插件元数据查询（应用用户覆盖） ───
 function findScriptById(id: string): any {
   const m = id.match(/^script:(.+)$/);
   if (!m) return null;
   return publishedScripts.find(s => s.id === m[1]) || null;
 }
-function toolName(id: string): string {
+function pluginName(id: string): string {
   if (homeLayout.overrides[id]?.name) return homeLayout.overrides[id].name;
-  const t = TOOL_REGISTRY.find(t => t.id === id);
+  const t = PLUGIN_REGISTRY.find(t => t.id === id);
   if (t) return t.name;
   const s = findScriptById(id);
   if (s) return s.name;
   return id;
 }
-function toolIcon(id: string): string {
+function pluginIcon(id: string): string {
   if (homeLayout.overrides[id]?.icon) return homeLayout.overrides[id].icon;
-  const t = TOOL_REGISTRY.find(t => t.id === id);
+  const t = PLUGIN_REGISTRY.find(t => t.id === id);
   if (t) return t.icon;
   const s = findScriptById(id);
   if (s) return s.icon;
   return '□';
 }
-function toolHidden(id: string): boolean { return !!homeLayout.overrides[id]?.hidden; }
-function toolDesc(id: string): string {
-  const t = TOOL_REGISTRY.find(t => t.id === id);
+function pluginHidden(id: string): boolean { return !!homeLayout.overrides[id]?.hidden; }
+function pluginDesc(id: string): string {
+  const t = PLUGIN_REGISTRY.find(t => t.id === id);
   if (t) return t.desc;
   const s = findScriptById(id);
   if (s) return s.desc || '用户脚本';
   return '';
 }
-function allToolIds(): string[] {
-  const ids = TOOL_REGISTRY.map(t => t.id);
+function allPluginIds(): string[] {
+  const ids = PLUGIN_REGISTRY.map(t => t.id);
   for (const s of publishedScripts) ids.push('script:' + s.id);
   return ids;
 }
-function orderedTools(): string[] {
-  const ids = allToolIds();
+function orderedPlugins(): string[] {
+  const ids = allPluginIds();
   const ordered: string[] = [];
   for (const id of homeLayout.order) if (ids.includes(id)) ordered.push(id);
   for (const id of ids) if (!ordered.includes(id)) ordered.push(id);
@@ -279,75 +284,75 @@ function orderedTools(): string[] {
 }
 
 // ─── 首页网格 ───
-function renderToolGrid() {
-  toolGrid.className = 'tool-grid view-' + homeLayout.viewMode;
-  const ids = orderedTools();
+function renderPluginGrid() {
+  pluginGrid.className = 'plugin-grid view-' + homeLayout.viewMode;
+  const ids = orderedPlugins();
   let html = '';
   for (const id of ids) {
-    const name = esc(toolName(id));
-    const icon = toolIcon(id);
-    const desc = esc(toolDesc(id));
-    const hiddenCls = toolHidden(id) ? ' hidden-tool' : '';
+    const name = esc(pluginName(id));
+    const icon = pluginIcon(id);
+    const desc = esc(pluginDesc(id));
+    const hiddenCls = pluginHidden(id) ? ' hidden-plugin' : '';
     const editCls = editMode ? ' editing' : '';
-    const clickAttr = editMode ? '' : ' onclick="showTool(\'' + id + '\')"';
+    const clickAttr = editMode ? '' : ' onclick="showPlugin(\'' + id + '\')"';
     const actions = editMode
-      ? '<div class="tool-card-actions">' +
-        '<button title="编辑" onclick="event.stopPropagation();openToolEdit(\'' + id + '\')">✎</button>' +
-        '<button title="上移" onclick="event.stopPropagation();moveTool(\'' + id + '\',-1)">↑</button>' +
-        '<button title="下移" onclick="event.stopPropagation();moveTool(\'' + id + '\',1)">↓</button>' +
+      ? '<div class="plugin-card-actions">' +
+        '<button title="编辑" onclick="event.stopPropagation();openPluginEdit(\'' + id + '\')">✎</button>' +
+        '<button title="上移" onclick="event.stopPropagation();movePlugin(\'' + id + '\',-1)">↑</button>' +
+        '<button title="下移" onclick="event.stopPropagation();movePlugin(\'' + id + '\',1)">↓</button>' +
         '</div>'
       : '';
-    html += '<div class="tool-card' + hiddenCls + editCls + '" data-id="' + id + '"' + clickAttr + '>' +
-      '<div class="tool-icon">' + icon + '</div>' +
-      '<div class="tool-name">' + name + '</div>' +
-      '<div class="tool-desc">' + desc + '</div>' +
+    html += '<div class="plugin-card' + hiddenCls + editCls + '" data-id="' + id + '"' + clickAttr + '>' +
+      '<div class="plugin-icon">' + icon + '</div>' +
+      '<div class="plugin-name">' + name + '</div>' +
+      '<div class="plugin-desc">' + desc + '</div>' +
       actions +
       '</div>';
   }
-  toolGrid.innerHTML = html;
+  pluginGrid.innerHTML = html;
 }
 
-// ─── 工具卡片编辑 ───
-(window as any).openToolEdit = function(id: string) {
-  editingToolId = id;
-  const defaultName = toolName(id);
+// ─── 插件卡片编辑 ───
+(window as any).openPluginEdit = function(id: string) {
+  editingPluginId = id;
+  const defaultName = pluginName(id);
   const hasOverride = !!homeLayout.overrides[id]?.name;
-  const nameEl = $('toolEditName') as HTMLInputElement;
+  const nameEl = $('pluginEditName') as HTMLInputElement;
   nameEl.value = hasOverride ? defaultName : '';
   nameEl.placeholder = defaultName;
-  ($('toolEditIconInput') as HTMLInputElement).value = (homeLayout.overrides[id]?.icon) || '';
-  ($('toolEditHidden') as HTMLInputElement).checked = toolHidden(id);
-  $('toolEditIconPicker').innerHTML = EMOJI_CHOICES.map(e =>
+  ($('pluginEditIconInput') as HTMLInputElement).value = (homeLayout.overrides[id]?.icon) || '';
+  ($('pluginEditHidden') as HTMLInputElement).checked = pluginHidden(id);
+  $('pluginEditIconPicker').innerHTML = EMOJI_CHOICES.map(e =>
     '<span style="font-size:22px;cursor:pointer;padding:4px 6px;border-radius:6px" onmouseover="this.style.background=\'var(--bg)\'" onmouseout="this.style.background=\'none\'" onclick="pickEmoji(\'' + e + '\')">' + e + '</span>'
   ).join('');
-  $('toolEditOverlay').classList.add('show');
+  $('pluginEditOverlay').classList.add('show');
 };
 (window as any).pickEmoji = function(e: string) {
-  ($('toolEditIconInput') as HTMLInputElement).value = e;
+  ($('pluginEditIconInput') as HTMLInputElement).value = e;
 };
-(window as any).closeToolEdit = function() {
-  $('toolEditOverlay').classList.remove('show');
-  editingToolId = null;
+(window as any).closePluginEdit = function() {
+  $('pluginEditOverlay').classList.remove('show');
+  editingPluginId = null;
 };
-(window as any).moveTool = function(id: string, dir: number) {
-  const order = orderedTools();
+(window as any).movePlugin = function(id: string, dir: number) {
+  const order = orderedPlugins();
   const i = order.indexOf(id);
   const j = i + dir;
   if (j < 0 || j >= order.length) return;
   [order[i], order[j]] = [order[j], order[i]];
   homeLayout.order = order;
   saveHomeLayout();
-  renderToolGrid();
+  renderPluginGrid();
 };
-$('toolEditOverlay')?.addEventListener('click', (e) => { if (e.target === $('toolEditOverlay')) (window as any).closeToolEdit(); });
-$('toolEditSave')?.addEventListener('click', async () => {
-  if (!editingToolId) return;
-  const id = editingToolId;
-  const name = ($('toolEditName') as HTMLInputElement).value.trim();
-  const icon = ($('toolEditIconInput') as HTMLInputElement).value.trim();
-  const hidden = ($('toolEditHidden') as HTMLInputElement).checked;
-  let origName = toolName(id), origIcon = toolIcon(id);
-  const t = TOOL_REGISTRY.find(t => t.id === id);
+$('pluginEditOverlay')?.addEventListener('click', (e) => { if (e.target === $('pluginEditOverlay')) (window as any).closePluginEdit(); });
+$('pluginEditSave')?.addEventListener('click', async () => {
+  if (!editingPluginId) return;
+  const id = editingPluginId;
+  const name = ($('pluginEditName') as HTMLInputElement).value.trim();
+  const icon = ($('pluginEditIconInput') as HTMLInputElement).value.trim();
+  const hidden = ($('pluginEditHidden') as HTMLInputElement).checked;
+  let origName = pluginName(id), origIcon = pluginIcon(id);
+  const t = PLUGIN_REGISTRY.find(t => t.id === id);
   if (t) { origName = t.name; origIcon = t.icon; }
   else { const s = findScriptById(id); if (s) { origName = s.name; origIcon = s.icon; } }
   const ov: any = {};
@@ -357,8 +362,8 @@ $('toolEditSave')?.addEventListener('click', async () => {
   if (Object.keys(ov).length === 0) delete homeLayout.overrides[id];
   else homeLayout.overrides[id] = ov;
   await saveHomeLayout();
-  (window as any).closeToolEdit();
-  renderToolGrid();
+  (window as any).closePluginEdit();
+  renderPluginGrid();
   toast('已保存', 'success');
 });
 
@@ -370,7 +375,7 @@ function bindHomeToolbar() {
       b.classList.toggle('active', b.getAttribute('data-mode') === mode);
     });
     saveHomeLayout();
-    renderToolGrid();
+    renderPluginGrid();
   }
   document.querySelectorAll('[id$="ViewSwitcher"]').forEach(sw => {
     sw.querySelectorAll('button').forEach(btn => {
@@ -383,7 +388,7 @@ function bindHomeToolbar() {
     const fmExit = $('fmExitEditBtn');
     if (fmEdit) fmEdit.style.display = on ? 'none' : 'flex';
     if (fmExit) fmExit.style.display = on ? 'flex' : 'none';
-    renderToolGrid();
+    renderPluginGrid();
   }
   const fmEditBtn = $('fmEditBtn');
   const fmExitEditBtn = $('fmExitEditBtn');
@@ -391,66 +396,66 @@ function bindHomeToolbar() {
   if (fmExitEditBtn) fmExitEditBtn.addEventListener('click', () => setEditModeUI(false));
 }
 
-// ─── 工具懒加载（核心隔离机制） ───
-// 动态 import 工具模块；render/mount 各自 try-catch，单工具失败只 toast，不波及壳与其他工具。
-// 进入时立即显示 tool-loader 覆盖工具区，掩盖 import/render/mount 的延迟。
-async function showTool(id: string) {
-  toolGrid.style.display = 'none';
+// ─── 插件懒加载（核心隔离机制） ───
+// 动态 import 插件模块；render/mount 各自 try-catch，单插件失败只 toast，不波及壳与其他插件。
+// 进入时立即显示 plugin-loader 覆盖插件区，掩盖 import/render/mount 的延迟。
+async function showPlugin(id: string) {
+  pluginGrid.style.display = 'none';
   const hgw = $('homeGridWrap'); if (hgw) hgw.style.display = 'none';
-  toolViews.innerHTML = '';
+  pluginViews.innerHTML = '';
   window.scrollTo(0, 0);
   const view = document.createElement('div');
-  view.className = 'tool-view active';
+  view.className = 'plugin-view active';
   view.id = 'view-' + id;
-  toolViews.appendChild(view);
+  pluginViews.appendChild(view);
   $('floatBack').classList.add('show');
   $('floatMenuBtn')?.classList.remove('open');
-  // 进入工具页：重置返回栈，清除工具菜单，显示浮动菜单供工具注册，隐藏首页专属菜单项
+  // 进入插件页：重置返回栈，清除插件菜单，显示浮动菜单供插件注册，隐藏首页专属菜单项
   resetFloatBack();
-  clearToolMenu();
-  const fmb = $('floatMenuBtn'); if (fmb) { fmb.style.display = ''; fmb.classList.add('in-tool'); }
+  clearPluginMenu();
+  const fmb = $('floatMenuBtn'); if (fmb) { fmb.style.display = ''; fmb.classList.add('in-plugin'); }
 
-  // 立即显示工具加载层（区域级，不全屏，保留 token 栏与浮动按钮）
-  view.innerHTML = '<div class="tool-loader"><div class="app-loader__bar"></div><div class="tool-loader__text">加载中…</div></div>';
+  // 立即显示插件加载层（区域级，不全屏，保留 token 栏与浮动按钮）
+  view.innerHTML = '<div class="plugin-loader"><div class="app-loader__bar"></div><div class="plugin-loader__text">加载中…</div></div>';
 
-  // script:xxx 复用 js-runner 工具模块渲染
+  // script:xxx 复用 js-runner 插件模块渲染
   const realId = id.startsWith('script:') ? 'js-runner' : id;
 
-  let mod = toolModuleCache[realId];
+  let mod = pluginModuleCache[realId];
   if (!mod) {
     try {
-      mod = (await import('/js/plugins/' + realId + '.js')) as ToolModule;
-      toolModuleCache[realId] = mod;
+      mod = (await import('/js/plugins/' + realId + '.js')) as PluginModule;
+      pluginModuleCache[realId] = mod;
     } catch (e) {
-      toast('工具加载失败：' + errMsg(e), 'error');
-      view.innerHTML = '<div style="padding:24px;color:var(--danger)">工具加载失败：' + esc(errMsg(e)) + '</div>';
+      toast('插件加载失败：' + errMsg(e), 'error');
+      view.innerHTML = '<div style="padding:24px;color:var(--danger)">插件加载失败：' + esc(errMsg(e)) + '</div>';
       return;
     }
   }
   try {
     view.innerHTML = mod.render(id);
   } catch (e) {
-    toast('工具渲染失败：' + errMsg(e), 'error');
-    view.innerHTML = '<div style="padding:24px;color:var(--danger)">工具渲染失败：' + esc(errMsg(e)) + '</div>';
+    toast('插件渲染失败：' + errMsg(e), 'error');
+    view.innerHTML = '<div style="padding:24px;color:var(--danger)">插件渲染失败：' + esc(errMsg(e)) + '</div>';
     return;
   }
   try {
     mod.mount(id);
   } catch (e) {
-    toast('工具初始化失败：' + errMsg(e), 'error');
-    // mount 失败不抛出：壳与其他工具继续可用
+    toast('插件初始化失败：' + errMsg(e), 'error');
+    // mount 失败不抛出：壳与其他插件继续可用
   }
 }
 
 function backToGrid() {
-  toolViews.innerHTML = '';
-  toolGrid.style.display = 'grid';
+  pluginViews.innerHTML = '';
+  pluginGrid.style.display = 'grid';
   const hgw = $('homeGridWrap'); if (hgw) hgw.style.display = '';
   $('floatBack').classList.remove('show');
   $('floatMenuBtn')?.classList.remove('open');
-  // 回到首页：清除工具注册的菜单项，恢复菜单按钮显示，恢复首页菜单项
-  clearToolMenu();
-  const fmb = $('floatMenuBtn'); if (fmb) { fmb.style.display = ''; fmb.classList.remove('in-tool'); }
+  // 回到首页：清除插件注册的菜单项，恢复菜单按钮显示，恢复首页菜单项
+  clearPluginMenu();
+  const fmb = $('floatMenuBtn'); if (fmb) { fmb.style.display = ''; fmb.classList.remove('in-plugin'); }
   window.scrollTo(0, 0);
 }
 
@@ -464,14 +469,14 @@ function hideAppLoader() {
   setTimeout(() => loader.remove(), 350);
 }
 
-// ─── 初始化工具区 ───
-function initTools() {
+// ─── 初始化插件区 ───
+function initPlugins() {
   bindHomeToolbar();
   // 先在网格区显示加载层，掩盖布局偏好加载期间的空白与布局跳变
-  toolGrid.innerHTML = '<div class="tool-loader" style="grid-column:1/-1"><div class="app-loader__bar"></div><div class="tool-loader__text">加载中…</div></div>';
+  pluginGrid.innerHTML = '<div class="plugin-loader" style="grid-column:1/-1"><div class="app-loader__bar"></div><div class="plugin-loader__text">加载中…</div></div>';
   loadHomeLayout().finally(() => {
-    // loadHomeLayout 内部正常会 renderToolGrid；此处兜底确保渲染
-    if (toolGrid.querySelector('.tool-loader')) renderToolGrid();
+    // loadHomeLayout 内部正常会 renderPluginGrid；此处兜底确保渲染
+    if (pluginGrid.querySelector('.plugin-loader')) renderPluginGrid();
     hideAppLoader();
   });
 }
@@ -538,10 +543,10 @@ $('confirmOkBtn')?.addEventListener('click', () => {
 });
 
 // 暴露给 inline onclick
-(window as any).showTool = showTool;
+(window as any).showPlugin = showPlugin;
 (window as any).backToGrid = backToGrid;
 
-// 监听工具发出的脚本变更事件（js 工具发布/删除脚本后触发首页刷新，避免工具直接依赖壳内部函数）
+// 监听插件发出的脚本变更事件（js 运行插件发布/删除脚本后触发首页刷新，避免插件直接依赖壳内部函数）
 // 通过 eventBus 订阅；同时兼容旧的 window 事件（过渡期）
 eventBus.on('kbox:scripts-changed', () => loadPublishedScripts());
 window.addEventListener('kbox:scripts-changed', () => loadPublishedScripts());
@@ -557,7 +562,7 @@ if (savedToken) {
         setVerifiedState();
         mainContent.classList.add('active');
         syncFloatMenuVisibility();
-        initTools(); // 内部 loadHomeLayout 完成后 hideAppLoader
+        initPlugins(); // 内部 loadHomeLayout 完成后 hideAppLoader
       } else {
         resetVerifiedState();
         localStorage.removeItem('kbox_token');

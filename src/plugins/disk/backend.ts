@@ -18,7 +18,7 @@ const DOWNLOAD_TOKEN_TTL_SEC = 300;
 
 const app = new Hono<{ Bindings: Bindings; Variables: Variables }>();
 
-// ─── 工具专用 D1 配置读取 ───
+// ─── 插件专用 D1 配置读取 ───
 async function diskD1Creds(c: any): Promise<{ token: string; base?: string }> {
   const base = await getConfig(c, 'disk', 'disk_d1_base');
   const token = await getConfig(c, 'disk', 'disk_d1_token');
@@ -354,7 +354,7 @@ app.delete('/files/:id', async (c) => {
 });
 
 // ─── 供 JS Runner / kbox 对象内部直调的读函数 ───
-// 注意：云盘支持工具级 D1 覆盖，这里读全局凭据（与 kbox 注入语义一致）
+// 注意：云盘支持插件级 D1 覆盖，这里读全局凭据（与 kbox 注入语义一致）
 export async function listDiskFiles(env: any): Promise<any[]> {
   const base = env.D1_API_BASE;
   const token = env.D1_API_TOKEN;

@@ -1,4 +1,4 @@
-// 工具：系统状态监控
+// 插件：系统状态监控
 import { $, esc, toast, api } from '../../shared.js';
 import type { FrontendPlugin } from '../../shared.js';
 
@@ -156,7 +156,7 @@ async function doRename(name: string) {
 async function loadHosts() {
   const el = $('smHostList');
   if (!el) return;
-  el.innerHTML = '<div class="tool-loader"><div class="app-loader__bar"></div></div>';
+  el.innerHTML = '<div class="plugin-loader"><div class="app-loader__bar"></div></div>';
 
   try {
     const data = await api('/api/plugins/sys-monitor/hosts') as { hosts: HostListItem[] };
@@ -252,7 +252,7 @@ async function showHostDetail(id: string) {
     });
 
     // 浮动菜单：注册详情页操作
-    (window as any).setToolMenu([
+    (window as any).setPluginMenu([
       {
         label: '主机操作',
         html: '<button onclick="document.getElementById(\'smDetailTitle\')?.click()">重命名</button>' +

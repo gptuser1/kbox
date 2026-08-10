@@ -28,7 +28,7 @@ const APP_CONFIG_SCHEMA: ConfigField[] = [
 ];
 
 export const NS_APP = 'app';
-export function toolNs(tool: string) { return 'tool:' + tool; }
+export function pluginNs(plugin: string) { return 'plugin:' + plugin; }
 
 const cache = new Map<string, { value: any; expireAt: number }>();
 const CACHE_TTL = 60 * 1000;
@@ -106,9 +106,9 @@ async function writeConfig(c: any, ns: string, key: string, value: string, sensi
 
 // ─── 对外 API ───
 
-export async function getConfig(c: any, tool: string, key: string): Promise<string | null> {
-  const toolVal = await readConfig(c, toolNs(tool), key);
-  if (toolVal != null) return toolVal;
+export async function getConfig(c: any, plugin: string, key: string): Promise<string | null> {
+  const pluginVal = await readConfig(c, pluginNs(plugin), key);
+  if (pluginVal != null) return pluginVal;
 
   const appVal = await readConfig(c, NS_APP, key);
   if (appVal != null) return appVal;
@@ -126,8 +126,8 @@ export async function getAppConfig(c: any, key: string): Promise<string | null> 
   return readConfig(c, NS_APP, key);
 }
 
-export async function getToolConfig(c: any, tool: string, key: string): Promise<string | null> {
-  return readConfig(c, toolNs(tool), key);
+export async function getPluginConfig(c: any, plugin: string, key: string): Promise<string | null> {
+  return readConfig(c, pluginNs(plugin), key);
 }
 
 // 写全局配置
@@ -145,19 +145,19 @@ export async function deleteAppConfig(c: any, key: string) {
   cacheInvalidate(NS_APP, key);
 }
 
-// 写工具级覆盖配置
-export async function setToolConfig(c: any, tool: string, key: string, value: string) {
+// 写插件级覆盖配置
+export async function setPluginConfig(c: any, plugin: string, key: string, value: string) {
   const field = APP_CONFIG_SCHEMA.find(f => f.key === key);
   if (!field) throw new Error('未知配置项: ' + key);
-  if (field.plugins && !field.plugins.includes(tool)) throw new Error('该配置项为 ' + field.plugins.join('/') + ' 专用，不可写入 ' + tool);
-  await writeConfig(c, toolNs(tool), key, value, field.sensitive);
+  if (field.plugins && !field.plugins.includes(plugin)) throw new Error('该配置项为 ' + field.plugins.join('/') + ' 专用，不可写入 ' + plugin);
+  await writeConfig(c, pluginNs(plugin), key, value, field.sensitive);
 }
 
-// 删除工具级覆盖
-export async function deleteToolConfig(c: any, tool: string, key: string) {
+// 删除插件级覆盖
+export async function deletePluginConfig(c: any, plugin: string, key: string) {
   const kv = createKv(c.env.D1_API_TOKEN, c.env.D1_API_BASE);
-  await kv.delete(toolNs(tool), key);
-  cacheInvalidate(toolNs(tool), key);
+  await kv.delete(pluginNs(plugin), key);
+  cacheInvalidate(pluginNs(plugin), key);
 }
 
 // 列出所有配置定义（供 UI 渲染表单）
@@ -165,13 +165,13 @@ export function getConfigSchema(): ConfigField[] {
   return APP_CONFIG_SCHEMA;
 }
 
-// 列出某工具的所有覆盖配置 key
-export async function listToolOverrides(c: any, tool: string): Promise<string[]> {
+// 列出某插件的所有覆盖配置 key
+export async function listPluginOverrides(c: any, plugin: string): Promise<string[]> {
   const kv = createKv(c.env.D1_API_TOKEN, c.env.D1_API_BASE);
-  const items = await kv.list(toolNs(tool));
+  const items = await kv.list(pluginNs(plugin));
   return items.map(i => i.key);
 }
 
-export async function getConfigByEnv(env: any, tool: string, key: string): Promise<string | null> {
-  return getConfig({ env }, tool, key);
+export async function getConfigByEnv(env: any, plugin: string, key: string): Promise<string | null> {
+  return getConfig({ env }, plugin, key);
 }

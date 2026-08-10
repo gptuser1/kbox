@@ -1,6 +1,6 @@
-// 工具：AI 新闻锐评
+// 插件：AI 新闻锐评
 // 独立模块，由 shell 在点击时动态 import('/js/plugins/news.js') 加载。
-// 即使本模块出错，只影响本工具，不波及壳与其他工具。
+// 即使本模块出错，只影响本插件，不波及壳与其他插件。
 import { $, esc, toast, api } from '../../shared.js';
 import type { FrontendPlugin } from '../../shared.js';
 
@@ -19,15 +19,13 @@ export function render(): string {
 
 export function mount(): void {
   const list = $('newsList');
-  const triggerBtn = $('newsTriggerBtn') as HTMLButtonElement;
-  const topBtn = $('newsTopBtn') as HTMLButtonElement;
-  const reloadBtn = $('newsReloadBtn');
-  const toggleBtn = $('newsToggleBtn');
   const sectionTitle = $('newsSectionTitle');
   const resultBox = $('newsResult');
 
   // 视图模式：'top' = Top10 关键词，'all' = 全部新闻列表
   let viewMode = 'top';
+  let grabbing = false;
+  let generating = false;
 
   function renderNewsCard(item) {
     const time = formatNewsTime(item.crawled_at);
@@ -108,42 +106,12 @@ export function mount(): void {
       sectionTitle.textContent = '最近新闻（全部）';
     }
     loadCurrent();
-    registerToolMenu();
+    registerPluginMenu();
   }
 
-  function registerToolMenu() {
-    const toggleLabel = viewMode === 'top' ? '📋 查看全部' : '🔥 返回 Top 10';
-    const toggleAction = "toggleNewsView()";
-    (window as any).toggleNewsView = () => setView(viewMode === 'top' ? 'all' : 'top');
-    (window as any).triggerNewsNow = triggerBtn.onclick;
-    (window as any).topNewsNow = topBtn.onclick;
-    (window as any).reloadNews = reloadBtn.onclick;
-    (window as any).setToolMenu([
-      {
-        label: '操作',
-        html: '<button class="active" onclick="triggerNewsNow()">📡 立即抓取</button>' +
-              '<button onclick="topNewsNow()">🎯 生成 Top 10</button>',
-      },
-      {
-        label: '视图',
-        html: '<button onclick="toggleNewsView()">' + toggleLabel + '</button>' +
-              '<button onclick="reloadNews()">🔄 刷新</button>',
-      },
-    ]);
-  }
-
-  function formatNewsTime(ts) {
-    try {
-      const d = new Date(ts);
-      if (isNaN(d.getTime())) return ts || '';
-      const pad = (n) => String(n).padStart(2, '0');
-      const cst = new Date(d.getTime() + 8 * 60 * 60 * 1000);
-      return (cst.getUTCMonth() + 1) + '/' + pad(cst.getUTCDate()) + ' ' + pad(cst.getUTCHours()) + ':' + pad(cst.getUTCMinutes());
-    } catch { return ts || ''; }
-  }
-
-  triggerBtn.onclick = async () => {
-    triggerBtn.disabled = true; triggerBtn.textContent = '📡 抓取中…';
+  async function triggerNews() {
+    if (grabbing) return;
+    grabbing = true;
     resultBox.className = 'result-box';
     resultBox.textContent = '⏳ 正在抓取新闻并由 AI 写锐评，可能需要 30-60 秒…';
     try {
@@ -163,12 +131,13 @@ export function mount(): void {
       resultBox.textContent = '✗ ' + e.message;
       toast('抓取失败', 'error');
     } finally {
-      triggerBtn.disabled = false; triggerBtn.textContent = '📡 立即抓取';
+      grabbing = false;
     }
-  };
+  }
 
-  topBtn.onclick = async () => {
-    topBtn.disabled = true; topBtn.textContent = '🎯 生成中…';
+  async function generateTop() {
+    if (generating) return;
+    generating = true;
     resultBox.className = 'result-box';
     resultBox.textContent = '⏳ 正在基于当前新闻生成 Top 10 关键词…';
     try {
@@ -190,14 +159,48 @@ export function mount(): void {
       resultBox.textContent = '✗ ' + e.message;
       toast('生成失败', 'error');
     } finally {
-      topBtn.disabled = false; topBtn.textContent = '🎯 生成 Top 10';
+      generating = false;
     }
-  };
+  }
 
-  reloadBtn.onclick = loadCurrent;
+  function toggleView() {
+    setView(viewMode === 'top' ? 'all' : 'top');
+  }
+
+  function registerPluginMenu() {
+    const toggleLabel = viewMode === 'top' ? '📋 查看全部' : '🔥 返回 Top 10';
+    (window as any).setPluginMenu([
+      {
+        label: '操作',
+        html: '<button class="active" onclick="window.__triggerNews()">📡 立即抓取</button>' +
+              '<button onclick="window.__genTop()">🎯 生成 Top 10</button>',
+      },
+      {
+        label: '视图',
+        html: '<button onclick="window.__toggleView()">' + toggleLabel + '</button>' +
+              '<button onclick="window.__reloadNews()">🔄 刷新</button>',
+      },
+    ]);
+  }
+
+  function formatNewsTime(ts) {
+    try {
+      const d = new Date(ts);
+      if (isNaN(d.getTime())) return ts || '';
+      const pad = (n) => String(n).padStart(2, '0');
+      const cst = new Date(d.getTime() + 8 * 60 * 60 * 1000);
+      return (cst.getUTCMonth() + 1) + '/' + pad(cst.getUTCDate()) + ' ' + pad(cst.getUTCHours()) + ':' + pad(cst.getUTCMinutes());
+    } catch { return ts || ''; }
+  }
+
+  // 暴露给菜单 inline onclick 使用
+  (window as any).__triggerNews = triggerNews;
+  (window as any).__genTop = generateTop;
+  (window as any).__toggleView = toggleView;
+  (window as any).__reloadNews = loadCurrent;
 
   loadTop();
-  registerToolMenu();
+  registerPluginMenu();
 }
 
 // 编译期校验：确保本模块符合 FrontendPlugin 接口

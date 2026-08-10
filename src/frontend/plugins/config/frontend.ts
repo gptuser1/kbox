@@ -1,6 +1,6 @@
-// 工具：配置管理
+// 插件：配置管理
 // 独立模块，由 shell 在点击时动态 import('/js/plugins/config.js') 加载。
-// 即使本模块出错，只影响本工具，不波及壳与其他工具。
+// 即使本模块出错，只影响本插件，不波及壳与其他插件。
 import { $, esc, toast, api } from '../../shared.js';
 import type { FrontendPlugin } from '../../shared.js';
 
@@ -11,7 +11,7 @@ export function render(): string {
 <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:12px;flex-wrap:wrap">
   <div class="tabs" id="configTabs">
     <button class="tab active" data-ctab="global">全局配置</button>
-    <button class="tab" data-ctab="tools">插件级</button>
+    <button class="tab" data-ctab="plugins">插件级</button>
   </div>
 </div>
 
@@ -21,8 +21,8 @@ export function render(): string {
   </div>
 </div>
 
-<div id="configToolsPane" style="display:none">
-  <div class="file-list" id="configToolList">
+<div id="configPluginsPane" style="display:none">
+  <div class="file-list" id="configPluginList">
     <div class="empty">加载中…</div>
   </div>
 </div>
@@ -61,10 +61,10 @@ export function render(): string {
 
 export function mount(): void {
   const globalList = $('configGlobalList');
-  const toolList = $('configToolList');
+  const toolList = $('configPluginList');
   const tabsEl = $('configTabs');
   const globalPane = $('configGlobalPane');
-  const toolsPane = $('configToolsPane');
+  const pluginsPane = $('configPluginsPane');
   const modalOverlay = $('configModalOverlay');
   const modalSave = $('configModalSave') as HTMLButtonElement;
   const modalInput = $('configModalInput') as HTMLInputElement;
@@ -77,20 +77,20 @@ export function mount(): void {
 
   // 闭包状态：每次 mount 重新初始化
   let schema: any[] = [];
-  let tools: any[] = [];
+  let plugins: any[] = [];
   let globalConfigs: any[] = [];
-  let toolOverrides: Record<string, any[]> = {};
-  let editing: { scope: string; tool: string | null; key: string; field: any } | null = null;
+  let pluginOverrides: Record<string, any[]> = {};
+  let editing: { scope: string; pluginId: string | null; key: string; field: any } | null = null;
   let globalOrder: string[] = [];
-  let toolOrder: string[] = [];
+  let pluginOrder: string[] = [];
   let sortMode = false;
 
   function toggleSortMode() {
     sortMode = !sortMode;
     renderGlobal();
-    renderTools();
+    renderPlugins();
     // 更新浮动菜单按钮状态
-    (window as any).setToolMenu([
+    (window as any).setPluginMenu([
       {
         label: '排列',
         html: '<button onclick="toggleConfigSort()">' + (sortMode ? '✓ 完成排序' : '↕ 调整顺序') + '</button>',
@@ -108,7 +108,7 @@ export function mount(): void {
         tabsEl.querySelectorAll('.tab').forEach((b: Element) => b.classList.toggle('active', b === btn));
         const isGlobal = tab === 'global';
         if (globalPane) globalPane.style.display = isGlobal ? '' : 'none';
-        if (toolsPane) toolsPane.style.display = isGlobal ? 'none' : '';
+        if (pluginsPane) pluginsPane.style.display = isGlobal ? 'none' : '';
       });
     });
   }
@@ -142,15 +142,15 @@ export function mount(): void {
     return ordered;
   }
 
-  function orderedToolsList(): any[] {
-    if (!toolOrder.length) return tools;
+  function orderedPluginsList(): any[] {
+    if (!pluginOrder.length) return plugins;
     const byId: Record<string, any> = {};
-    for (const t of tools) byId[t.id] = t;
+    for (const t of plugins) byId[t.id] = t;
     const ordered: any[] = [];
-    for (const id of toolOrder) {
+    for (const id of pluginOrder) {
       if (byId[id]) { ordered.push(byId[id]); delete byId[id]; }
     }
-    for (const t of tools) {
+    for (const t of plugins) {
       if (byId[t.id]) ordered.push(t);
     }
     return ordered;
@@ -181,21 +181,21 @@ export function mount(): void {
     }).join('');
   }
 
-  function renderTools() {
+  function renderPlugins() {
     if (!toolList) return;
-    if (!tools.length) {
-      toolList.innerHTML = '<div class="empty">无工具</div>';
+    if (!plugins.length) {
+      toolList.innerHTML = '<div class="empty">无插件</div>';
       return;
     }
-    const list = orderedToolsList();
+    const list = orderedPluginsList();
     toolList.innerHTML = list.map((t, i) => {
-      const overrides = toolOverrides[t.id] || [];
+      const overrides = pluginOverrides[t.id] || [];
       let chips = '';
       if (overrides.length) {
         chips = overrides.map((o: any) => {
           const valText = o.sensitive ? '●' : (o.value ? esc(o.value) : '●');
-          return '<span class="saved-config" onclick="editConfig(\'tool\',\'' + t.id + '\',\'' + esc(o.key) + '\')">' + esc(o.key) + ': ' + valText +
-            '<span class="del" onclick="event.stopPropagation();clearConfig(\'tool\',\'' + t.id + '\',\'' + esc(o.key) + '\')">✕</span></span>';
+          return '<span class="saved-config" onclick="editConfig(\'plugin\',\'' + t.id + '\',\'' + esc(o.key) + '\')">' + esc(o.key) + ': ' + valText +
+            '<span class="del" onclick="event.stopPropagation();clearConfig(\'plugin\',\'' + t.id + '\',\'' + esc(o.key) + '\')">✕</span></span>';
         }).join('');
       }
       const existing = new Set(overrides.map((o: any) => o.key));
@@ -203,9 +203,9 @@ export function mount(): void {
       const upDisabled = i === 0 ? ' disabled' : '';
       const downDisabled = i === list.length - 1 ? ' disabled' : '';
       const actions = sortMode
-        ? '<button class="icon-btn"' + upDisabled + ' onclick="moveConfigItem(\'tool\',-1,\'' + esc(t.id) + '\')">↑</button>' +
-          '<button class="icon-btn"' + downDisabled + ' onclick="moveConfigItem(\'tool\',1,\'' + esc(t.id) + '\')">↓</button>'
-        : (available.length ? '<button class="btn btn-outline btn-sm" onclick="addToolOverride(\'' + t.id + '\')">+ 添加</button>' : '');
+        ? '<button class="icon-btn"' + upDisabled + ' onclick="moveConfigItem(\'plugin\',-1,\'' + esc(t.id) + '\')">↑</button>' +
+          '<button class="icon-btn"' + downDisabled + ' onclick="moveConfigItem(\'plugin\',1,\'' + esc(t.id) + '\')">↓</button>'
+        : (available.length ? '<button class="btn btn-outline btn-sm" onclick="addPluginOverride(\'' + t.id + '\')">+ 添加</button>' : '');
       return '<div class="file-item" style="display:block;padding:10px 14px">' +
         '<div style="display:flex;align-items:center;gap:8px">' +
         '<div style="font-weight:600;font-size:14px;flex:1">' + esc(t.name) + '</div>' +
@@ -220,7 +220,7 @@ export function mount(): void {
     try {
       await api('/api/preferences/config_order', {
         method: 'PUT',
-        body: JSON.stringify({ value: { app: globalOrder, plugins: toolOrder } }),
+        body: JSON.stringify({ value: { app: globalOrder, plugins: pluginOrder } }),
         headers: { 'Content-Type': 'application/json' },
       });
     } catch (e: any) { if (e.message !== 'UNAUTHORIZED') toast('顺序保存失败', 'error'); }
@@ -237,13 +237,13 @@ export function mount(): void {
       renderGlobal();
       saveOrder();
     } else {
-      const order = orderedToolsList().map(t => t.id);
+      const order = orderedPluginsList().map(t => t.id);
       const i = order.indexOf(id);
       const j = i + dir;
       if (j < 0 || j >= order.length) return;
       [order[i], order[j]] = [order[j], order[i]];
-      toolOrder = order;
-      renderTools();
+      pluginOrder = order;
+      renderPlugins();
       saveOrder();
     }
   };
@@ -255,29 +255,29 @@ export function mount(): void {
         api('/api/config'),
       ]);
       schema = schemaData.schema || [];
-      tools = schemaData.plugins || [];
+      plugins = schemaData.plugins || [];
       globalConfigs = globalData.configs || [];
 
       const results = await Promise.all(
-        tools.map((t: any) => api('/api/config/plugins/' + t.id).catch(() => ({ overrides: [] })))
+        plugins.map((t: any) => api('/api/config/plugins/' + t.id).catch(() => ({ overrides: [] })))
       );
-      toolOverrides = {};
-      tools.forEach((t: any, i: number) => {
-        toolOverrides[t.id] = results[i].overrides || [];
+      pluginOverrides = {};
+      plugins.forEach((t: any, i: number) => {
+        pluginOverrides[t.id] = results[i].overrides || [];
       });
 
       try {
         const orderData = await api('/api/preferences/config_order');
         if (orderData.value) {
           if (Array.isArray(orderData.value.app)) globalOrder = orderData.value.app;
-          if (Array.isArray(orderData.value.plugins)) toolOrder = orderData.value.plugins;
+          if (Array.isArray(orderData.value.plugins)) pluginOrder = orderData.value.plugins;
         }
       } catch { /* 无偏好则用默认顺序 */ }
 
       renderGlobal();
-      renderTools();
+      renderPlugins();
       // 注册浮动菜单项
-      (window as any).setToolMenu([
+      (window as any).setPluginMenu([
         {
           label: '排列',
           html: '<button onclick="toggleConfigSort()">↕ 调整顺序</button>',
@@ -290,12 +290,12 @@ export function mount(): void {
     }
   }
 
-  function openModal(scope: string, tool: string | null, key: string) {
+  function openModal(scope: string, pluginId: string | null, key: string) {
     const field = schema.find((f: any) => f.key === key);
     if (!field) return;
-    editing = { scope, tool, key, field };
+    editing = { scope, pluginId, key, field };
 
-    modalTitle.textContent = scope === 'app' ? '编辑全局配置' : '编辑工具配置';
+    modalTitle.textContent = scope === 'app' ? '编辑全局配置' : '编辑插件配置';
     modalLabel.textContent = field.key + ' — ' + field.desc + (field.sensitive ? ' （敏感）' : '');
     modalInput.placeholder = field.placeholder || (field.default ? '默认: ' + field.default : '');
     modalInput.value = '';
@@ -316,19 +316,19 @@ export function mount(): void {
   };
   modalOverlay.onclick = (e) => { if (e.target === modalOverlay) (window as any).closeConfigModal(); };
 
-  (window as any).editConfig = function (scope: string, tool: string | null, key: string) {
-    openModal(scope, tool, key);
+  (window as any).editConfig = function (scope: string, pluginId: string | null, key: string) {
+    openModal(scope, pluginId, key);
   };
 
-  (window as any).addToolOverride = function (tool: string) {
-    const overrides = toolOverrides[tool] || [];
+  (window as any).addPluginOverride = function (pluginId: string) {
+    const overrides = pluginOverrides[pluginId] || [];
     const existing = new Set(overrides.map((o: any) => o.key));
-    const available = schema.filter((f: any) => !existing.has(f.key) && (!f.plugins || f.plugins.includes(tool)));
+    const available = schema.filter((f: any) => !existing.has(f.key) && (!f.plugins || f.plugins.includes(pluginId)));
     if (!available.length) { toast('已无可添加的配置项', 'info'); return; }
     pickBody.innerHTML = available.map((f: any) => {
       const sensitiveTag = f.sensitive ? ' <span class="badge badge-err">密</span>' : '';
       const defaultTag = f.default ? ' <span style="color:var(--text-muted);font-size:11px">默认 ' + esc(f.default) + '</span>' : '';
-      return '<div class="file-item" style="padding:10px 14px;cursor:pointer" onclick="pickOverride(\'' + esc(tool) + '\',\'' + esc(f.key) + '\')">' +
+      return '<div class="file-item" style="padding:10px 14px;cursor:pointer" onclick="pickOverride(\'' + esc(pluginId) + '\',\'' + esc(f.key) + '\')">' +
         '<div class="file-info"><div class="file-name">' + esc(f.key) + sensitiveTag + '</div>' +
         '<div class="file-meta">' + esc(f.desc) + ' ' + defaultTag + '</div></div></div>';
     }).join('');
@@ -340,17 +340,17 @@ export function mount(): void {
   };
   pickOverlay.onclick = (e) => { if (e.target === pickOverlay) (window as any).closeConfigPick(); };
 
-  (window as any).pickOverride = function (tool: string, key: string) {
+  (window as any).pickOverride = function (pluginId: string, key: string) {
     (window as any).closeConfigPick();
-    openModal('tool', tool, key);
+    openModal('plugin', pluginId, key);
   };
 
-  (window as any).clearConfig = function (scope: string, tool: string | null, key: string) {
+  (window as any).clearConfig = function (scope: string, pluginId: string | null, key: string) {
     (window as any).showConfirm('确认清除 ' + key + '？', async () => {
       try {
         const url = scope === 'app'
           ? '/api/config/' + encodeURIComponent(key)
-          : '/api/config/plugins/' + encodeURIComponent(tool!) + '/' + encodeURIComponent(key);
+          : '/api/config/plugins/' + encodeURIComponent(pluginId!) + '/' + encodeURIComponent(key);
         await api(url, { method: 'PUT', body: JSON.stringify({ value: '' }), headers: { 'Content-Type': 'application/json' } });
         toast('已清除', 'success');
         loadAll();
@@ -363,13 +363,13 @@ export function mount(): void {
 
   modalSave.onclick = async () => {
     if (!editing) return;
-    const { scope, tool, key } = editing;
+    const { scope, pluginId, key } = editing;
     const value = modalInput.value;
     modalSave.disabled = true; modalSave.textContent = '保存中…';
     try {
       const url = scope === 'app'
         ? '/api/config/' + encodeURIComponent(key)
-        : '/api/config/plugins/' + encodeURIComponent(tool!) + '/' + encodeURIComponent(key);
+        : '/api/config/plugins/' + encodeURIComponent(pluginId!) + '/' + encodeURIComponent(key);
       await api(url, { method: 'PUT', body: JSON.stringify({ value }), headers: { 'Content-Type': 'application/json' } });
       toast('已保存', 'success');
       (window as any).closeConfigModal();

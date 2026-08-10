@@ -77,8 +77,7 @@ export function render(): string {
           <div class="qr-progress-bar" id="qrSendBar"></div>
           <span id="qrSendStatus"></span>
         </div>
-        <button class="btn btn-outline btn-sm" id="qrStopSendBtn">⏹ 停止传输</button>
-      </div>
+        </div>
     </div>
     <div id="qrReceivePanel" class="qr-panel" style="display:none">
       <div class="section-title">摄像头</div>
@@ -88,8 +87,6 @@ export function render(): string {
         <div id="qrCameraStatus" class="qr-camera-status">等待启动…</div>
       </div>
       <button class="btn btn-primary" id="qrStartCameraBtn">📷 启动摄像头</button>
-      <button class="btn btn-outline" id="qrStopCameraBtn" style="display:none">⏹ 停止接收</button>
-      <button class="btn btn-outline qr-cache-btn" id="qrClearCacheBtn" style="display:none">🗑️ 清理缓存</button>
       <div id="qrReceiveProgress" class="qr-progress" style="display:none">
         <div class="qr-progress-bar" id="qrReceiveBar"></div>
         <span id="qrReceiveStatus"></span>
@@ -134,7 +131,6 @@ export function mount(): void {
   const fileSize = $('qrFileSize');
   const clearFileBtn = $('qrClearFileBtn');
   const startSendBtn = $('qrStartSendBtn') as HTMLButtonElement;
-  const stopSendBtn = $('qrStopSendBtn') as HTMLButtonElement;
   const sendStage = $('qrSendStage');
   const canvas = $('qrCanvas') as HTMLCanvasElement;
   const sendBar = $('qrSendBar');
@@ -142,7 +138,6 @@ export function mount(): void {
   const frameBytesSelect = $('qrFrameBytes') as HTMLSelectElement;
   const fpsSelect = $('qrFps') as HTMLSelectElement;
   const startCameraBtn = $('qrStartCameraBtn') as HTMLButtonElement;
-  const stopCameraBtn = $('qrStopCameraBtn') as HTMLButtonElement;
   const video = $('qrVideo') as HTMLVideoElement;
   const overlay = $('qrOverlay') as HTMLCanvasElement;
   const cameraStatus = $('qrCameraStatus');
@@ -161,7 +156,6 @@ export function mount(): void {
   const textBtn = $('qrTextBtn');
   const textInput = $('qrTextInput') as HTMLTextAreaElement;
   const textArea = $('qrTextArea');
-  const clearCacheBtn = $('qrClearCacheBtn') as HTMLButtonElement;
 
   // 状态
   let selectedFile: { name: string; bytes: Uint8Array; type: string } | null = null;
@@ -305,7 +299,6 @@ export function mount(): void {
     const gen = ++sendGeneration;
     sendStage.style.display = 'block';
     startSendBtn.disabled = true;
-    stopSendBtn.style.display = '';
 
     try {
       let packed: PackedOpticalFile;
@@ -403,7 +396,6 @@ export function mount(): void {
     } catch (e: any) {
       sendStatus.textContent = '发送失败: ' + (e.message || String(e));
       startSendBtn.disabled = false;
-      stopSendBtn.style.display = 'none';
     }
   }
 
@@ -412,7 +404,6 @@ export function mount(): void {
     cancelAnimationFrame(sendAnimFrame);
     sendStage.style.display = 'none';
     startSendBtn.disabled = false;
-    stopSendBtn.style.display = 'none';
     encoder = null;
     header = null;
     sendBar.style.width = '0%';
@@ -420,7 +411,6 @@ export function mount(): void {
   }
 
   startSendBtn.addEventListener('click', startSend);
-  stopSendBtn.addEventListener('click', stopSend);
 
   // ─── 接收端 ───
   const overlayCtx = overlay.getContext('2d')!;
@@ -532,8 +522,6 @@ export function mount(): void {
 
     video.srcObject = stream;
     startCameraBtn.style.display = 'none';
-    stopCameraBtn.style.display = '';
-    clearCacheBtn.style.display = '';
 
     // 初始化 QR 解码器
     if (!qrDecoderRef) {
@@ -748,8 +736,6 @@ export function mount(): void {
     stream?.getTracks().forEach(t => t.stop());
     stream = null;
     startCameraBtn.style.display = '';
-    stopCameraBtn.style.display = 'none';
-    clearCacheBtn.style.display = 'none';
     startCameraBtn.disabled = false;
     startCameraBtn.textContent = '📷 启动摄像头';
     cameraStatus.textContent = '已停止';
@@ -762,14 +748,9 @@ export function mount(): void {
   }
 
   startCameraBtn.addEventListener('click', startCamera);
-  stopCameraBtn.addEventListener('click', () => {
-    receiveDone = true;
-    captureGen++;
-    stopCamera();
-  });
 
-  // ─── 清理缓存 ───
-  clearCacheBtn.addEventListener('click', () => {
+  // 清理缓存（由浮动菜单调用）
+  function clearCache() {
     decoder = null;
     streamKey = '';
     receiveBar.style.width = '0%';
@@ -777,7 +758,23 @@ export function mount(): void {
     receiveResult.style.display = 'none';
     receiveResult.innerHTML = '';
     toast('接收缓存已清理', 'success');
-  });
+  }
+
+  // ─── 浮动菜单 ───
+  (window as any).__qrStopSend = stopSend;
+  (window as any).__qrStopCamera = () => { receiveDone = true; captureGen++; stopCamera(); };
+  (window as any).__qrClearCache = clearCache;
+  (window as any).setPluginMenu([
+    {
+      label: '发送',
+      html: '<button onclick="window.__qrStopSend()">⏹ 停止传输</button>',
+    },
+    {
+      label: '接收',
+      html: '<button onclick="window.__qrStopCamera()">⏹ 停止接收</button>' +
+            '<button onclick="window.__qrClearCache()">🗑️ 清理缓存</button>',
+    },
+  ]);
 
   // 设置清理函数，供 unmount 调用
   _cleanup = () => {
@@ -788,7 +785,6 @@ export function mount(): void {
     header = null;
     sendStage.style.display = 'none';
     startSendBtn.disabled = false;
-    stopSendBtn.style.display = 'none';
     sendBar.style.width = '0%';
     sendStatus.textContent = '';
     // 文件选择清理
@@ -808,8 +804,6 @@ export function mount(): void {
     }
     clearTimeout(scanTimer);
     startCameraBtn.style.display = '';
-    stopCameraBtn.style.display = 'none';
-    clearCacheBtn.style.display = 'none';
     startCameraBtn.disabled = false;
     startCameraBtn.textContent = '📷 启动摄像头';
     cameraStatus.textContent = '已停止';
