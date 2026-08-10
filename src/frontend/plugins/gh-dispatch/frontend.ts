@@ -8,27 +8,20 @@ export function render(): string {
   return `
     <h2>⚡ GitHub Actions 触发</h2>
     <div class="saved-configs" id="dispatchSavedConfigs"></div>
-    <div class="form-row">
-      <div class="form-group">
-        <label>仓库</label>
-        <input type="text" id="dispatchRepo" placeholder="user/repo 或粘贴 GitHub 链接">
-      </div>
-      <button class="btn btn-outline" id="dispatchLoadBtn" style="margin-bottom:0">加载</button>
+    <div class="form-inline" id="dispatchTopRow" style="display:flex;gap:6px;align-items:center;flex-wrap:nowrap">
+      <input type="text" id="dispatchRepo" placeholder="user/repo 或粘贴 GitHub 链接" style="flex:1;min-width:0;padding:7px 10px;border:1px solid var(--border);border-radius:6px;font-size:13px;background:var(--input-bg);color:var(--text);outline:none">
+      <select id="dispatchBranch" style="display:none;padding:7px 10px;border:1px solid var(--border);border-radius:6px;font-size:13px;background:var(--input-bg);color:var(--text);outline:none;flex-shrink:0"></select>
+      <button class="btn btn-outline btn-sm" id="dispatchLoadBtn" style="flex-shrink:0">加载</button>
     </div>
-    <div class="form-group" id="dispatchBranchGroup" style="display:none">
-      <label>分支</label>
-      <select id="dispatchBranch"></select>
-      <div id="dispatchCommitInfo" style="font-size:12px;color:var(--text-muted);margin-top:6px"></div>
+    <div id="dispatchCommitInfo" style="font-size:12px;color:var(--text-muted);margin-bottom:12px"></div>
+    <div class="form-inline" id="dispatchWfRow" style="display:none;gap:6px;align-items:center;flex-wrap:nowrap">
+      <div id="dispatchWfInfo" style="flex:1;min-width:0;padding:7px 10px;border:1px dashed var(--border);border-radius:6px;font-size:13px;color:var(--text-muted);cursor:pointer;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;user-select:none">点击选择工作流</div>
+      <button class="btn btn-primary btn-sm" id="dispatchTriggerBtn" disabled style="flex-shrink:0">触发</button>
+      <button class="btn btn-outline btn-sm" id="dispatchSaveBtn" style="flex-shrink:0">保存</button>
     </div>
-    <div class="section-title" id="dispatchWfTitle" style="display:none">选择工作流</div>
-    <div class="wf-list" id="dispatchWfList"></div>
     <div id="dispatchInputsSection" style="display:none">
       <div class="section-title" id="dispatchInputsTitle">输入参数</div>
       <div id="dispatchInputs"></div>
-    </div>
-    <div style="display:flex;gap:8px;margin-top:16px;margin-bottom:16px;flex-wrap:wrap">
-      <button class="btn btn-primary" id="dispatchTriggerBtn" disabled>触发</button>
-      <button class="btn btn-outline" id="dispatchSaveBtn">保存配置</button>
     </div>
     <div class="result-box" id="dispatchResult"></div>
     <div id="dispatchRunSection" style="display:none;margin-top:16px">
@@ -44,6 +37,17 @@ export function render(): string {
       <div id="dispatchLogContent" style="display:none">
         <div class="section-title" id="dispatchLogJobTitle"></div>
         <pre class="wf-log-box" id="dispatchLogText"></pre>
+      </div>
+    </div>
+    <div class="modal-overlay" id="dispatchWfModal">
+      <div class="modal" style="max-width:520px;max-height:70vh;display:flex;flex-direction:column">
+        <div class="modal-header">
+          <h3>选择工作流</h3>
+          <button class="modal-close" id="dispatchWfModalClose">✕</button>
+        </div>
+        <div class="modal-body" id="dispatchWfModalBody" style="flex:1;overflow-y:auto;min-height:0;padding:12px 18px">
+          <div class="wf-list" id="dispatchWfList"></div>
+        </div>
       </div>
     </div>
   `;
@@ -142,8 +146,6 @@ export function mount(): void {
   const repoInput = $('dispatchRepo') as HTMLInputElement;
   const loadBtn = $('dispatchLoadBtn') as HTMLButtonElement;
   const wfList = $('dispatchWfList');
-  const wfTitle = $('dispatchWfTitle');
-  const branchGroup = $('dispatchBranchGroup');
   const branchSelect = $('dispatchBranch') as HTMLSelectElement;
   const inputsSection = $('dispatchInputsSection');
   const inputsTitle = $('dispatchInputsTitle');
@@ -161,6 +163,11 @@ export function mount(): void {
   const logContent = $('dispatchLogContent');
   const logJobTitle = $('dispatchLogJobTitle');
   const logText = $('dispatchLogText');
+
+  const wfInfo = $('dispatchWfInfo');
+  const wfModal = $('dispatchWfModal');
+  const wfModalClose = $('dispatchWfModalClose') as HTMLElement;
+  const wfRow = $('dispatchWfRow');
 
   let selectedWf: string | null = null;
   let selectedWfPath: string | null = null;
@@ -410,11 +417,14 @@ export function mount(): void {
     const [owner, repoName] = repo.split('/');
     loadBtn.disabled = true; loadBtn.textContent = '加载中…';
     wfList.innerHTML = '<div class="empty">加载中…</div>';
-    wfTitle.style.display = '';
     inputsSection.style.display = 'none';
-    branchGroup.style.display = 'none';
+    branchSelect.style.display = 'none';
     selectedWf = null;
     triggerBtn.disabled = true;
+    wfInfo.innerHTML = '点击选择工作流';
+    wfInfo.style.border = '1px dashed var(--border)';
+    wfInfo.style.color = 'var(--text-muted)';
+    wfRow.style.display = 'none';
     stopPoll();
     trackingLive = false;
     lastRunId = null;
@@ -433,7 +443,7 @@ export function mount(): void {
 
       const branches = branchData.branches || [];
       if (branches.length) {
-        branchGroup.style.display = '';
+        branchSelect.style.display = '';
         branchSelect.innerHTML = branches.map((b: any) =>
           '<option value="' + esc(b.name) + '"' + (b.name === 'main' ? ' selected' : '') + '>' + esc(b.name) + '</option>'
         ).join('');
@@ -457,6 +467,7 @@ export function mount(): void {
         html += '<div class="wf-item" data-wf="' + esc(w.filename) + '" data-path="' + esc(w.path) + '"><div class="wf-info"><div class="wf-name">' + esc(w.name) + '</div><div class="wf-path">' + esc(w.path) + '</div></div><span class="wf-state ' + (w.state === 'active' ? 'active' : '') + '">' + esc(w.state) + '</span></div>';
       }
       wfList.innerHTML = html;
+      wfRow.style.display = '';
       wfList.querySelectorAll('.wf-item').forEach((item: any) => {
         item.onclick = () => {
           wfList.querySelectorAll('.wf-item').forEach((i: any) => i.classList.remove('selected'));
@@ -464,6 +475,22 @@ export function mount(): void {
           selectedWf = item.dataset.wf;
           selectedWfPath = item.dataset.path;
           triggerBtn.disabled = false;
+
+          // 更新工作流信息显示
+          const name = item.querySelector('.wf-name')?.textContent || selectedWf;
+          const path = item.querySelector('.wf-path')?.textContent || '';
+          const state = item.querySelector('.wf-state')?.textContent || '';
+          const stateColor = state === 'active' ? 'var(--success)' : 'var(--text-muted)';
+          wfInfo.innerHTML =
+            '<span style="font-weight:500;color:var(--text)">' + esc(name) + '</span> ' +
+            '<span style="font-size:12px;opacity:0.7">' + esc(path) + '</span> ' +
+            '<span style="font-size:11px;color:' + stateColor + '">' + esc(state) + '</span>';
+          wfInfo.style.border = '1px solid var(--border)';
+          wfInfo.style.color = '';
+          wfRow.style.display = '';
+
+          // 关闭模态框
+          wfModal.classList.remove('show');
 
           inputsBox.innerHTML = '<div class="empty">加载参数定义中…</div>';
           inputsTitle.textContent = '输入参数';
@@ -488,6 +515,11 @@ export function mount(): void {
           fetchRuns();
         };
       });
+
+      // 自动选中第一个工作流
+      const firstItem = wfList.querySelector('.wf-item') as HTMLElement | null;
+      if (firstItem) firstItem.click();
+
     } catch (e: any) {
       if (e.message === 'UNAUTHORIZED') return;
       wfList.innerHTML = '<div class="empty">加载失败：' + esc(e.message) + '</div>';
@@ -587,6 +619,17 @@ export function mount(): void {
       if (e.message === 'UNAUTHORIZED') return;
       toast('保存失败：' + e.message, 'error');
     }
+  };
+
+  // ─── 工作流选择模态框交互 ───
+  wfInfo.onclick = () => {
+    wfModal.classList.add('show');
+  };
+  wfModalClose.onclick = () => {
+    wfModal.classList.remove('show');
+  };
+  wfModal.onclick = (e: MouseEvent) => {
+    if (e.target === wfModal) wfModal.classList.remove('show');
   };
 
   renderSavedConfigs();
