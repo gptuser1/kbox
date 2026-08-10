@@ -25,9 +25,9 @@ export function render(): string {
     <div class="tool-title-row">
       <h2>📡 QR 传输</h2>
     </div>
-    <div class="qr-tabs">
-      <button class="qr-tab active" data-tab="send">📤 发送</button>
-      <button class="qr-tab" data-tab="receive">📥 接收</button>
+    <div class="tabs" id="qrTabs">
+      <button class="tab active" data-qtab="send">📤 发送</button>
+      <button class="tab" data-qtab="receive">📥 接收</button>
     </div>
     <div id="qrSendPanel" class="qr-panel">
       <div class="section-title">文件来源</div>
@@ -103,7 +103,6 @@ export function mount(): void {
   // DOM 引用
   const sendPanel = $('qrSendPanel');
   const receivePanel = $('qrReceivePanel');
-  const tabs = document.querySelectorAll('.qr-tab');
   const fileInput = $('qrFileInput') as HTMLInputElement;
   const localBtn = $('qrLocalBtn');
   const fileInfo = $('qrFileInfo');
@@ -144,16 +143,18 @@ export function mount(): void {
   let pendingContainer: Uint8Array | null = null;
   let acceptTransfer = false;
 
-  // ─── Tab 切换 ───
-  tabs.forEach(tab => {
-    tab.addEventListener('click', () => {
-      tabs.forEach(t => t.classList.remove('active'));
-      tab.classList.add('active');
-      const target = (tab as HTMLElement).dataset.tab;
-      sendPanel.style.display = target === 'send' ? '' : 'none';
-      receivePanel.style.display = target === 'receive' ? '' : 'none';
+  // ─── Tab 切换（参考配置管理） ───
+  const tabsEl = $('qrTabs');
+  if (tabsEl) {
+    tabsEl.querySelectorAll('.tab').forEach((btn: Element) => {
+      btn.addEventListener('click', () => {
+        const tab = (btn as HTMLElement).dataset.qtab;
+        tabsEl.querySelectorAll('.tab').forEach((b: Element) => b.classList.toggle('active', b === btn));
+        sendPanel.style.display = tab === 'send' ? '' : 'none';
+        receivePanel.style.display = tab === 'receive' ? '' : 'none';
+      });
     });
-  });
+  }
 
   // ─── 文件选择 ───
   localBtn.addEventListener('click', () => fileInput.click());
@@ -243,13 +244,15 @@ export function mount(): void {
         });
         if (version === undefined) {
           version = qr.version;
-          // 调整 canvas 大小
-          const cell = qr.modules.size + 2 * MARGIN;
+          // 计算 canvas 尺寸：适应容器宽度，最小 200px，最大 400px
+          const parent = canvas.parentElement;
+          const maxW = parent ? Math.min(parent.clientWidth, 400) : 400;
+          const displaySize = Math.max(200, maxW);
           const dpr = window.devicePixelRatio || 1;
-          canvas.width = cell * dpr;
-          canvas.height = cell * dpr;
-          canvas.style.width = cell + 'px';
-          canvas.style.height = cell + 'px';
+          canvas.width = displaySize * dpr;
+          canvas.height = displaySize * dpr;
+          canvas.style.width = displaySize + 'px';
+          canvas.style.height = displaySize + 'px';
           canvas.style.maxWidth = '100%';
         }
 

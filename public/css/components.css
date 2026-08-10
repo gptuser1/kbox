@@ -555,3 +555,27 @@ input[type="checkbox"] { accent-color: var(--primary); width: 16px; height: 16px
 .hour-chip span { display: block; text-align: center; padding: 4px 0; font-size: 12px; border: 1px solid var(--border); border-radius: 4px; color: var(--text-secondary); background: var(--bg); transition: all .12s; }
 .hour-chip input:checked + span { background: var(--primary); color: #fff; border-color: var(--primary); }
 .hour-chip:hover span { border-color: var(--primary); }
+
+/* ─── QR 传输 ─── */
+.qr-panel { margin-top: 12px; }
+.qr-source-options { display: flex; gap: 8px; margin-bottom: 12px; }
+.qr-source-btn { display: flex; align-items: center; gap: 6px; padding: 10px 16px; border: 1px solid var(--border); border-radius: 8px; cursor: pointer; font-size: 13px; color: var(--text); background: var(--input-bg); transition: border-color 0.15s; }
+.qr-source-btn:hover { border-color: var(--primary); }
+.qr-file-info { display: flex; align-items: center; gap: 10px; padding: 8px 12px; background: var(--input-bg); border-radius: 8px; font-size: 13px; margin-bottom: 12px; flex-wrap: wrap; }
+.qr-file-info #qrFileName { font-weight: 600; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.qr-file-info #qrFileSize { color: var(--text-muted); font-size: 12px; flex-shrink: 0; }
+.qr-settings-row { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; margin-bottom: 12px; }
+.qr-settings-row label { font-size: 13px; color: var(--text-secondary); display: flex; align-items: center; gap: 6px; }
+.qr-settings-row select { padding: 4px 8px; border: 1px solid var(--border); border-radius: 6px; background: var(--input-bg); color: var(--text); font-size: 12px; outline: none; }
+.qr-stage { margin-top: 12px; display: flex; flex-direction: column; align-items: center; gap: 12px; }
+#qrCanvas { background: #fff; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); max-width: 100%; height: auto; }
+.qr-progress { width: 100%; display: flex; align-items: center; gap: 8px; }
+.qr-progress-bar { height: 6px; background: var(--primary); border-radius: 3px; transition: width 0.3s; }
+.qr-progress span { font-size: 12px; color: var(--text-muted); flex-shrink: 0; }
+.qr-camera-box { position: relative; width: 100%; max-width: 480px; margin: 0 auto; border-radius: 10px; overflow: hidden; background: #000; }
+.qr-camera-box video { display: block; width: 100%; height: auto; max-height: 70vh; object-fit: contain; }
+.qr-camera-box .qr-overlay { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; }
+.qr-camera-status { padding: 8px 12px; font-size: 12px; color: var(--text-muted); text-align: center; }
+.qr-result { margin-top: 12px; padding: 12px; background: var(--card); border-radius: 10px; box-shadow: var(--shadow); text-align: center; }
+.qr-success { color: var(--success); font-size: 16px; font-weight: 600; margin-bottom: 8px; }
+.qr-error { color: var(--danger); font-size: 16px; font-weight: 600; margin-bottom: 8px; }
