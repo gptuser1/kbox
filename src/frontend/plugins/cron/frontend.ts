@@ -9,10 +9,6 @@ const CRON_ACTIONS: Record<string, string> = { news_crawl: '新闻抓取' };
 export function render(): string {
   return `
     <h2>⏰ 定时任务</h2>
-    <div style="display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap">
-      <button class="btn btn-primary" id="cronNewBtn">+ 新建任务</button>
-      <button class="btn btn-outline" id="cronRefreshBtn">刷新</button>
-    </div>
     <div id="cronList"></div>
     <div class="modal-overlay" id="cronModalOverlay">
       <div class="modal" style="max-width:480px">
@@ -33,8 +29,9 @@ export function render(): string {
 export function mount(): void {
   const newBtn = $('cronNewBtn');
   const refreshBtn = $('cronRefreshBtn');
-  if (newBtn) newBtn.onclick = () => (window as any).renderCronEditor(null);
-  if (refreshBtn) refreshBtn.onclick = () => loadCronTasks();
+  // 按钮在 render 中已移除，通过浮动菜单访问
+  (window as any).openNewCron = () => (window as any).renderCronEditor(null);
+  (window as any).refreshCron = () => loadCronTasks();
   // 事件委托：避免内联 onclick 的引号转义陷阱
   const list = $('cronList');
   if (list) {
@@ -48,6 +45,14 @@ export function mount(): void {
       else if (act === 'delete') (window as any).deleteCronTask(id);
     });
   }
+  // 注册浮动菜单项
+  (window as any).setToolMenu([
+    {
+      label: '任务',
+      html: '<button class="btn btn-primary btn-sm" onclick="openNewCron()">+ 新建任务</button>' +
+            '<button class="btn btn-outline btn-sm" onclick="refreshCron()">🔄 刷新</button>',
+    },
+  ]);
   loadCronTasks();
 }
 

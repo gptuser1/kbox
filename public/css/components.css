@@ -116,7 +116,7 @@ body:has(.modal-overlay.show) .float-back { display: none !important; }
   pointer-events: auto;
 }
 .float-menu-container.open {
-  width: 220px; height: 290px; border-radius: 16px;
+  width: 220px; min-height: 200px; height: auto; max-height: 80vh; border-radius: 16px;
   background: var(--fm-bg);
   border: 1px solid var(--fm-border);
   box-shadow: var(--fm-shadow);

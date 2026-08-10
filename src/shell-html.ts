@@ -64,6 +64,7 @@ export function renderShellHTML(): string {
         <button id="fmExitEditBtn" style="display:none">✓ 完成编辑</button>
       </div>
     </div>
+    <div id="fmToolSections" style="display:none"></div>
   </div>
 </div>
 

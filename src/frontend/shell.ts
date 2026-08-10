@@ -73,6 +73,73 @@ function bindFloatMenu() {
   }
 }
 
+// ─── 浮动返回按钮行为栈 ───
+let floatBackStack: Array<() => void> = [];
+
+// 工具调用：push 一个返回行为，覆盖默认的 backToGrid
+function pushFloatBack(action: () => void) {
+  floatBackStack.push(action);
+  const fb = $('floatBack');
+  if (fb) fb.onclick = action;
+}
+
+// 工具调用：pop 当前行为，恢复到上一个或默认 backToGrid
+function popFloatBack() {
+  floatBackStack.pop();
+  const action = floatBackStack.length > 0
+    ? floatBackStack[floatBackStack.length - 1]
+    : backToGrid;
+  const fb = $('floatBack');
+  if (fb) fb.onclick = action;
+}
+
+// 进入工具时由 showTool 调用，重置栈
+function resetFloatBack() {
+  floatBackStack = [];
+  const fb = $('floatBack');
+  if (fb) fb.onclick = backToGrid;
+}
+
+// ─── 浮动菜单工具化 ───
+interface ToolMenuSection {
+  label: string;
+  html: string;
+}
+
+let toolMenuSections: ToolMenuSection[] = [];
+
+function renderToolMenu() {
+  const container = $('fmToolSections');
+  if (!container) return;
+  if (toolMenuSections.length === 0) {
+    container.style.display = 'none';
+    return;
+  }
+  container.style.display = '';
+  container.innerHTML = toolMenuSections.map(s =>
+    '<div class="fm-section">' +
+    '<div class="fm-label">' + s.label + '</div>' +
+    '<div class="fm-btn-group">' + s.html + '</div>' +
+    '</div>'
+  ).join('');
+}
+
+function setToolMenu(sections: ToolMenuSection[]) {
+  toolMenuSections = sections;
+  renderToolMenu();
+}
+
+function clearToolMenu() {
+  toolMenuSections = [];
+  renderToolMenu();
+}
+
+// 暴露给工具模块（通过 window 或者直接 import）
+(window as any).pushFloatBack = pushFloatBack;
+(window as any).popFloatBack = popFloatBack;
+(window as any).setToolMenu = setToolMenu;
+(window as any).clearToolMenu = clearToolMenu;
+
 // ─── 令牌 ───
 function setBtnStatus(text: string, cls: string, disabled?: boolean) {
   verifyBtn.textContent = text;
@@ -338,8 +405,10 @@ async function showTool(id: string) {
   toolViews.appendChild(view);
   $('floatBack').classList.add('show');
   $('floatMenuBtn')?.classList.remove('open');
-  // 进入工具页：隐藏首页菜单按钮（视图切换/自定义布局仅对首页有意义，避免在工具页误点）
-  const fmb = $('floatMenuBtn'); if (fmb) fmb.style.display = 'none';
+  // 进入工具页：重置返回栈，清除工具菜单，显示浮动菜单供工具注册
+  resetFloatBack();
+  clearToolMenu();
+  const fmb = $('floatMenuBtn'); if (fmb) fmb.style.display = '';
 
   // 立即显示工具加载层（区域级，不全屏，保留 token 栏与浮动按钮）
   view.innerHTML = '<div class="tool-loader"><div class="app-loader__bar"></div><div class="tool-loader__text">加载中…</div></div>';
@@ -379,7 +448,8 @@ function backToGrid() {
   const hgw = $('homeGridWrap'); if (hgw) hgw.style.display = '';
   $('floatBack').classList.remove('show');
   $('floatMenuBtn')?.classList.remove('open');
-  // 回到首页：恢复菜单按钮显示
+  // 回到首页：清除工具注册的菜单项，恢复菜单按钮显示
+  clearToolMenu();
   const fmb = $('floatMenuBtn'); if (fmb) fmb.style.display = '';
   window.scrollTo(0, 0);
 }

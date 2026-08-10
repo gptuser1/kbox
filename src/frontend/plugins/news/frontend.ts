@@ -8,13 +8,6 @@ export function render(): string {
   return `
 <h2>📰 AI 新闻锐评</h2>
 
-<div style="display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap">
-  <button class="btn btn-primary" id="newsTriggerBtn">📡 立即抓取</button>
-  <button class="btn btn-outline" id="newsTopBtn">🎯 生成 Top 10</button>
-  <button class="btn btn-outline" id="newsReloadBtn">🔄 刷新</button>
-  <button class="btn btn-outline" id="newsToggleBtn">📋 查看全部</button>
-</div>
-
 <div class="result-box" id="newsResult"></div>
 
 <div class="section-title" id="newsSectionTitle">🔥 Top 10 热门关键词</div>
@@ -111,12 +104,32 @@ export function mount(): void {
     viewMode = mode;
     if (mode === 'top') {
       sectionTitle.textContent = '🔥 Top 10 热门关键词';
-      toggleBtn.textContent = '📋 查看全部';
     } else {
       sectionTitle.textContent = '最近新闻（全部）';
-      toggleBtn.textContent = '🔥 返回 Top 10';
     }
     loadCurrent();
+    registerToolMenu();
+  }
+
+  function registerToolMenu() {
+    const toggleLabel = viewMode === 'top' ? '📋 查看全部' : '🔥 返回 Top 10';
+    const toggleAction = "toggleNewsView()";
+    (window as any).toggleNewsView = () => setView(viewMode === 'top' ? 'all' : 'top');
+    (window as any).triggerNewsNow = triggerBtn.onclick;
+    (window as any).topNewsNow = topBtn.onclick;
+    (window as any).reloadNews = reloadBtn.onclick;
+    (window as any).setToolMenu([
+      {
+        label: '操作',
+        html: '<button class="btn btn-primary btn-sm" onclick="triggerNewsNow()">📡 立即抓取</button>' +
+              '<button class="btn btn-outline btn-sm" onclick="topNewsNow()">🎯 生成 Top 10</button>',
+      },
+      {
+        label: '视图',
+        html: '<button class="btn btn-outline btn-sm" onclick="toggleNewsView()">' + toggleLabel + '</button>' +
+              '<button class="btn btn-outline btn-sm" onclick="reloadNews()">🔄 刷新</button>',
+      },
+    ]);
   }
 
   function formatNewsTime(ts) {
@@ -182,9 +195,9 @@ export function mount(): void {
   };
 
   reloadBtn.onclick = loadCurrent;
-  toggleBtn.onclick = () => setView(viewMode === 'top' ? 'all' : 'top');
 
   loadTop();
+  registerToolMenu();
 }
 
 // 编译期校验：确保本模块符合 FrontendPlugin 接口

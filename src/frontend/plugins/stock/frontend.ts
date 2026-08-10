@@ -11,11 +11,6 @@ export function render(): string {
   <div class="ttr-stats" id="stockStats"><span class="ttr-refresh">上次刷新: <span id="stockLastTime">-</span></span></div>
 </div>
 
-<div style="display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap">
-  <button class="btn btn-primary" id="stockRefreshBtn">🔄 刷新全部估值</button>
-  <button class="btn btn-outline" id="stockAddBtn">➕ 添加基金</button>
-</div>
-
 <div class="result-box" id="stockResult"></div>
 
 <div class="section-title">基金列表</div>
@@ -264,7 +259,8 @@ export function mount(): void {
     document.body.appendChild(detailOverlay);
   };
 
-  addBtn.onclick = () => {
+  // 添加基金（通过浮动菜单访问）
+  (window as any).stockAddFund = () => {
     editingId = null;
     ($('stockFundName') as HTMLInputElement).value = '';
     ($('stockFundCode') as HTMLInputElement).value = '';
@@ -310,8 +306,8 @@ export function mount(): void {
     }
   };
 
-  refreshBtn.onclick = async () => {
-    refreshBtn.disabled = true; refreshBtn.textContent = '🔄 刷新中…';
+  // 刷新全部估值（通过浮动菜单访问）
+  (window as any).stockRefreshAll = async () => {
     resultBox.className = 'result-box';
     resultBox.textContent = '⏳ 正在抓取行情并计算估值…';
     try {
@@ -326,8 +322,6 @@ export function mount(): void {
       resultBox.className = 'result-box show error';
       resultBox.textContent = '✗ ' + e.message;
       toast('刷新失败', 'error');
-    } finally {
-      refreshBtn.disabled = false; refreshBtn.textContent = '🔄 刷新全部估值';
     }
   };
 
@@ -380,6 +374,15 @@ export function mount(): void {
       importSubmit.disabled = false; importSubmit.textContent = '导入';
     }
   };
+
+  // 注册浮动菜单项
+  (window as any).setToolMenu([
+    {
+      label: '基金',
+      html: '<button class="btn btn-primary btn-sm" onclick="stockRefreshAll()">🔄 刷新全部估值</button>' +
+            '<button class="btn btn-outline btn-sm" onclick="stockAddFund()">➕ 添加基金</button>',
+    },
+  ]);
 
   loadFunds();
 }

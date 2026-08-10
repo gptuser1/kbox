@@ -13,7 +13,6 @@ export function render(): string {
     <button class="tab active" data-ctab="global">全局配置</button>
     <button class="tab" data-ctab="tools">插件级</button>
   </div>
-  <button class="btn btn-outline btn-sm" id="configSortBtn">调整顺序</button>
 </div>
 
 <div id="configGlobalPane">
@@ -86,21 +85,21 @@ export function mount(): void {
   let toolOrder: string[] = [];
   let sortMode = false;
 
-  function applySortBtn() {
-    if (!sortBtn) return;
-    sortBtn.textContent = sortMode ? '完成' : '调整顺序';
-    sortBtn.classList.toggle('btn-primary', sortMode);
-    sortBtn.classList.toggle('btn-outline', !sortMode);
+  function toggleSortMode() {
+    sortMode = !sortMode;
+    renderGlobal();
+    renderTools();
+    // 更新浮动菜单按钮状态
+    (window as any).setToolMenu([
+      {
+        label: '排列',
+        html: '<button class="btn btn-outline btn-sm" onclick="toggleConfigSort()">' + (sortMode ? '✓ 完成排序' : '↕ 调整顺序') + '</button>',
+      },
+    ]);
   }
 
-  if (sortBtn) {
-    sortBtn.onclick = () => {
-      sortMode = !sortMode;
-      applySortBtn();
-      renderGlobal();
-      renderTools();
-    };
-  }
+  // 暴露给浮动菜单 onclick
+  (window as any).toggleConfigSort = toggleSortMode;
 
   if (tabsEl) {
     tabsEl.querySelectorAll('.tab').forEach((btn: Element) => {
@@ -277,6 +276,13 @@ export function mount(): void {
 
       renderGlobal();
       renderTools();
+      // 注册浮动菜单项
+      (window as any).setToolMenu([
+        {
+          label: '排列',
+          html: '<button class="btn btn-outline btn-sm" onclick="toggleConfigSort()">↕ 调整顺序</button>',
+        },
+      ]);
     } catch (e: any) {
       if (e.message === 'UNAUTHORIZED') return;
       if (globalList) globalList.innerHTML = '<div class="empty">加载失败：' + esc(e.message) + '</div>';

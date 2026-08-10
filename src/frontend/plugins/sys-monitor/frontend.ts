@@ -57,7 +57,6 @@ export function render(): string {
     <div id="smHostList"></div>
     <div id="smDetail" style="display:none">
       <div class="sm-detail-bar">
-        <button class="btn btn-outline btn-sm" id="smBackBtn">← 返回</button>
         <span id="smDetailTitle" class="sm-detail-title sm-clickable-name"></span>
         <span id="smStatusBadge" class="sm-status-badge"></span>
         <input type="text" id="smRenameInput" class="sm-rename-input" placeholder="新名称" style="display:none">
@@ -85,12 +84,8 @@ export function render(): string {
 export function mount(): void {
   loadHosts();
 
-  $('smBackBtn')?.addEventListener('click', () => {
-    currentHost = null;
-    $('smDetail')!.style.display = 'none';
-    $('smHostList')!.style.display = '';
-    loadHosts();
-  });
+  // 返回按钮由浮动返回按钮替代，无需在 mount 中绑定
+  // 详情页通过 showHostDetail 中的 pushFloatBack 处理
 
   const titleEl = $('smDetailTitle');
   const renameInput = $('smRenameInput') as HTMLInputElement;
@@ -117,6 +112,7 @@ export function mount(): void {
         $('smDetail')!.style.display = 'none';
         $('smHostList')!.style.display = '';
         currentHost = null;
+        (window as any).popFloatBack();
         loadHosts();
       } catch (e: any) {
         toast('删除失败：' + e.message, 'error');
@@ -245,6 +241,25 @@ async function showHostDetail(id: string) {
 
     // 历史
     renderHistory(data.history);
+
+    // 浮动返回：点击返回回到主机列表，并自动 pop 栈
+    (window as any).pushFloatBack(() => {
+      currentHost = null;
+      $('smDetail')!.style.display = 'none';
+      $('smHostList')!.style.display = '';
+      loadHosts();
+      (window as any).popFloatBack();
+    });
+
+    // 浮动菜单：注册详情页操作
+    (window as any).setToolMenu([
+      {
+        label: '主机操作',
+        html: '<button class="btn btn-outline btn-sm" onclick="document.getElementById(\'smDetailTitle\')?.click()">重命名</button>' +
+              '<button class="btn btn-outline btn-sm" onclick="document.getElementById(\'smExtraBtn\')?.click()">📝 附加信息</button>' +
+              '<button class="btn btn-outline btn-sm" style="color:var(--danger)" onclick="document.getElementById(\'smDeleteBtn\')?.click()">删除</button>',
+      },
+    ]);
   } catch (e: any) {
     if (e.message === 'UNAUTHORIZED') return;
     toast('加载详情失败：' + e.message, 'error');
