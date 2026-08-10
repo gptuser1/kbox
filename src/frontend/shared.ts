@@ -86,10 +86,8 @@ export function toast(msg: string, type?: string): void {
 }
 
 // 统一带鉴权的 API 调用；401 时触发 shell 注册的失效回调
-// 注：currentToken 可能为空（当 shared.ts 被 esbuild --bundle 内联到独立 chunk 时），
-// 此时从 localStorage 兜底读取，确保鉴权始终有效。
 export async function api(url: string, options?: any): Promise<any> {
-  const token = currentToken || localStorage.getItem('kbox_token') || '';
+  const token = currentToken;
   const res = await fetch(url, {
     ...options,
     headers: { ...(options?.headers || {}), 'Authorization': 'Bearer ' + token },

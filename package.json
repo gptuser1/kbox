@@ -5,7 +5,7 @@
   "scripts": {
     "gen:registry": "node script/gen-registry.mjs",
     "typecheck:frontend": "tsc -p src/frontend/tsconfig.json --noEmit",
-    "build:frontend": "npm run gen:registry && npm run typecheck:frontend && esbuild src/frontend/shell.ts src/frontend/shared.ts src/frontend/registry.ts src/frontend/plugins/*.ts --format=esm --target=es2022 --outdir=public/js --outbase=src/frontend --allow-overwrite --log-level=warning && esbuild src/frontend/plugins/qr-transfer/main.ts --bundle --format=esm --target=es2022 --outfile=public/js/plugins/qr-transfer.js --log-level=warning",
+    "build:frontend": "npm run gen:registry && npm run typecheck:frontend && esbuild src/frontend/shell.ts src/frontend/shared.ts src/frontend/registry.ts src/frontend/plugins/config.ts src/frontend/plugins/cron.ts src/frontend/plugins/db-admin.ts src/frontend/plugins/disk.ts src/frontend/plugins/dispatch.ts src/frontend/plugins/js.ts src/frontend/plugins/news.ts src/frontend/plugins/stock.ts src/frontend/plugins/sys-monitor.ts --format=esm --target=es2022 --outdir=public/js --outbase=src/frontend --allow-overwrite --log-level=warning && esbuild src/frontend/plugins/qr-transfer.ts --bundle --external:../shared.js --format=esm --target=es2022 --outfile=public/js/plugins/qr-transfer.js --log-level=warning",
     "dev": "npm run build:frontend && wrangler dev",
     "deploy": "npm run build:frontend && wrangler deploy",
     "typecheck": "tsc --noEmit && npm run typecheck:frontend",
