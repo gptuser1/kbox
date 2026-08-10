@@ -236,11 +236,6 @@ input[type="checkbox"] { accent-color: var(--primary); width: 16px; height: 16px
 .wf-log-box .log-line { white-space: pre-wrap; min-height: 1em; }
 .wf-log-box .log-empty { color: var(--text-muted); padding: 8px 0; }
 .wf-log-box .log-ts { color: var(--text-muted); opacity: 0.65; }
-.wf-log-box .log-group { margin: 6px 0; border-left: 2px solid var(--border); padding-left: 10px; }
-.wf-log-box .log-group > summary { cursor: pointer; color: var(--primary); font-weight: 600; padding: 2px 0; list-style: none; white-space: pre-wrap; }
-.wf-log-box .log-group > summary::-webkit-details-marker { display: none; }
-.wf-log-box .log-group > summary::before { content: '▸ '; display: inline-block; transition: transform 0.15s; }
-.wf-log-box .log-group[open] > summary::before { transform: rotate(90deg); }
 .wf-log-box .log-cmd { padding: 4px 8px; margin: 3px 0; border-radius: 4px; font-weight: 500; white-space: pre-wrap; }
 .wf-log-box .log-cmd-icon { font-weight: bold; margin-right: 6px; }
 .wf-log-box .log-cmd-error { background: rgba(239,68,68,0.12); color: var(--danger); border-left: 3px solid var(--danger); }
@@ -572,10 +567,14 @@ input[type="checkbox"] { accent-color: var(--primary); width: 16px; height: 16px
 .qr-progress { width: 100%; display: flex; align-items: center; gap: 8px; }
 .qr-progress-bar { height: 6px; background: var(--primary); border-radius: 3px; transition: width 0.3s; }
 .qr-progress span { font-size: 12px; color: var(--text-muted); flex-shrink: 0; }
-.qr-camera-box { position: relative; width: 100%; max-width: 480px; margin: 0 auto; border-radius: 10px; overflow: hidden; background: #000; }
+.qr-camera-box { position: relative; width: 100%; max-width: 480px; margin: 0 auto 16px; border-radius: 10px; overflow: hidden; background: #000; }
 .qr-camera-box video { display: block; width: 100%; height: auto; max-height: 70vh; object-fit: contain; }
 .qr-camera-box .qr-overlay { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; }
 .qr-camera-status { padding: 8px 12px; font-size: 12px; color: var(--text-muted); text-align: center; }
-.qr-result { margin-top: 12px; padding: 12px; background: var(--card); border-radius: 10px; box-shadow: var(--shadow); text-align: center; }
+.qr-result { margin-top: 16px; padding: 16px 12px 12px; background: var(--card); border-radius: 10px; box-shadow: var(--shadow); text-align: center; border-top: 1px solid var(--border); }
 .qr-success { color: var(--success); font-size: 16px; font-weight: 600; margin-bottom: 8px; }
 .qr-error { color: var(--danger); font-size: 16px; font-weight: 600; margin-bottom: 8px; }
+.qr-text-area { margin-bottom: 12px; }
+.qr-text-area textarea { width: 100%; padding: 10px 12px; border: 1px solid var(--border); border-radius: 8px; font-size: 14px; outline: none; resize: vertical; background: var(--input-bg); color: var(--text); font-family: inherit; box-sizing: border-box; min-height: 80px; }
+.qr-text-area textarea:focus { border-color: var(--primary); }
+.qr-cache-btn { margin-top: 8px; }

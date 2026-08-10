@@ -101,13 +101,11 @@ function renderAnsi(text: string): string {
   return out.join('');
 }
 
-// 格式化整段 job 日志为 HTML：折叠 group、高亮 error/warning、时间戳淡显、解析 ANSI
+// 格式化整段 job 日志为 HTML：高亮 error/warning、时间戳淡显、解析 ANSI
 function formatJobLog(raw: string): string {
   if (!raw) return '<div class="log-empty">（空日志）</div>';
   const lines = raw.split('\n');
   const out: string[] = [];
-  let inGroup = false;
-  const closeGroup = () => { if (inGroup) { out.push('</details>'); inGroup = false; } };
   for (const line of lines) {
     // \r 用于进度条覆盖，取最后一次状态
     const crParts = line.split('\r');
@@ -125,21 +123,18 @@ function formatJobLog(raw: string): string {
     if (cmdMatch) {
       const cmd = cmdMatch[1].toLowerCase();
       const arg = cmdMatch[2];
-      if (cmd === 'group') {
-        closeGroup();
-        out.push('<details class="log-group"><summary>' + ts + esc(arg) + '</summary>');
-        inGroup = true;
+      if (cmd === 'group' || cmd === 'section') {
+        out.push('<div class="log-cmd log-cmd-section">' + ts + '<span class="log-cmd-icon">▸</span>' + renderAnsi(arg) + '</div>');
         continue;
       }
-      if (cmd === 'endgroup') { closeGroup(); continue; }
-      const icons: Record<string, string> = { error: '✖', warning: '⚠', notice: 'ℹ', section: '▸' };
+      if (cmd === 'endgroup') { continue; }
+      const icons: Record<string, string> = { error: '✖', warning: '⚠', notice: 'ℹ' };
       const icon = icons[cmd] || '•';
       out.push('<div class="log-cmd log-cmd-' + esc(cmd) + '">' + ts + '<span class="log-cmd-icon">' + icon + '</span>' + renderAnsi(arg) + '</div>');
       continue;
     }
     out.push('<div class="log-line">' + ts + renderAnsi(body) + '</div>');
   }
-  closeGroup();
   return out.join('');
 }
 

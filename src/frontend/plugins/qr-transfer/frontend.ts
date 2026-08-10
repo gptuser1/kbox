@@ -6,6 +6,7 @@
 import QRCode from 'qrcode';
 import { LTEncoder, LTDecoder } from './fountain';
 import { packFile, unpackFile, verifyFile, packFrame, parseFrame, fnv1a, streamIdentity } from './protocol';
+import type { PackedOpticalFile } from './protocol';
 import { blockLength, fitsInOneStream } from './frame-capacity';
 import { rasterizeQr } from './qr-raster';
 import { api, esc, toast } from '../../shared.js';
@@ -18,6 +19,7 @@ function formatSize(bytes: number): string {
   return (bytes / 1024 / 1024).toFixed(2) + ' MB';
 }
 
+const SNIPPET_MEDIA_TYPE = "application/vnd.kbox.snippet";
 const $ = (id: string): HTMLElement => document.getElementById(id) as HTMLElement;
 
 // ─── 渲染 HTML ───
@@ -31,7 +33,7 @@ export function render(): string {
       <button class="tab" data-qtab="receive">📥 接收</button>
     </div>
     <div id="qrSendPanel" class="qr-panel">
-      <div class="section-title">文件来源</div>
+      <div class="section-title">内容来源</div>
       <div class="qr-source-options">
         <label class="qr-source-btn" id="qrLocalBtn">
           <input type="file" id="qrFileInput" style="display:none">
@@ -40,11 +42,17 @@ export function render(): string {
         <label class="qr-source-btn" id="qrDiskBtn">
           <span>☁️ 从云盘选择</span>
         </label>
+        <label class="qr-source-btn" id="qrTextBtn">
+          <span>📝 发送文本</span>
+        </label>
       </div>
       <div id="qrFileInfo" class="qr-file-info" style="display:none">
         <span id="qrFileName"></span>
         <span id="qrFileSize"></span>
         <button class="btn btn-sm btn-outline" id="qrClearFileBtn">✕ 清除</button>
+      </div>
+      <div id="qrTextArea" class="qr-text-area" style="display:none">
+        <textarea id="qrTextInput" rows="4" placeholder="输入要发送的文本内容…" style="width:100%;box-sizing:border-box"></textarea>
       </div>
       <div class="section-title" style="margin-top:16px">传输设置</div>
       <div class="qr-settings-row">
@@ -81,6 +89,7 @@ export function render(): string {
       </div>
       <button class="btn btn-primary" id="qrStartCameraBtn">📷 启动摄像头</button>
       <button class="btn btn-outline" id="qrStopCameraBtn" style="display:none">⏹ 停止接收</button>
+      <button class="btn btn-outline qr-cache-btn" id="qrClearCacheBtn" style="display:none">🗑️ 清理缓存</button>
       <div id="qrReceiveProgress" class="qr-progress" style="display:none">
         <div class="qr-progress-bar" id="qrReceiveBar"></div>
         <span id="qrReceiveStatus"></span>
@@ -149,6 +158,10 @@ export function mount(): void {
   const diskOverlay = $('qrDiskOverlay');
   const diskBody = $('qrDiskBody');
   const diskCloseBtn = $('qrDiskCloseBtn') as HTMLButtonElement;
+  const textBtn = $('qrTextBtn');
+  const textInput = $('qrTextInput') as HTMLTextAreaElement;
+  const textArea = $('qrTextArea');
+  const clearCacheBtn = $('qrClearCacheBtn') as HTMLButtonElement;
 
   // 状态
   let selectedFile: { name: string; bytes: Uint8Array; type: string } | null = null;
@@ -256,6 +269,28 @@ export function mount(): void {
   diskCloseBtn.addEventListener('click', () => { diskOverlay.classList.remove('show'); });
   diskOverlay.addEventListener('click', (e) => { if (e.target === diskOverlay) diskOverlay.classList.remove('show'); });
 
+  // ─── 文本发送 ───
+  textBtn.addEventListener('click', () => {
+    const isVisible = textArea.style.display !== 'none';
+    if (isVisible) {
+      // 隐藏文本输入，切回文件模式
+      textArea.style.display = 'none';
+      textInput.value = '';
+      textBtn.style.borderColor = '';
+    } else {
+      // 显示文本输入，清除文件选择
+      textArea.style.display = 'block';
+      selectedFile = null;
+      fileInfo.style.display = 'none';
+      fileInput.value = '';
+      startSendBtn.disabled = !textInput.value.trim();
+      textBtn.style.borderColor = 'var(--primary)';
+    }
+  });
+  textInput.addEventListener('input', () => {
+    startSendBtn.disabled = !textInput.value.trim() && !selectedFile;
+  });
+
   // ─── 发送端 ───
   let sendAnimFrame = 0;
   let encoder: LTEncoder | null = null;
@@ -266,14 +301,26 @@ export function mount(): void {
   const tempCanvas = document.createElement('canvas');
 
   async function startSend() {
-    if (!selectedFile) return;
+    if (!selectedFile && !textInput.value.trim()) return;
     const gen = ++sendGeneration;
     sendStage.style.display = 'block';
     startSendBtn.disabled = true;
     stopSendBtn.style.display = '';
 
     try {
-      const packed = await packFile(selectedFile.name, selectedFile.type, selectedFile.bytes);
+      let packed: PackedOpticalFile;
+      let sendName: string;
+      if (selectedFile) {
+        packed = await packFile(selectedFile.name, selectedFile.type, selectedFile.bytes);
+        sendName = selectedFile.name;
+      } else {
+        // 发送文本
+        const text = textInput.value;
+        const bytes = new TextEncoder().encode(text);
+        // 模拟 packFile 逻辑，直接使用文本内容
+        packed = await packFile('snippet.txt', SNIPPET_MEDIA_TYPE, bytes);
+        sendName = '文本片段';
+      }
       const frameBytes = Number(frameBytesSelect.value);
       const fps = Number(fpsSelect.value);
       const blockLen = blockLength(frameBytes);
@@ -486,6 +533,7 @@ export function mount(): void {
     video.srcObject = stream;
     startCameraBtn.style.display = 'none';
     stopCameraBtn.style.display = '';
+    clearCacheBtn.style.display = '';
 
     // 初始化 QR 解码器
     if (!qrDecoderRef) {
@@ -628,6 +676,35 @@ export function mount(): void {
       const verified = await verifyFile(file);
       if (!verified) throw new Error('SHA-256 校验失败');
 
+      // 判断是否为文本片段
+      if (file.type === SNIPPET_MEDIA_TYPE) {
+        const text = new TextDecoder().decode(file.bytes);
+        receiveResult.style.display = 'block';
+        receiveResult.innerHTML = `
+          <div class="qr-success">✅ 文本已接收</div>
+          <p style="text-align:left;white-space:pre-wrap;word-break:break-all;max-height:200px;overflow-y:auto;padding:8px;background:var(--input-bg);border-radius:6px;font-size:13px;margin:8px 0">${esc(text)}</p>
+          <div style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin-top:8px">
+            <button class="btn btn-primary" id="qrCopyTextBtn">📋 复制文本</button>
+            <button class="btn btn-primary" id="qrReceiveAnotherBtn">📥 继续接收</button>
+          </div>
+        `;
+        receiveStatus.textContent = '文本接收完成';
+        receiveBar.style.width = '100%';
+        $('qrCopyTextBtn')?.addEventListener('click', async () => {
+          try {
+            await navigator.clipboard.writeText(text);
+            toast('文本已复制到剪贴板', 'success');
+          } catch {
+            toast('复制失败', 'error');
+          }
+        });
+        $('qrReceiveAnotherBtn')?.addEventListener('click', () => {
+          receiveResult.style.display = 'none';
+          startCamera();
+        });
+        return;
+      }
+
       // 触发下载
       const blob = new Blob([file.bytes as BlobPart], { type: file.type });
       const url = URL.createObjectURL(blob);
@@ -672,6 +749,7 @@ export function mount(): void {
     stream = null;
     startCameraBtn.style.display = '';
     stopCameraBtn.style.display = 'none';
+    clearCacheBtn.style.display = 'none';
     startCameraBtn.disabled = false;
     startCameraBtn.textContent = '📷 启动摄像头';
     cameraStatus.textContent = '已停止';
@@ -690,6 +768,17 @@ export function mount(): void {
     stopCamera();
   });
 
+  // ─── 清理缓存 ───
+  clearCacheBtn.addEventListener('click', () => {
+    decoder = null;
+    streamKey = '';
+    receiveBar.style.width = '0%';
+    receiveStatus.textContent = '缓存已清理';
+    receiveResult.style.display = 'none';
+    receiveResult.innerHTML = '';
+    toast('接收缓存已清理', 'success');
+  });
+
   // 设置清理函数，供 unmount 调用
   _cleanup = () => {
     // 发送端清理
@@ -706,6 +795,10 @@ export function mount(): void {
     selectedFile = null;
     fileInfo.style.display = 'none';
     fileInput.value = '';
+    // 文本输入清理
+    textArea.style.display = 'none';
+    textInput.value = '';
+    textBtn.style.borderColor = '';
     // 接收端清理
     receiveDone = true;
     captureGen++;
@@ -716,6 +809,7 @@ export function mount(): void {
     clearTimeout(scanTimer);
     startCameraBtn.style.display = '';
     stopCameraBtn.style.display = 'none';
+    clearCacheBtn.style.display = 'none';
     startCameraBtn.disabled = false;
     startCameraBtn.textContent = '📷 启动摄像头';
     cameraStatus.textContent = '已停止';
