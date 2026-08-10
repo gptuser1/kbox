@@ -1,8 +1,8 @@
 // 工具：基金估值
 // 独立模块，由 shell 在点击时动态 import('/js/plugins/stock.js') 加载。
 // 即使本模块出错，只影响本工具，不波及壳与其他工具。
-import { $, esc, toast, api } from '../shared.js';
-import type { FrontendPlugin } from '../shared.js';
+import { $, esc, toast, api } from '../../shared.js';
+import type { FrontendPlugin } from '../../shared.js';
 
 export function render(): string {
   return `

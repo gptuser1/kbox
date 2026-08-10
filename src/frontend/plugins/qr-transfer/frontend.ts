@@ -4,12 +4,12 @@
 // 接收端：摄像头 → QR 解码 → 喷泉码恢复 → 文件下载
 
 import QRCode from 'qrcode';
-import { LTEncoder, LTDecoder } from './qr-transfer/fountain';
-import { packFile, unpackFile, verifyFile, packFrame, parseFrame, fnv1a, streamIdentity } from './qr-transfer/protocol';
-import { blockLength, fitsInOneStream } from './qr-transfer/frame-capacity';
-import { rasterizeQr } from './qr-transfer/qr-raster';
-import { api, esc, toast } from '../shared.js';
-import type { FrontendPlugin } from '../shared.js';
+import { LTEncoder, LTDecoder } from './fountain';
+import { packFile, unpackFile, verifyFile, packFrame, parseFrame, fnv1a, streamIdentity } from './protocol';
+import { blockLength, fitsInOneStream } from './frame-capacity';
+import { rasterizeQr } from './qr-raster';
+import { api, esc, toast } from '../../shared.js';
+import type { FrontendPlugin } from '../../shared.js';
 
 // ─── 工具函数 ───
 function formatSize(bytes: number): string {

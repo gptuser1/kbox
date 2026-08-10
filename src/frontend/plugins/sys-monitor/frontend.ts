@@ -1,6 +1,6 @@
 // 工具：系统状态监控
-import { $, esc, toast, api } from '../shared.js';
-import type { FrontendPlugin } from '../shared.js';
+import { $, esc, toast, api } from '../../shared.js';
+import type { FrontendPlugin } from '../../shared.js';
 
 // light-chart.js 全局声明（单文件，零依赖，在 HTML 中以 <script> 加载）
 declare const chart: {

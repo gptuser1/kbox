@@ -2,8 +2,8 @@
 // 独立模块，由 shell 在点击时动态 import('/js/plugins/js.js') 加载。
 // 即使本模块出错，只影响本工具，不波及壳与其他工具。
 // script:xxx 复用本模块：shell 传入 id='script:<scriptId>' 时渲染轻量运行视图。
-import { $, esc, toast, api } from '../shared.js';
-import type { FrontendPlugin } from '../shared.js';
+import { $, esc, toast, api } from '../../shared.js';
+import type { FrontendPlugin } from '../../shared.js';
 
 // ─── 判断是否为 script:xxx 运行视图 ───
 function isScriptView(id?: string): boolean {
