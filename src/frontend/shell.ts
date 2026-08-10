@@ -405,10 +405,10 @@ async function showTool(id: string) {
   toolViews.appendChild(view);
   $('floatBack').classList.add('show');
   $('floatMenuBtn')?.classList.remove('open');
-  // 进入工具页：重置返回栈，清除工具菜单，显示浮动菜单供工具注册
+  // 进入工具页：重置返回栈，清除工具菜单，显示浮动菜单供工具注册，隐藏首页专属菜单项
   resetFloatBack();
   clearToolMenu();
-  const fmb = $('floatMenuBtn'); if (fmb) fmb.style.display = '';
+  const fmb = $('floatMenuBtn'); if (fmb) { fmb.style.display = ''; fmb.classList.add('in-tool'); }
 
   // 立即显示工具加载层（区域级，不全屏，保留 token 栏与浮动按钮）
   view.innerHTML = '<div class="tool-loader"><div class="app-loader__bar"></div><div class="tool-loader__text">加载中…</div></div>';
@@ -448,9 +448,9 @@ function backToGrid() {
   const hgw = $('homeGridWrap'); if (hgw) hgw.style.display = '';
   $('floatBack').classList.remove('show');
   $('floatMenuBtn')?.classList.remove('open');
-  // 回到首页：清除工具注册的菜单项，恢复菜单按钮显示
+  // 回到首页：清除工具注册的菜单项，恢复菜单按钮显示，恢复首页菜单项
   clearToolMenu();
-  const fmb = $('floatMenuBtn'); if (fmb) fmb.style.display = '';
+  const fmb = $('floatMenuBtn'); if (fmb) { fmb.style.display = ''; fmb.classList.remove('in-tool'); }
   window.scrollTo(0, 0);
 }
 

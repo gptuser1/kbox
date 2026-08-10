@@ -255,9 +255,9 @@ async function showHostDetail(id: string) {
     (window as any).setToolMenu([
       {
         label: '主机操作',
-        html: '<button class="btn btn-outline btn-sm" onclick="document.getElementById(\'smDetailTitle\')?.click()">重命名</button>' +
-              '<button class="btn btn-outline btn-sm" onclick="document.getElementById(\'smExtraBtn\')?.click()">📝 附加信息</button>' +
-              '<button class="btn btn-outline btn-sm" style="color:var(--danger)" onclick="document.getElementById(\'smDeleteBtn\')?.click()">删除</button>',
+        html: '<button onclick="document.getElementById(\'smDetailTitle\')?.click()">重命名</button>' +
+              '<button onclick="document.getElementById(\'smExtraBtn\')?.click()">📝 附加信息</button>' +
+              '<button onclick="document.getElementById(\'smDeleteBtn\')?.click()" style="color:var(--danger)">删除</button>',
       },
     ]);
   } catch (e: any) {

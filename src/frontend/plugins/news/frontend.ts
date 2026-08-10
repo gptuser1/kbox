@@ -121,13 +121,13 @@ export function mount(): void {
     (window as any).setToolMenu([
       {
         label: '操作',
-        html: '<button class="btn btn-primary btn-sm" onclick="triggerNewsNow()">📡 立即抓取</button>' +
-              '<button class="btn btn-outline btn-sm" onclick="topNewsNow()">🎯 生成 Top 10</button>',
+        html: '<button class="active" onclick="triggerNewsNow()">📡 立即抓取</button>' +
+              '<button onclick="topNewsNow()">🎯 生成 Top 10</button>',
       },
       {
         label: '视图',
-        html: '<button class="btn btn-outline btn-sm" onclick="toggleNewsView()">' + toggleLabel + '</button>' +
-              '<button class="btn btn-outline btn-sm" onclick="reloadNews()">🔄 刷新</button>',
+        html: '<button onclick="toggleNewsView()">' + toggleLabel + '</button>' +
+              '<button onclick="reloadNews()">🔄 刷新</button>',
       },
     ]);
   }

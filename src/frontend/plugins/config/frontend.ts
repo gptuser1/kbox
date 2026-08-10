@@ -93,7 +93,7 @@ export function mount(): void {
     (window as any).setToolMenu([
       {
         label: '排列',
-        html: '<button class="btn btn-outline btn-sm" onclick="toggleConfigSort()">' + (sortMode ? '✓ 完成排序' : '↕ 调整顺序') + '</button>',
+        html: '<button onclick="toggleConfigSort()">' + (sortMode ? '✓ 完成排序' : '↕ 调整顺序') + '</button>',
       },
     ]);
   }
@@ -280,7 +280,7 @@ export function mount(): void {
       (window as any).setToolMenu([
         {
           label: '排列',
-          html: '<button class="btn btn-outline btn-sm" onclick="toggleConfigSort()">↕ 调整顺序</button>',
+          html: '<button onclick="toggleConfigSort()">↕ 调整顺序</button>',
         },
       ]);
     } catch (e: any) {

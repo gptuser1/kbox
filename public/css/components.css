@@ -150,8 +150,10 @@ body:has(.modal-overlay.show) .float-back { display: none !important; }
 }
 .fm-section { padding: 8px 0; border-bottom: 1px solid var(--border); }
 .fm-section:last-child { border-bottom: none; }
+/* 工具页中隐藏首页专属菜单项（主题/视图/操作），仅显示工具注册项 */
+.float-menu-container.in-tool > .fm-items > .fm-section { display: none; }
 .fm-label { font-size: 11px; font-weight: 600; color: var(--text-muted); padding: 4px 0; text-transform: uppercase; letter-spacing: 0.5px; }
-.fm-btn-group { display: flex; gap: 4px; padding: 2px 0; }
+.fm-btn-group { display: flex; gap: 4px; padding: 2px 0; flex-wrap: wrap; }
 .fm-btn-group button {
   flex: 1; padding: 5px 9px; border: 1px solid var(--border); border-radius: 999px;
   background: none; color: var(--text-muted); cursor: pointer; font-size: 13px; line-height: 1.4;

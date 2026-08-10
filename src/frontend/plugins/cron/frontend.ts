@@ -49,8 +49,8 @@ export function mount(): void {
   (window as any).setToolMenu([
     {
       label: '任务',
-      html: '<button class="btn btn-primary btn-sm" onclick="openNewCron()">+ 新建任务</button>' +
-            '<button class="btn btn-outline btn-sm" onclick="refreshCron()">🔄 刷新</button>',
+      html: '<button class="active" onclick="openNewCron()">+ 新建任务</button>' +
+            '<button onclick="refreshCron()">🔄 刷新</button>',
     },
   ]);
   loadCronTasks();

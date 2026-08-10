@@ -379,8 +379,8 @@ export function mount(): void {
   (window as any).setToolMenu([
     {
       label: '基金',
-      html: '<button class="btn btn-primary btn-sm" onclick="stockRefreshAll()">🔄 刷新全部估值</button>' +
-            '<button class="btn btn-outline btn-sm" onclick="stockAddFund()">➕ 添加基金</button>',
+      html: '<button class="active" onclick="stockRefreshAll()">🔄 刷新全部估值</button>' +
+            '<button onclick="stockAddFund()">➕ 添加基金</button>',
     },
   ]);
 
