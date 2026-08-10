@@ -8,6 +8,7 @@ import { LTEncoder, LTDecoder } from './fountain';
 import { packFile, unpackFile, verifyFile, packFrame, parseFrame, fnv1a, streamIdentity } from './protocol';
 import { blockLength, fitsInOneStream } from './frame-capacity';
 import { rasterizeQr } from './qr-raster';
+import { api, esc, toast } from '../../shared.js';
 import type { FrontendPlugin } from '../../shared.js';
 
 // ─── 工具函数 ───
@@ -35,6 +36,9 @@ export function render(): string {
         <label class="qr-source-btn" id="qrLocalBtn">
           <input type="file" id="qrFileInput" style="display:none">
           <span>📁 从本地选择</span>
+        </label>
+        <label class="qr-source-btn" id="qrDiskBtn">
+          <span>☁️ 从云盘选择</span>
         </label>
       </div>
       <div id="qrFileInfo" class="qr-file-info" style="display:none">
@@ -95,6 +99,17 @@ export function render(): string {
         </div>
       </div>
     </div>
+    <div class="modal-overlay" id="qrDiskOverlay">
+      <div class="modal" style="max-width:480px;max-height:70vh;display:flex;flex-direction:column">
+        <div class="modal-header">
+          <h3>☁️ 从云盘选择文件</h3>
+          <button class="modal-close" id="qrDiskCloseBtn">✕</button>
+        </div>
+        <div class="modal-body" id="qrDiskBody" style="flex:1;overflow-y:auto;min-height:0">
+          <div class="empty">加载中…</div>
+        </div>
+      </div>
+    </div>
   `;
 }
 
@@ -130,6 +145,10 @@ export function mount(): void {
   const confirmBody = $('qrConfirmBody');
   const acceptBtn = $('qrAcceptBtn') as HTMLButtonElement;
   const rejectBtn = $('qrRejectBtn') as HTMLButtonElement;
+  const diskBtn = $('qrDiskBtn');
+  const diskOverlay = $('qrDiskOverlay');
+  const diskBody = $('qrDiskBody');
+  const diskCloseBtn = $('qrDiskCloseBtn') as HTMLButtonElement;
 
   // 状态
   let selectedFile: { name: string; bytes: Uint8Array; type: string } | null = null;
@@ -142,6 +161,9 @@ export function mount(): void {
   let pendingFileInfo: { name: string; size: number; type: string } | null = null;
   let pendingContainer: Uint8Array | null = null;
   let acceptTransfer = false;
+  let pendingConfirm = false; // 确认框显示中时暂停解码
+  let qrDecoderRef: { detect(frame: HTMLVideoElement | ImageData): Promise<Uint8Array[]> } | null = null;
+  let decoderInitError = '';
 
   // ─── Tab 切换（参考配置管理） ───
   const tabsEl = $('qrTabs');
@@ -180,14 +202,68 @@ export function mount(): void {
     fileInput.value = '';
   });
 
+  // ─── 云盘文件选择 ───
+  diskBtn.addEventListener('click', async () => {
+    try {
+      diskBody.innerHTML = '<div class="empty">加载中…</div>';
+      diskOverlay.classList.add('show');
+      const data = await api('/api/plugins/disk/files');
+      const files = data.files || [];
+      if (!files.length) {
+        diskBody.innerHTML = '<div class="empty">云盘暂无文件</div>';
+        return;
+      }
+      diskBody.innerHTML = files.map((f: any) =>
+        '<div class="file-item" style="cursor:pointer;padding:10px 14px" data-disk-id="' + f.id + '" data-disk-name="' + esc(f.name) + '" data-disk-mime="' + esc(f.mime_type || '') + '">' +
+          '<div class="file-info">' +
+            '<div class="file-name">' + esc(f.name) + '</div>' +
+            '<div class="file-meta">' + formatSize(f.size) + ' · ' + (f.mime_type || '未知') + '</div>' +
+          '</div>' +
+        '</div>'
+      ).join('');
+      // 点击文件项选择
+      diskBody.querySelectorAll('.file-item').forEach((el: Element) => {
+        el.addEventListener('click', async () => {
+          const id = (el as HTMLElement).dataset.diskId;
+          const name = (el as HTMLElement).dataset.diskName || '未知文件';
+          const mime = (el as HTMLElement).dataset.diskMime || '';
+          if (!id) return;
+          diskOverlay.classList.remove('show');
+          diskBody.innerHTML = '<div class="empty">加载中…</div>';
+          try {
+            // 获取下载令牌
+            const dtData = await api('/api/plugins/disk/files/' + id + '/download-token', { method: 'POST' });
+            if (!dtData.dt) throw new Error('未获取到下载令牌');
+            // 下载文件
+            const res = await fetch('/api/plugins/disk/files/' + id + '/download?dt=' + encodeURIComponent(dtData.dt));
+            if (!res.ok) throw new Error('下载失败');
+            const buf = await res.arrayBuffer();
+            selectedFile = { name, bytes: new Uint8Array(buf), type: mime };
+            fileName.textContent = '📄 ' + name;
+            fileSize.textContent = formatSize(buf.byteLength);
+            fileInfo.style.display = 'flex';
+            startSendBtn.disabled = false;
+            toast('已选择云盘文件: ' + name, 'success');
+          } catch (e: any) {
+            toast('选择云盘文件失败: ' + (e.message || String(e)), 'error');
+          }
+        });
+      });
+    } catch (e: any) {
+      diskBody.innerHTML = '<div class="empty" style="color:var(--danger)">加载失败: ' + esc(e.message) + '</div>';
+    }
+  });
+  diskCloseBtn.addEventListener('click', () => { diskOverlay.classList.remove('show'); });
+  diskOverlay.addEventListener('click', (e) => { if (e.target === diskOverlay) diskOverlay.classList.remove('show'); });
+
   // ─── 发送端 ───
-  // 使用 BarcodeDetector 检测 canvas 上的 QR 码
-  // 为了兼容性，我们使用 qrcode 库生成 QR 码并直接显示在 canvas 上
   let sendAnimFrame = 0;
   let encoder: LTEncoder | null = null;
   let sessionId = 0;
   let nextSeq = 0;
   let header: any = null;
+  // 复用临时 canvas 避免每帧分配内存
+  const tempCanvas = document.createElement('canvas');
 
   async function startSend() {
     if (!selectedFile) return;
@@ -262,8 +338,7 @@ export function mount(): void {
         const dpr = window.devicePixelRatio || 1;
         const imgData = new ImageData(new Uint8ClampedArray(raster.pixels.buffer), raster.size, raster.size);
         ctx.imageSmoothingEnabled = false;
-        // 创建临时 canvas 缩放
-        const tempCanvas = document.createElement('canvas');
+        // 复用临时 canvas
         tempCanvas.width = raster.size;
         tempCanvas.height = raster.size;
         tempCanvas.getContext('2d')!.putImageData(imgData, 0, 0);
@@ -293,6 +368,8 @@ export function mount(): void {
     stopSendBtn.style.display = 'none';
     encoder = null;
     header = null;
+    sendBar.style.width = '0%';
+    sendStatus.textContent = '';
   }
 
   startSendBtn.addEventListener('click', startSend);
@@ -301,8 +378,6 @@ export function mount(): void {
   // ─── 接收端 ───
   const overlayCtx = overlay.getContext('2d')!;
   let scanTimer = 0;
-  let qrDecoder: { detect(frame: HTMLVideoElement | ImageData): Promise<Uint8Array[]> } | null = null;
-  let decoderInitError = '';
 
   // 初始化 QR 解码器：优先 BarcodeDetector，fallback 到 decimen WASM codec
   async function initQRDecoder(): Promise<{ detect(frame: HTMLVideoElement | ImageData): Promise<Uint8Array[]> } | null> {
@@ -336,7 +411,7 @@ export function mount(): void {
           detect: async (frame: HTMLVideoElement | ImageData) => {
             let imageData: ImageData;
             if (frame instanceof HTMLVideoElement) {
-              // 从 video 元素捕获帧到 canvas
+              // 从 video 元素捕获帧到 canvas（复用 _captureCanvas）
               const v = frame as HTMLVideoElement;
               if (v.readyState < 2) return [];
               const w = v.videoWidth;
@@ -346,9 +421,12 @@ export function mount(): void {
               const scale = Math.min(1, 640 / Math.max(w, h));
               const cw = Math.round(w * scale);
               const ch = Math.round(h * scale);
-              const cvs = document.createElement('canvas');
-              cvs.width = cw;
-              cvs.height = ch;
+              if (!_captureCanvas || _captureCanvas.width !== cw || _captureCanvas.height !== ch) {
+                _captureCanvas = document.createElement('canvas');
+                _captureCanvas.width = cw;
+                _captureCanvas.height = ch;
+              }
+              const cvs = _captureCanvas;
               cvs.getContext('2d')!.drawImage(v, 0, 0, cw, ch);
               imageData = cvs.getContext('2d')!.getImageData(0, 0, cw, ch);
             } else {
@@ -410,11 +488,11 @@ export function mount(): void {
     stopCameraBtn.style.display = '';
 
     // 初始化 QR 解码器
-    if (!qrDecoder) {
-      qrDecoder = await initQRDecoder();
+    if (!qrDecoderRef) {
+      qrDecoderRef = await initQRDecoder();
     }
 
-    if (!qrDecoder) {
+    if (!qrDecoderRef) {
       const msg = decoderInitError || '浏览器不支持 QR 码检测，且 WASM 解码器加载失败';
       cameraStatus.textContent = msg;
       stopCamera();
@@ -436,11 +514,17 @@ export function mount(): void {
   }
 
   async function scanLoop(gen: number) {
-    if (receiveDone || gen !== captureGen || !stream || !qrDecoder) return;
+    if (receiveDone || gen !== captureGen || !stream || !qrDecoderRef) return;
+
+    // 确认框显示中时，暂停解码，等待用户操作
+    if (pendingConfirm) {
+      scanTimer = window.setTimeout(() => scanLoop(gen), 200);
+      return;
+    }
 
     if (video.readyState >= 2) {
       try {
-        const results = await qrDecoder.detect(video);
+        const results = await qrDecoderRef.detect(video);
         for (const bytes of results) {
           if (!bytes || !bytes.length) continue;
           const parsed = parseFrame(bytes);
@@ -449,11 +533,15 @@ export function mount(): void {
 
           const identity = streamIdentity(h);
           if (!decoder || streamKey !== identity) {
-            // 新流，弹出确认框
+            // 新流：弹出确认框，暂停解码
             if (!acceptTransfer) {
               pendingFileInfo = { name: `文件 (${formatSize(h.totalLen)})`, size: h.totalLen, type: 'application/octet-stream' };
               pendingContainer = null;
+              pendingConfirm = true;
               showConfirm(h);
+              // 不创建 decoder，待用户确认后再创建
+              scanTimer = window.setTimeout(() => scanLoop(gen), 200);
+              return;
             }
             decoder = new LTDecoder(h.k, h.blockLen, h.sessionId, h.totalLen);
             streamKey = identity;
@@ -498,6 +586,7 @@ export function mount(): void {
         <strong>🔢 块数:</strong> K = ${h.k}<br>
         <strong>📦 块大小:</strong> ${h.blockLen} B
       </p>
+      <p style="margin-top:8px;font-size:12px;color:var(--text-muted)">确认后将开始接收并解码数据</p>
     `;
     confirmOverlay.classList.add('show');
   }
@@ -505,15 +594,18 @@ export function mount(): void {
   function closeConfirm() {
     confirmOverlay.classList.remove('show');
     pendingFileInfo = null;
-    acceptTransfer = false;
   }
 
   function handleAccept() {
     acceptTransfer = true;
+    pendingConfirm = false;
     closeConfirm();
+    cameraStatus.textContent = '等待二维码中…';
   }
 
   function handleReject() {
+    acceptTransfer = false;
+    pendingConfirm = false;
     decoder = null;
     streamKey = '';
     receiveStatus.textContent = '已拒绝';
@@ -584,6 +676,11 @@ export function mount(): void {
     startCameraBtn.textContent = '📷 启动摄像头';
     cameraStatus.textContent = '已停止';
     clearTimeout(scanTimer);
+    // 清理接收状态
+    acceptTransfer = false;
+    pendingConfirm = false;
+    decoder = null;
+    streamKey = '';
   }
 
   startCameraBtn.addEventListener('click', startCamera);
@@ -592,7 +689,73 @@ export function mount(): void {
     captureGen++;
     stopCamera();
   });
+
+  // 设置清理函数，供 unmount 调用
+  _cleanup = () => {
+    // 发送端清理
+    sendGeneration++;
+    cancelAnimationFrame(sendAnimFrame);
+    encoder = null;
+    header = null;
+    sendStage.style.display = 'none';
+    startSendBtn.disabled = false;
+    stopSendBtn.style.display = 'none';
+    sendBar.style.width = '0%';
+    sendStatus.textContent = '';
+    // 文件选择清理
+    selectedFile = null;
+    fileInfo.style.display = 'none';
+    fileInput.value = '';
+    // 接收端清理
+    receiveDone = true;
+    captureGen++;
+    if (stream) {
+      stream.getTracks().forEach(t => t.stop());
+      stream = null;
+    }
+    clearTimeout(scanTimer);
+    startCameraBtn.style.display = '';
+    stopCameraBtn.style.display = 'none';
+    startCameraBtn.disabled = false;
+    startCameraBtn.textContent = '📷 启动摄像头';
+    cameraStatus.textContent = '已停止';
+    video.srcObject = null;
+    receiveProgress.style.display = 'none';
+    receiveBar.style.width = '0%';
+    receiveStatus.textContent = '';
+    receiveResult.style.display = 'none';
+    receiveResult.innerHTML = '';
+    // 解码器清理
+    qrDecoderRef = null;
+    decoder = null;
+    streamKey = '';
+    // 确认框清理
+    confirmOverlay.classList.remove('show');
+    pendingFileInfo = null;
+    pendingContainer = null;
+    acceptTransfer = false;
+    pendingConfirm = false;
+    // 云盘模态框清理
+    diskOverlay.classList.remove('show');
+    // 覆盖层 canvas 清理
+    overlayCtx.clearRect(0, 0, overlay.width, overlay.height);
+    // 释放可复用捕获 canvas
+    if (_captureCanvas) {
+      _captureCanvas.width = 0;
+      _captureCanvas.height = 0;
+    }
+  };
+}
+
+// 模块级可复用资源
+let _cleanup: (() => void) | null = null;
+let _captureCanvas: HTMLCanvasElement | null = null; // 复用 WASM 解码帧捕获 canvas
+
+export function unmount(): void {
+  _cleanup?.();
+  _cleanup = null;
+  _captureCanvas = null;
 }
 
 // 编译期校验
-const _typeCheck: FrontendPlugin = { render, mount };
+const _typeCheck: FrontendPlugin = { render, mount, unmount };
