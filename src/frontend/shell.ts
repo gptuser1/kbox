@@ -344,8 +344,8 @@ async function showTool(id: string) {
   // 立即显示工具加载层（区域级，不全屏，保留 token 栏与浮动按钮）
   view.innerHTML = '<div class="tool-loader"><div class="app-loader__bar"></div><div class="tool-loader__text">加载中…</div></div>';
 
-  // script:xxx 复用 js 工具模块渲染
-  const realId = id.startsWith('script:') ? 'js' : id;
+  // script:xxx 复用 js-runner 工具模块渲染
+  const realId = id.startsWith('script:') ? 'js-runner' : id;
 
   let mod = toolModuleCache[realId];
   if (!mod) {

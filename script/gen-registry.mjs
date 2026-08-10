@@ -10,7 +10,7 @@ const PLUGINS_DIR = 'src/plugins';
 const REGISTRY_PATH = 'src/frontend/registry.ts';
 
 // 首页工具展示顺序（与历史 registry 保持一致；未列出的追加到末尾）
-const TOOL_ORDER = ['dispatch', 'disk', 'stock', 'news', 'db-admin', 'js', 'cron', 'config', 'sys-monitor'];
+const TOOL_ORDER = ['gh-dispatch', 'disk', 'stock', 'news', 'db-admin', 'js-runner', 'cron', 'config', 'sys-monitor'];
 
 async function loadManifests() {
   const entries = await readdir(PLUGINS_DIR, { withFileTypes: true });

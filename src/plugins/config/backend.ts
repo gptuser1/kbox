@@ -10,12 +10,12 @@ const router = new Hono<{ Bindings: Bindings; Variables: Variables }>();
 
 // 工具清单（用于前端渲染工具级覆盖 UI）
 const TOOL_LIST = [
-  { id: 'dispatch',  name: 'GitHub Actions 触发' },
+  { id: 'gh-dispatch',  name: 'GitHub Actions 触发' },
   { id: 'disk',      name: '微型云盘' },
   { id: 'stock',     name: '基金估值' },
   { id: 'news',      name: 'AI 新闻锐评' },
   { id: 'db-admin',  name: 'DB 管理' },
-  { id: 'js',        name: 'JS 运行工具' },
+  { id: 'js-runner', name: 'JS 运行工具' },
   { id: 'cron',      name: 'Cron 任务' },
   { id: 'sys-monitor', name: '系统监控' },
 ];

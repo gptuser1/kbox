@@ -104,7 +104,7 @@ router.get('/workflows', async (c) => {
     return c.json({ error: '需要 owner 和 repo 参数' }, 400);
   }
 
-  const ghToken = await getConfig(c, 'dispatch', 'gh_token');
+  const ghToken = await getConfig(c, 'gh-dispatch', 'gh_token');
   if (!ghToken) {
     return c.json({ error: '未配置 GitHub Token，请到配置管理设置 gh_token' }, 500);
   }
@@ -157,7 +157,7 @@ router.post('/dispatch', async (c) => {
     payload.inputs = inputs;
   }
 
-  const ghToken = await getConfig(c, 'dispatch', 'gh_token');
+  const ghToken = await getConfig(c, 'gh-dispatch', 'gh_token');
   if (!ghToken) {
     return c.json({ error: '未配置 GitHub Token，请到配置管理设置 gh_token' }, 500);
   }
@@ -197,7 +197,7 @@ router.get('/workflow-runs', async (c) => {
   }
   const perPage = Math.min(Number(c.req.query('per_page')) || 1, 10);
 
-  const ghToken = await getConfig(c, 'dispatch', 'gh_token');
+  const ghToken = await getConfig(c, 'gh-dispatch', 'gh_token');
   if (!ghToken) {
     return c.json({ error: '未配置 GitHub Token，请到配置管理设置 gh_token' }, 500);
   }
@@ -243,7 +243,7 @@ router.get('/workflow-run-jobs', async (c) => {
     return c.json({ error: '需要 owner、repo、run_id 参数' }, 400);
   }
 
-  const ghToken = await getConfig(c, 'dispatch', 'gh_token');
+  const ghToken = await getConfig(c, 'gh-dispatch', 'gh_token');
   if (!ghToken) {
     return c.json({ error: '未配置 GitHub Token，请到配置管理设置 gh_token' }, 500);
   }
@@ -292,7 +292,7 @@ router.get('/workflow-run-logs', async (c) => {
     return c.json({ error: '需要 owner、repo、job_id 参数' }, 400);
   }
 
-  const ghToken = await getConfig(c, 'dispatch', 'gh_token');
+  const ghToken = await getConfig(c, 'gh-dispatch', 'gh_token');
   if (!ghToken) {
     return c.json({ error: '未配置 GitHub Token，请到配置管理设置 gh_token' }, 500);
   }
@@ -414,7 +414,7 @@ router.get('/branches', async (c) => {
     return c.json({ error: '需要 owner 和 repo 参数' }, 400);
   }
 
-  const ghToken = await getConfig(c, 'dispatch', 'gh_token');
+  const ghToken = await getConfig(c, 'gh-dispatch', 'gh_token');
   if (!ghToken) {
     return c.json({ error: '未配置 GitHub Token，请到配置管理设置 gh_token' }, 500);
   }
@@ -453,7 +453,7 @@ router.get('/branch-commit', async (c) => {
     return c.json({ error: '需要 owner 和 repo 参数' }, 400);
   }
 
-  const ghToken = await getConfig(c, 'dispatch', 'gh_token');
+  const ghToken = await getConfig(c, 'gh-dispatch', 'gh_token');
   if (!ghToken) {
     return c.json({ error: '未配置 GitHub Token，请到配置管理设置 gh_token' }, 500);
   }
@@ -500,7 +500,7 @@ router.get('/workflow-inputs', async (c) => {
     return c.json({ error: '需要 owner、repo、path 参数' }, 400);
   }
 
-  const ghToken = await getConfig(c, 'dispatch', 'gh_token');
+  const ghToken = await getConfig(c, 'gh-dispatch', 'gh_token');
   if (!ghToken) {
     return c.json({ error: '未配置 GitHub Token，请到配置管理设置 gh_token' }, 500);
   }
