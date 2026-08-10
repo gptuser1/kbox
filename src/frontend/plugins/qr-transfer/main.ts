@@ -300,11 +300,89 @@ export function mount(): void {
 
   // ─── 接收端 ───
   const overlayCtx = overlay.getContext('2d')!;
-  let barcodeDetector: any = null;
   let scanTimer = 0;
+  let qrDecoder: { detect(frame: HTMLVideoElement | ImageData): Promise<Uint8Array[]> } | null = null;
+  let decoderInitError = '';
 
-  // 检查浏览器是否支持 BarcodeDetector
-  const BarcodeDetector = (window as any).BarcodeDetector;
+  // 初始化 QR 解码器：优先 BarcodeDetector，fallback 到 decimen WASM codec
+  async function initQRDecoder(): Promise<{ detect(frame: HTMLVideoElement | ImageData): Promise<Uint8Array[]> } | null> {
+    // 尝试 1: 浏览器原生 BarcodeDetector (Chrome/Edge/Opera)
+    const NativeBarcodeDetector = (window as any).BarcodeDetector;
+    if (NativeBarcodeDetector) {
+      try {
+        const detector = new NativeBarcodeDetector({ formats: ['qr_code'] });
+        // 快速验证是否可用
+        if (detector && typeof detector.detect === 'function') {
+          return {
+            detect: async (frame: HTMLVideoElement | ImageData) => {
+              const barcodes = await detector.detect(frame);
+              return barcodes
+                .filter((bc: any) => bc.rawValue)
+                .map((bc: any) => strToUint8(bc.rawValue))
+                .filter((b: Uint8Array | null) => b !== null) as Uint8Array[];
+            },
+          };
+        }
+      } catch { /* 不可用，fallthrough */ }
+    }
+
+    // 尝试 2: decimen WASM codec (全浏览器，含 Firefox/Safari)
+    try {
+      // @ts-ignore - 浏览器运行时动态导入路径
+      const DecimenCodec = (await import('/lib/decimen/decimen_codec.js')).default;
+      const codec = await DecimenCodec();
+      if (codec && typeof codec.readFull === 'function') {
+        return {
+          detect: async (frame: HTMLVideoElement | ImageData) => {
+            let imageData: ImageData;
+            if (frame instanceof HTMLVideoElement) {
+              // 从 video 元素捕获帧到 canvas
+              const v = frame as HTMLVideoElement;
+              if (v.readyState < 2) return [];
+              const w = v.videoWidth;
+              const h = v.videoHeight;
+              if (!w || !h) return [];
+              // 缩小尺寸提高性能（最大 640px）
+              const scale = Math.min(1, 640 / Math.max(w, h));
+              const cw = Math.round(w * scale);
+              const ch = Math.round(h * scale);
+              const cvs = document.createElement('canvas');
+              cvs.width = cw;
+              cvs.height = ch;
+              cvs.getContext('2d')!.drawImage(v, 0, 0, cw, ch);
+              imageData = cvs.getContext('2d')!.getImageData(0, 0, cw, ch);
+            } else {
+              imageData = frame;
+            }
+
+            const { data, width, height } = imageData;
+            const ptr = codec._malloc(data.length);
+            if (!ptr) return [];
+            try {
+              codec.HEAPU8.set(new Uint8Array(data.buffer), ptr);
+              const results = codec.readFull(ptr, width, height, true, 10, false);
+              const count = results.size();
+              const out: Uint8Array[] = [];
+              for (let i = 0; i < count; i++) {
+                const r = results.get(i);
+                if (r.valid && r.bytes && r.bytes.length) {
+                  out.push(r.bytes);
+                }
+              }
+              results.delete();
+              return out;
+            } finally {
+              codec._free(ptr);
+            }
+          },
+        };
+      }
+    } catch (e: any) {
+      decoderInitError = 'WASM 解码器加载失败: ' + (e.message || String(e));
+    }
+
+    return null;
+  }
 
   async function startCamera() {
     if (!navigator.mediaDevices?.getUserMedia) {
@@ -330,18 +408,20 @@ export function mount(): void {
     video.srcObject = stream;
     startCameraBtn.style.display = 'none';
     stopCameraBtn.style.display = '';
+
+    // 初始化 QR 解码器
+    if (!qrDecoder) {
+      qrDecoder = await initQRDecoder();
+    }
+
+    if (!qrDecoder) {
+      const msg = decoderInitError || '浏览器不支持 QR 码检测，且 WASM 解码器加载失败';
+      cameraStatus.textContent = msg;
+      stopCamera();
+      return;
+    }
+
     cameraStatus.textContent = '等待二维码中…';
-
-    // 初始化 BarcodeDetector
-    if (BarcodeDetector) {
-      try {
-        barcodeDetector = new BarcodeDetector({ formats: ['qr_code'] });
-      } catch { barcodeDetector = null; }
-    }
-
-    if (!barcodeDetector) {
-      cameraStatus.textContent = '浏览器不支持 QR 码检测，请使用 Chrome 或 Edge';
-    }
 
     // 开始扫描循环
     captureGen++;
@@ -356,18 +436,13 @@ export function mount(): void {
   }
 
   async function scanLoop(gen: number) {
-    if (receiveDone || gen !== captureGen || !stream) return;
+    if (receiveDone || gen !== captureGen || !stream || !qrDecoder) return;
 
-    if (barcodeDetector && video.readyState >= 2) {
+    if (video.readyState >= 2) {
       try {
-        const barcodes = await barcodeDetector.detect(video);
-        for (const bc of barcodes) {
-          if (!bc.rawValue) continue;
-          // 将 base64 或二进制数据转换为 Uint8Array
-          const raw = bc.rawValue;
-          const bytes = strToUint8(raw);
-          if (!bytes) continue;
-
+        const results = await qrDecoder.detect(video);
+        for (const bytes of results) {
+          if (!bytes || !bytes.length) continue;
           const parsed = parseFrame(bytes);
           if (!parsed || receiveDone) continue;
           const { header: h, block } = parsed;
@@ -408,7 +483,6 @@ export function mount(): void {
 
   function strToUint8(s: string): Uint8Array | null {
     try {
-      // 尝试作为二进制字符串处理
       const bytes = new Uint8Array(s.length);
       for (let i = 0; i < s.length; i++) bytes[i] = s.charCodeAt(i) & 0xff;
       return bytes;
