@@ -27,10 +27,10 @@ jobs:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CF_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CF_ACCOUNT_ID }}
 
-      - name: Set secrets (ACCESS_TOKEN + D1_API_TOKEN from KBOX_TOKEN)
+      - name: Set secrets
         run: |
           if [ -z "${{ secrets.KBOX_TOKEN }}" ]; then
-            echo "::error::KBOX_TOKEN secret 未设置，请在 GitHub Secrets 中配置"
+            echo "::error::Please set KBOX_TOKEN secret"
             exit 1
           fi
           echo "${{ secrets.KBOX_TOKEN }}" | npx wrangler secret put ACCESS_TOKEN
