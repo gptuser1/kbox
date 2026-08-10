@@ -114,9 +114,9 @@ function formatJobLog(raw: string): string {
     // \r 用于进度条覆盖，取最后一次状态
     const crParts = line.split('\r');
     const content = crParts[crParts.length - 1];
-    // 时间戳前缀：2026-08-09T04:19:50.3761360Z
+    // 时间戳前缀：2026-08-09T04:19:50.3761360Z（可能有前导空格）
     let ts = '';
-    let body = content;
+    let body = content.trimStart();
     const tsMatch = body.match(/^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d+Z)\s(.*)$/);
     if (tsMatch) {
       ts = '<span class="log-ts">' + esc(tsMatch[1]) + '</span> ';
@@ -128,7 +128,7 @@ function formatJobLog(raw: string): string {
       const cmd = cmdMatch[1].toLowerCase();
       const arg = cmdMatch[2];
       if (cmd === 'group' || cmd === 'section') {
-        out.push('<div class="log-cmd log-cmd-section">' + ts + '<span class="log-cmd-icon">▸</span>' + renderAnsi(arg) + '</div>');
+        out.push('<div class="log-line">' + ts + renderAnsi(arg) + '</div>');
         continue;
       }
       if (cmd === 'endgroup') { continue; }
