@@ -153,20 +153,28 @@ body:has(.modal-overlay.show) .float-back { display: none !important; }
 /* 插件页中隐藏首页专属菜单项（主题/视图/操作），仅显示插件注册项 */
 .float-menu-container.in-plugin > .fm-items > .fm-section { display: none; }
 .fm-label { font-size: 11px; font-weight: 600; color: var(--text-muted); padding: 4px 0; text-transform: uppercase; letter-spacing: 0.5px; }
-.fm-btn-group { display: flex; gap: 4px; padding: 2px 0; }
+/* 首页菜单：segmented control 风格（一个容器分多段） */
+.fm-btn-group {
+  display: flex; gap: 2px; padding: 3px;
+  background: var(--input-bg); border: 1px solid var(--border); border-radius: 999px;
+}
 .fm-btn-group button {
-  flex: 1; padding: 5px 9px; border: 1px solid var(--border); border-radius: 999px;
+  flex: 1; padding: 5px 9px; border: none; border-radius: 999px;
   background: none; color: var(--text-muted); cursor: pointer; font-size: 13px; line-height: 1.4;
   transition: all 0.15s; white-space: nowrap;
 }
-.fm-btn-group button.active { background: var(--primary); color: #fff; border-color: var(--primary); }
+.fm-btn-group button.active { background: var(--primary); color: #fff; }
 .fm-btn-group button:hover:not(.active) { color: var(--text); }
 
-/* 插件页菜单：section 内按钮纵向排布 */
-.float-menu-container.in-plugin .fm-btn-group { flex-direction: column; }
-.float-menu-container.in-plugin .fm-btn-group button {
-  flex: none; padding: 6px 12px; border-radius: 8px; text-align: left;
+/* 插件页菜单：纵向独立按钮 */
+.float-menu-container.in-plugin .fm-btn-group {
+  flex-direction: column; background: none; border: none; padding: 0; gap: 4px;
 }
+.float-menu-container.in-plugin .fm-btn-group button {
+  flex: none; padding: 6px 12px; border: 1px solid var(--border); border-radius: 8px;
+  text-align: left;
+}
+.float-menu-container.in-plugin .fm-btn-group button:hover:not(.active) { border-color: var(--primary); }
 
 /* ─── 按钮 ─── */
 .btn {

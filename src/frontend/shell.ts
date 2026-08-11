@@ -52,6 +52,14 @@ function initTheme() {
 }
 
 // ─── 浮动菜单（按钮自身膨胀展开 + 主题切换） ───
+function closeFloatMenu() {
+  const fmc = $('floatMenuBtn');
+  if (!fmc) return;
+  fmc.classList.remove('open');
+  fmc.style.width = '';
+  fmc.style.height = '';
+}
+
 function bindFloatMenu() {
   document.querySelectorAll('[id$="ThemeSwitcher"]').forEach(sw => {
     sw.querySelectorAll('button').forEach(b => {
@@ -61,14 +69,13 @@ function bindFloatMenu() {
   const fmc = $('floatMenuBtn');
   if (fmc) {
     fmc.addEventListener('click', (e) => {
-      if (fmc.classList.contains('open')) return; // 展开后点击菜单项由各自 handler 处理
+      if (fmc.classList.contains('open')) return;
       e.stopPropagation();
       fmc.classList.add('open');
-      // 动态测量内容高度，自适应菜单尺寸
       requestAnimationFrame(() => {
         const items = fmc.querySelector('.fm-items') as HTMLElement;
         if (!items) return;
-        const contentH = items.scrollHeight + 32; // padding 补偿
+        const contentH = items.scrollHeight + 32;
         const w = fmc.classList.contains('in-plugin') ? 200 : 220;
         const h = Math.min(Math.max(contentH, 120), 360);
         fmc.style.width = w + 'px';
@@ -78,9 +85,7 @@ function bindFloatMenu() {
     document.addEventListener('click', (e) => {
       if (!fmc.classList.contains('open')) return;
       if (fmc.contains(e.target as Node)) return;
-      fmc.classList.remove('open');
-      fmc.style.width = '';
-      fmc.style.height = '';
+      closeFloatMenu();
     });
   }
 }
@@ -432,7 +437,7 @@ async function showPlugin(id: string) {
   view.id = 'view-' + id;
   pluginViews.appendChild(view);
   $('floatBack').classList.add('show');
-  $('floatMenuBtn')?.classList.remove('open');
+  closeFloatMenu();
   // 进入插件页：重置返回栈，清除插件菜单，显示浮动菜单供插件注册，隐藏首页专属菜单项
   resetFloatBack();
   clearPluginMenu();
@@ -475,7 +480,7 @@ function backToGrid() {
   pluginGrid.style.display = 'grid';
   const hgw = $('homeGridWrap'); if (hgw) hgw.style.display = '';
   $('floatBack').classList.remove('show');
-  $('floatMenuBtn')?.classList.remove('open');
+  closeFloatMenu();
   // 回到首页：清除插件注册的菜单项，恢复菜单按钮显示，恢复首页菜单项
   clearPluginMenu();
   const fmb = $('floatMenuBtn'); if (fmb) { fmb.style.display = ''; fmb.classList.remove('in-plugin'); }
