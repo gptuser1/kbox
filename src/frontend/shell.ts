@@ -64,11 +64,23 @@ function bindFloatMenu() {
       if (fmc.classList.contains('open')) return; // 展开后点击菜单项由各自 handler 处理
       e.stopPropagation();
       fmc.classList.add('open');
+      // 动态测量内容高度，自适应菜单尺寸
+      requestAnimationFrame(() => {
+        const items = fmc.querySelector('.fm-items') as HTMLElement;
+        if (!items) return;
+        const contentH = items.scrollHeight + 32; // padding 补偿
+        const w = fmc.classList.contains('in-plugin') ? 200 : 220;
+        const h = Math.min(Math.max(contentH, 120), 360);
+        fmc.style.width = w + 'px';
+        fmc.style.height = h + 'px';
+      });
     });
     document.addEventListener('click', (e) => {
       if (!fmc.classList.contains('open')) return;
       if (fmc.contains(e.target as Node)) return;
       fmc.classList.remove('open');
+      fmc.style.width = '';
+      fmc.style.height = '';
     });
   }
 }
@@ -114,19 +126,30 @@ function renderPluginMenu() {
   if (pluginMenuSections.length === 0) {
     container.style.display = 'none';
     container.innerHTML = '';
-    return;
-  }
-  container.style.display = '';
-  container.innerHTML = pluginMenuSections.map(s =>
+  } else {
+    container.style.display = '';
+    container.innerHTML = pluginMenuSections.map(s =>
+      '<div class="fm-section">' +
+      '<div class="fm-label">' + s.label + '</div>' +
+      '<div class="fm-btn-group">' + s.html + '</div>' +
+      '</div>'
+    ).join('') +
     '<div class="fm-section">' +
-    '<div class="fm-label">' + s.label + '</div>' +
-    '<div class="fm-btn-group">' + s.html + '</div>' +
-    '</div>'
-  ).join('') +
-  '<div class="fm-section">' +
-    '<div class="fm-label">页面</div>' +
-    '<div class="fm-btn-group"><button onclick="location.reload()">🔄 刷新页面</button></div>' +
-  '</div>';
+      '<div class="fm-label">页面</div>' +
+      '<div class="fm-btn-group"><button onclick="location.reload()">🔄 刷新页面</button></div>' +
+    '</div>';
+  }
+  // 若菜单已打开，重新测量高度
+  const fmc = $('floatMenuBtn');
+  if (fmc && fmc.classList.contains('open')) {
+    requestAnimationFrame(() => {
+      const items = fmc.querySelector('.fm-items') as HTMLElement;
+      if (!items) return;
+      const contentH = items.scrollHeight + 32;
+      const h = Math.min(Math.max(contentH, 120), 360);
+      fmc.style.height = h + 'px';
+    });
+  }
 }
 
 function setPluginMenu(sections: PluginMenuSection[]) {

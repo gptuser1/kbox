@@ -116,12 +116,11 @@ body:has(.modal-overlay.show) .float-back { display: none !important; }
   pointer-events: auto;
 }
 .float-menu-container.open {
-  width: auto; min-width: 180px; height: auto; max-height: 80vh; border-radius: 16px;
+  width: 220px; height: 290px; border-radius: 16px;
   background: var(--fm-bg);
   border: 1px solid var(--fm-border);
   box-shadow: var(--fm-shadow);
   cursor: default;
-  overflow: visible;
 }
 .fm-icon {
   position: absolute; top: 13px; left: 13px;
@@ -136,13 +135,13 @@ body:has(.modal-overlay.show) .float-back { display: none !important; }
   transform: rotate(90deg) scale(0.5);
 }
 .fm-items {
+  position: absolute; top: 0; left: 0; right: 0; bottom: 0;
   padding: 16px;
   opacity: 0;
   transform: translateY(8px);
   transition: all 0.35s ease 0.12s;
   pointer-events: none;
   overflow-y: auto;
-  max-height: 70vh;
 }
 .float-menu-container.open .fm-items {
   opacity: 1;
@@ -154,14 +153,20 @@ body:has(.modal-overlay.show) .float-back { display: none !important; }
 /* 插件页中隐藏首页专属菜单项（主题/视图/操作），仅显示插件注册项 */
 .float-menu-container.in-plugin > .fm-items > .fm-section { display: none; }
 .fm-label { font-size: 11px; font-weight: 600; color: var(--text-muted); padding: 4px 0; text-transform: uppercase; letter-spacing: 0.5px; }
-.fm-btn-group { display: flex; flex-direction: column; gap: 4px; padding: 2px 0; }
+.fm-btn-group { display: flex; gap: 4px; padding: 2px 0; }
 .fm-btn-group button {
-  padding: 6px 12px; border: 1px solid var(--border); border-radius: 8px;
+  flex: 1; padding: 5px 9px; border: 1px solid var(--border); border-radius: 999px;
   background: none; color: var(--text-muted); cursor: pointer; font-size: 13px; line-height: 1.4;
-  transition: all 0.15s; text-align: left; white-space: nowrap;
+  transition: all 0.15s; white-space: nowrap;
 }
 .fm-btn-group button.active { background: var(--primary); color: #fff; border-color: var(--primary); }
-.fm-btn-group button:hover:not(.active) { color: var(--text); border-color: var(--primary); }
+.fm-btn-group button:hover:not(.active) { color: var(--text); }
+
+/* 插件页菜单：section 内按钮纵向排布 */
+.float-menu-container.in-plugin .fm-btn-group { flex-direction: column; }
+.float-menu-container.in-plugin .fm-btn-group button {
+  flex: none; padding: 6px 12px; border-radius: 8px; text-align: left;
+}
 
 /* ─── 按钮 ─── */
 .btn {
