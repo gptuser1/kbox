@@ -57,9 +57,14 @@ let inPluginPage = false;
 function closeFloatMenu() {
   const fmc = $('floatMenuBtn');
   if (!fmc) return;
+  // 禁用过渡动画，防止展开→收缩的椭圆形
+  fmc.style.transition = 'none';
   fmc.classList.remove('open');
   fmc.style.width = '';
   fmc.style.height = '';
+  // 强制重排后恢复过渡
+  fmc.offsetHeight;
+  fmc.style.transition = '';
 }
 
 function syncFloatMenuVisibility() {
@@ -115,6 +120,11 @@ function bindFloatMenu() {
       fmc.classList.add('open');
       measureMenuSize();
     });
+    // 菜单内部点击阻止冒泡，防止 DOM 替换后 document handler 误关菜单
+    const items = fmc.querySelector('.fm-items');
+    if (items) {
+      items.addEventListener('click', (e) => e.stopPropagation());
+    }
     document.addEventListener('click', (e) => {
       if (!fmc.classList.contains('open')) return;
       if (fmc.contains(e.target as Node)) return;
