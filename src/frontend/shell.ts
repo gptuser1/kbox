@@ -51,13 +51,31 @@ function initTheme() {
   updateThemeButtons(saved);
 }
 
-// ─── 浮动菜单（按钮自身膨胀展开 + 主题切换） ───
+// ─── 浮动菜单 ───
+let inPluginPage = false;
+
 function closeFloatMenu() {
   const fmc = $('floatMenuBtn');
   if (!fmc) return;
   fmc.classList.remove('open');
   fmc.style.width = '';
   fmc.style.height = '';
+}
+
+function syncFloatMenuVisibility() {
+  const fmc = $('floatMenuBtn');
+  if (!fmc) return;
+  if (!mainContent.classList.contains('active')) {
+    fmc.classList.remove('show');
+    return;
+  }
+  // 首页始终显示；插件页仅在有菜单项时显示
+  if (inPluginPage) {
+    if (pluginMenuSections.length > 0) fmc.classList.add('show');
+    else fmc.classList.remove('show');
+  } else {
+    fmc.classList.add('show');
+  }
 }
 
 function bindFloatMenu() {
@@ -76,8 +94,8 @@ function bindFloatMenu() {
         const items = fmc.querySelector('.fm-items') as HTMLElement;
         if (!items) return;
         const contentH = items.scrollHeight + 32;
-        const w = fmc.classList.contains('in-plugin') ? 200 : 220;
-        const h = Math.min(Math.max(contentH, 120), 360);
+        const w = inPluginPage ? 200 : 220;
+        const h = Math.min(Math.max(contentH, 100), 360);
         fmc.style.width = w + 'px';
         fmc.style.height = h + 'px';
       });
@@ -138,12 +156,9 @@ function renderPluginMenu() {
       '<div class="fm-label">' + s.label + '</div>' +
       '<div class="fm-btn-group">' + s.html + '</div>' +
       '</div>'
-    ).join('') +
-    '<div class="fm-section">' +
-      '<div class="fm-label">页面</div>' +
-      '<div class="fm-btn-group"><button onclick="location.reload()">🔄 刷新页面</button></div>' +
-    '</div>';
+    ).join('');
   }
+  syncFloatMenuVisibility();
   // 若菜单已打开，重新测量高度
   const fmc = $('floatMenuBtn');
   if (fmc && fmc.classList.contains('open')) {
@@ -151,7 +166,7 @@ function renderPluginMenu() {
       const items = fmc.querySelector('.fm-items') as HTMLElement;
       if (!items) return;
       const contentH = items.scrollHeight + 32;
-      const h = Math.min(Math.max(contentH, 120), 360);
+      const h = Math.min(Math.max(contentH, 100), 360);
       fmc.style.height = h + 'px';
     });
   }
@@ -438,10 +453,11 @@ async function showPlugin(id: string) {
   pluginViews.appendChild(view);
   $('floatBack').classList.add('show');
   closeFloatMenu();
-  // 进入插件页：重置返回栈，清除插件菜单，显示浮动菜单供插件注册，隐藏首页专属菜单项
+  // 进入插件页：重置返回栈，清除插件菜单
+  inPluginPage = true;
   resetFloatBack();
   clearPluginMenu();
-  const fmb = $('floatMenuBtn'); if (fmb) { fmb.style.display = ''; fmb.classList.add('in-plugin'); }
+  const fmb = $('floatMenuBtn'); if (fmb) { fmb.classList.add('in-plugin'); }
 
   // 立即显示插件加载层（区域级，不全屏，保留 token 栏与浮动按钮）
   view.innerHTML = '<div class="plugin-loader"><div class="app-loader__bar"></div><div class="plugin-loader__text">加载中…</div></div>';
@@ -481,9 +497,11 @@ function backToGrid() {
   const hgw = $('homeGridWrap'); if (hgw) hgw.style.display = '';
   $('floatBack').classList.remove('show');
   closeFloatMenu();
-  // 回到首页：清除插件注册的菜单项，恢复菜单按钮显示，恢复首页菜单项
+  // 回到首页：恢复首页菜单
+  inPluginPage = false;
   clearPluginMenu();
-  const fmb = $('floatMenuBtn'); if (fmb) { fmb.style.display = ''; fmb.classList.remove('in-plugin'); }
+  const fmb = $('floatMenuBtn'); if (fmb) { fmb.classList.remove('in-plugin'); }
+  syncFloatMenuVisibility();
   window.scrollTo(0, 0);
 }
 
@@ -526,13 +544,6 @@ function initPlugins() {
 })();
 
 // ─── 入口 ───
-function syncFloatMenuVisibility() {
-  const fmc = $('floatMenuBtn');
-  if (!fmc) return;
-  if (mainContent.classList.contains('active')) fmc.classList.add('show');
-  else fmc.classList.remove('show');
-}
-
 initToast($('toastContainer'));
 setUnauthorizedHandler(() => {
   localStorage.removeItem('kbox_token');
