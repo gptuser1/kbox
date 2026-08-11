@@ -121,6 +121,7 @@ body:has(.modal-overlay.show) .float-back { display: none !important; }
   border: 1px solid var(--fm-border);
   box-shadow: var(--fm-shadow);
   cursor: default;
+  overflow: visible;
 }
 .fm-icon {
   position: absolute; top: 13px; left: 13px;
@@ -135,13 +136,13 @@ body:has(.modal-overlay.show) .float-back { display: none !important; }
   transform: rotate(90deg) scale(0.5);
 }
 .fm-items {
-  position: absolute; top: 0; left: 0; right: 0; bottom: 0;
   padding: 16px;
   opacity: 0;
   transform: translateY(8px);
   transition: all 0.35s ease 0.12s;
   pointer-events: none;
   overflow-y: auto;
+  max-height: 70vh;
 }
 .float-menu-container.open .fm-items {
   opacity: 1;
