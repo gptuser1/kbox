@@ -61,7 +61,7 @@ export function render(): string {
 
 export function mount(): void {
   const globalList = $('configGlobalList');
-  const toolList = $('configPluginList');
+  const pluginList = $('configPluginList');
   const tabsEl = $('configTabs');
   const globalPane = $('configGlobalPane');
   const pluginsPane = $('configPluginsPane');
@@ -182,13 +182,13 @@ export function mount(): void {
   }
 
   function renderPlugins() {
-    if (!toolList) return;
+    if (!pluginList) return;
     if (!plugins.length) {
-      toolList.innerHTML = '<div class="empty">无插件</div>';
+      pluginList.innerHTML = '<div class="empty">无插件</div>';
       return;
     }
     const list = orderedPluginsList();
-    toolList.innerHTML = list.map((t, i) => {
+    pluginList.innerHTML = list.map((t, i) => {
       const overrides = pluginOverrides[t.id] || [];
       let chips = '';
       if (overrides.length) {
@@ -286,7 +286,7 @@ export function mount(): void {
     } catch (e: any) {
       if (e.message === 'UNAUTHORIZED') return;
       if (globalList) globalList.innerHTML = '<div class="empty">加载失败：' + esc(e.message) + '</div>';
-      if (toolList) toolList.innerHTML = '';
+      if (pluginList) pluginList.innerHTML = '';
     }
   }
 

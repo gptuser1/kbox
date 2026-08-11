@@ -25,7 +25,7 @@ const $ = (id: string): HTMLElement => document.getElementById(id) as HTMLElemen
 // ─── 渲染 HTML ───
 export function render(): string {
   return `
-    <div class="tool-title-row">
+    <div class="plugin-title-row">
       <h2>📡 QR 传输</h2>
     </div>
     <div class="tabs" id="qrTabs">

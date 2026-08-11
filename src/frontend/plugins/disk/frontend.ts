@@ -29,7 +29,7 @@ function formatSize(bytes: number): string {
 
 export function render(): string {
   return `
-    <div class="tool-title-row">
+    <div class="plugin-title-row">
       <h2>☁️ 微型云盘</h2>
       <div class="ttr-stats" id="diskStats"></div>
     </div>

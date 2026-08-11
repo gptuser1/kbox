@@ -6,7 +6,7 @@ import type { FrontendPlugin } from '../../shared.js';
 
 export function render(): string {
   return `
-<div class="tool-title-row">
+<div class="plugin-title-row">
   <h2>💰 基金估值</h2>
   <div class="ttr-stats" id="stockStats"><span class="ttr-refresh">上次刷新: <span id="stockLastTime">-</span></span></div>
 </div>
