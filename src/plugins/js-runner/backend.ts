@@ -28,7 +28,7 @@ const WRITE_BLACKLIST = [
 ];
 export function isWriteForbidden(ns: string): boolean {
   if (WRITE_BLACKLIST.includes(ns)) return true;
-  if (ns.startsWith('tool:')) return true;
+  if (ns.startsWith('plugin:')) return true;
   return false;
 }
 

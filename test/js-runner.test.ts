@@ -14,10 +14,10 @@ describe('isWriteForbidden', () => {
     expect(isWriteForbidden('cron_tasks')).toBe(true);
   });
 
-  it('blocks tool: prefixed namespaces', () => {
-    expect(isWriteForbidden('tool:news')).toBe(true);
-    expect(isWriteForbidden('tool:disk')).toBe(true);
-    expect(isWriteForbidden('tool:stock')).toBe(true);
+  it('blocks plugin: prefixed namespaces', () => {
+    expect(isWriteForbidden('plugin:news')).toBe(true);
+    expect(isWriteForbidden('plugin:disk')).toBe(true);
+    expect(isWriteForbidden('plugin:stock')).toBe(true);
   });
 
   it('allows user namespaces', () => {
