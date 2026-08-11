@@ -122,7 +122,7 @@ body:has(.modal-overlay.show) .float-back { display: none !important; }
   pointer-events: auto;
 }
 .float-menu-container.open {
-  width: 220px; height: 290px; border-radius: 16px;
+  width: 180px; height: 200px; border-radius: 16px;
   background: var(--fm-bg);
   border: 1px solid var(--fm-border);
   box-shadow: var(--fm-shadow);
@@ -155,19 +155,19 @@ body:has(.modal-overlay.show) .float-back { display: none !important; }
   pointer-events: auto;
 }
 .fm-section { padding: 6px 0; }
-.fm-section + .fm-section { border-top: 1px solid var(--border); margin-top: 4px; padding-top: 10px; }
+.fm-section + .fm-section { border-top: 1px solid var(--border); padding-top: 10px; }
 /* 插件页中隐藏首页专属菜单项 */
 .float-menu-container.in-plugin > .fm-items > .fm-section { display: none; }
-.fm-label { font-size: 10px; font-weight: 700; color: var(--text-muted); padding: 2px 0 6px; text-transform: uppercase; letter-spacing: 0.6px; }
-/* 首页菜单：segmented control */
+.fm-label { display: inline-block; font-size: 10px; font-weight: 700; color: var(--text-muted); padding: 2px 0 6px; text-transform: uppercase; letter-spacing: 0.6px; }
+/* 首页菜单：segmented control（inline-flex 收缩到内容宽度） */
 .fm-btn-group {
-  display: flex; gap: 2px; padding: 3px;
+  display: inline-flex; gap: 2px; padding: 3px;
   background: var(--input-bg); border: 1px solid var(--border); border-radius: 999px;
 }
 .fm-btn-group button {
-  flex: 1; padding: 5px 8px; border: none; border-radius: 999px;
+  flex: none; min-width: 36px; padding: 5px 10px; border: none; border-radius: 999px;
   background: none; color: var(--text-muted); cursor: pointer; font-size: 13px; line-height: 1.4;
-  transition: background 0.15s, color 0.15s; white-space: nowrap;
+  transition: background 0.15s, color 0.15s; white-space: nowrap; text-align: center;
 }
 .fm-btn-group button.active { background: var(--primary); color: #fff; }
 .fm-btn-group button:hover:not(.active) { color: var(--text); }
@@ -177,7 +177,7 @@ body:has(.modal-overlay.show) .float-back { display: none !important; }
   flex-direction: column; background: none; border: none; padding: 0; gap: 6px;
 }
 .float-menu-container.in-plugin .fm-btn-group button {
-  flex: none; padding: 8px 14px; border: 1px solid var(--border); border-radius: 8px;
+  padding: 8px 14px; border: 1px solid var(--border); border-radius: 8px;
   background: var(--card); color: var(--text); text-align: left; font-size: 13px;
   transition: border-color 0.15s, background 0.15s;
 }
