@@ -93,6 +93,7 @@ export function render(): string {
         <div id="dbInsertForm"></div>
         <div style="margin-top:12px;display:flex;gap:8px">
           <button class="btn btn-primary btn-sm" id="dbInsertSubmitBtn">插入</button>
+          <button class="btn btn-outline btn-sm" id="dbInsertSubmitB64Btn" title="将所有值 Base64 编码后插入">插入为 B64</button>
           <span class="db-meta" id="dbInsertMeta"></span>
         </div>
       </div>
@@ -145,6 +146,7 @@ export function render(): string {
       <span class="db-meta" id="dbRowModalMeta" style="margin-right:auto"></span>
       <button class="btn btn-outline" onclick="closeDbRowModal()">取消</button>
       <button class="btn btn-primary" id="dbRowSaveBtn">保存</button>
+      <button class="btn btn-outline" id="dbRowSaveB64Btn" title="将所有值 Base64 编码后保存">保存为 B64</button>
     </div>
   </div>
 </div>
@@ -244,6 +246,7 @@ export function mount(): void {
   // 新建项面板
   const insertForm = $('dbInsertForm');
   const insertSubmitBtn = $('dbInsertSubmitBtn') as HTMLButtonElement;
+  const insertSubmitB64Btn = $('dbInsertSubmitB64Btn') as HTMLButtonElement;
   const insertMeta = $('dbInsertMeta');
 
   // 连接管理弹层
@@ -264,6 +267,7 @@ export function mount(): void {
   const rowModalBody = $('dbRowModalBody');
   const rowModalMeta = $('dbRowModalMeta');
   const rowSaveBtn = $('dbRowSaveBtn') as HTMLButtonElement;
+  const rowSaveB64Btn = $('dbRowSaveB64Btn') as HTMLButtonElement;
 
   // 新建表弹层
   const createTableOverlay = $('dbCreateTableOverlay');
@@ -310,7 +314,6 @@ export function mount(): void {
     // 检测 Base64 编码并解码用于显示
     const isB64 = isBase64Str(value);
     const displayVal = isB64 ? escapeAttr(decodeBase64Field(value)) : escapeAttr(value);
-    const b64Checked = isB64 ? ' checked' : '';
 
     if (disabled) {
       return '<textarea data-col="' + colName + '" rows="1" placeholder="' + ph + '"' + disabledAttr + '>' + displayVal + '</textarea>';
@@ -318,8 +321,6 @@ export function mount(): void {
     return '<div class="db-field-wrap">' +
       '<textarea data-col="' + colName + '" class="db-field-input" rows="1" placeholder="' + ph + '">' + displayVal + '</textarea>' +
       '<button type="button" class="db-field-expand" onclick="toggleDbField(this)" title="展开多行编辑">⛶</button>' +
-      '<label class="db-base64-opt" title="Base64 编码存储，可保留换行和特殊字符">' +
-      '<input type="checkbox" data-col="' + colName + '" data-base64' + b64Checked + '>B64</label>' +
       '</div>';
   }
 
@@ -331,10 +332,6 @@ export function mount(): void {
     const col = field.getAttribute('data-col') || '';
     const val = field.value;
     const ph = field.getAttribute('placeholder') || '';
-
-    // 检查当前字段是否启用了 Base64（从对应的 checkbox 读取）
-    const b64Checkbox = wrap.querySelector('input[data-base64][data-col="' + col + '"]') as HTMLInputElement;
-    const b64Enabled = b64Checkbox ? b64Checkbox.checked : false;
 
     // 移除已存在的弹窗
     const existing = document.querySelector('.modal-overlay.db-field-modal');
@@ -821,11 +818,12 @@ export function mount(): void {
     }
   }
 
-  insertSubmitBtn.onclick = async () => {
+  async function handleInsertSubmit(encodeB64: boolean) {
     if (!activeConnId || !activeTable) return;
-    const values = collectFieldValues(insertForm, true);
+    const values = collectFieldValues(insertForm, true, encodeB64);
     if (Object.keys(values).length === 0) { toast('请至少填写一个字段', 'error'); return; }
-    insertSubmitBtn.disabled = true; insertSubmitBtn.textContent = '插入中…';
+    const btn = encodeB64 ? insertSubmitB64Btn : insertSubmitBtn;
+    btn.disabled = true; btn.textContent = '插入中…';
     insertMeta.textContent = '';
     try {
       const res = await api('/api/plugins/db-admin/connections/' + activeConnId + '/tables/' + encodeURIComponent(activeTable) + '/row', {
@@ -833,8 +831,8 @@ export function mount(): void {
         body: JSON.stringify({ values }),
         headers: { 'Content-Type': 'application/json' },
       });
-      toast('已插入' + (res.last_row_id ? '，ID=' + res.last_row_id : ''), 'success');
-      insertForm.querySelectorAll('[data-col]').forEach((inp: any) => inp.value = '');
+      toast(encodeB64 ? '已插入（B64 编码）' + (res.last_row_id ? '，ID=' + res.last_row_id : '') : '已插入' + (res.last_row_id ? '，ID=' + res.last_row_id : ''), 'success');
+      insertForm.querySelectorAll('textarea[data-col]').forEach((inp: any) => inp.value = '');
       switchTab('data');
       loadData();
     } catch (e: any) {
@@ -842,9 +840,12 @@ export function mount(): void {
       insertMeta.textContent = '✗ ' + e.message;
       insertMeta.style.color = '#ef4444';
     } finally {
-      insertSubmitBtn.disabled = false; insertSubmitBtn.textContent = '插入';
+      btn.disabled = false; btn.textContent = encodeB64 ? '插入为 B64' : '插入';
     }
-  };
+  }
+
+  insertSubmitBtn.onclick = () => handleInsertSubmit(false);
+  insertSubmitB64Btn.onclick = () => handleInsertSubmit(true);
 
   // ─── 行编辑弹层 ───
   function openRowModal(mode: string, where: any) {
@@ -906,31 +907,27 @@ export function mount(): void {
     }
   }
 
-  function collectFieldValues(container: HTMLElement, skipEmpty = false): Record<string, string> {
+  function collectFieldValues(container: HTMLElement, skipEmpty = false, encodeB64 = false): Record<string, string> {
     const values: Record<string, string> = {};
-    const inputs = container.querySelectorAll('[data-col]:not(:disabled)');
+    const inputs = container.querySelectorAll('textarea[data-col]:not(:disabled)');
     inputs.forEach((inp: any) => {
       const col = inp.getAttribute('data-col');
       let val = inp.value;
       if (skipEmpty && val === '') return;
-      // 检查同行的 Base64 checkbox
-      const wrap = inp.closest('.db-field-wrap');
-      if (wrap) {
-        const b64cb = wrap.querySelector('input[data-base64]') as HTMLInputElement;
-        if (b64cb && b64cb.checked) {
-          val = encodeBase64Field(val);
-        }
+      if (encodeB64) {
+        val = encodeBase64Field(val);
       }
       values[col] = val;
     });
     return values;
   }
 
-  rowSaveBtn.onclick = async () => {
+  async function handleRowSave(encodeB64: boolean) {
     if (!rowEditingState) return;
-    const set = collectFieldValues(rowModalBody);
+    const set = collectFieldValues(rowModalBody, false, encodeB64);
     if (Object.keys(set).length === 0) { toast('请至少填写一个字段', 'error'); return; }
-    rowSaveBtn.disabled = true; rowSaveBtn.textContent = '保存中…';
+    const btn = encodeB64 ? rowSaveB64Btn : rowSaveBtn;
+    btn.disabled = true; btn.textContent = '保存中…';
     rowModalMeta.textContent = '';
     try {
       if (rowEditingState.mode === 'edit') {
@@ -939,7 +936,7 @@ export function mount(): void {
           body: JSON.stringify({ set, where: rowEditingState.where }),
           headers: { 'Content-Type': 'application/json' },
         });
-        toast('已保存', 'success');
+        toast(encodeB64 ? '已保存（B64 编码）' : '已保存', 'success');
       } else {
         const values: any = {};
         Object.keys(set).forEach(k => { if (set[k] !== '') values[k] = set[k]; });
@@ -948,7 +945,7 @@ export function mount(): void {
           body: JSON.stringify({ values }),
           headers: { 'Content-Type': 'application/json' },
         });
-        toast('已插入', 'success');
+        toast(encodeB64 ? '已插入（B64 编码）' : '已插入', 'success');
       }
       closeDbRowModal();
       loadData();
@@ -957,9 +954,12 @@ export function mount(): void {
       rowModalMeta.textContent = '✗ ' + e.message;
       rowModalMeta.style.color = '#ef4444';
     } finally {
-      rowSaveBtn.disabled = false; rowSaveBtn.textContent = '保存';
+      btn.disabled = false; btn.textContent = encodeB64 ? '保存为 B64' : '保存';
     }
-  };
+  }
+
+  rowSaveBtn.onclick = () => handleRowSave(false);
+  rowSaveB64Btn.onclick = () => handleRowSave(true);
 
   function deleteRow(where: any) {
     (window as any).showConfirm('确认删除此行？', async () => {

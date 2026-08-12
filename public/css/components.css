@@ -556,15 +556,6 @@ input[type="checkbox"] { accent-color: var(--primary); width: 16px; height: 16px
   box-sizing: border-box;
 }
 
-/* Base64 存储选项标签 */
-.db-base64-opt {
-  flex-shrink: 0; display: inline-flex; align-items: center; gap: 2px;
-  font-size: 11px; color: var(--text-muted); cursor: pointer; white-space: nowrap;
-  padding: 0 2px; user-select: none;
-}
-.db-base64-opt input { margin: 0; cursor: pointer; }
-.db-base64-opt:hover { color: var(--primary); }
-
 /* DB 字段展开弹窗-底部工具栏 */
 .db-field-toolbar {
   display: flex; align-items: center; gap: 8px;
