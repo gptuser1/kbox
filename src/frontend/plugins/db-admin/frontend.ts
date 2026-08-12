@@ -303,8 +303,14 @@ export function mount(): void {
   function escapeAttr(s: any) { return esc(s == null ? '' : String(s)); }
 
   function isBase64Str(s: string): boolean { return typeof s === 'string' && s.startsWith('b64:'); }
-  function decodeBase64Field(s: string): string { return isBase64Str(s) ? atob(s.slice(4)) : s; }
-  function encodeBase64Field(s: string): string { return 'b64:' + btoa(s); }
+  function decodeBase64Field(s: string): string {
+    if (!isBase64Str(s)) return s;
+    const bin = atob(s.slice(4));
+    try { return decodeURIComponent(escape(bin)); } catch { return bin; }
+  }
+  function encodeBase64Field(s: string): string {
+    return 'b64:' + btoa(unescape(encodeURIComponent(s)));
+  }
 
   function renderDbField(col: any, value: string, placeholder: string, disabled: boolean): string {
     const colName = escapeAttr(col.name);
