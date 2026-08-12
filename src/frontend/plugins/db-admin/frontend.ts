@@ -298,25 +298,43 @@ export function mount(): void {
 
   function escapeAttr(s: any) { return esc(s == null ? '' : String(s)); }
 
+  function isBase64Str(s: string): boolean { return typeof s === 'string' && s.startsWith('b64:'); }
+  function decodeBase64Field(s: string): string { return isBase64Str(s) ? atob(s.slice(4)) : s; }
+  function encodeBase64Field(s: string): string { return 'b64:' + btoa(s); }
+
   function renderDbField(col: any, value: string, placeholder: string, disabled: boolean): string {
     const colName = escapeAttr(col.name);
-    const val = escapeAttr(value);
     const ph = escapeAttr(placeholder);
     const disabledAttr = disabled ? ' disabled' : '';
+
+    // 检测 Base64 编码并解码用于显示
+    const isB64 = isBase64Str(value);
+    const displayVal = isB64 ? escapeAttr(decodeBase64Field(value)) : escapeAttr(value);
+    const b64Checked = isB64 ? ' checked' : '';
+
     if (disabled) {
-      return '<input data-col="' + colName + '" value="' + val + '" placeholder="' + ph + '"' + disabledAttr + '>';
+      return '<textarea data-col="' + colName + '" rows="1" placeholder="' + ph + '"' + disabledAttr + '>' + displayVal + '</textarea>';
     }
-    return '<div class="db-field-wrap"><input data-col="' + colName + '" class="db-field-input" value="' + val + '" placeholder="' + ph + '"><button type="button" class="db-field-expand" onclick="toggleDbField(this)" title="展开多行编辑">⛶</button></div>';
+    return '<div class="db-field-wrap">' +
+      '<textarea data-col="' + colName + '" class="db-field-input" rows="1" placeholder="' + ph + '">' + displayVal + '</textarea>' +
+      '<button type="button" class="db-field-expand" onclick="toggleDbField(this)" title="展开多行编辑">⛶</button>' +
+      '<label class="db-base64-opt" title="Base64 编码存储，可保留换行和特殊字符">' +
+      '<input type="checkbox" data-col="' + colName + '" data-base64' + b64Checked + '>B64</label>' +
+      '</div>';
   }
 
   (window as any).toggleDbField = function(btn: HTMLElement) {
     const wrap = btn.parentNode as HTMLElement;
     if (!wrap || !wrap.classList.contains('db-field-wrap')) return;
-    const field = wrap.querySelector('.db-field-input') as HTMLInputElement;
+    const field = wrap.querySelector('.db-field-input') as HTMLTextAreaElement;
     if (!field) return;
     const col = field.getAttribute('data-col') || '';
     const val = field.value;
     const ph = field.getAttribute('placeholder') || '';
+
+    // 检查当前字段是否启用了 Base64（从对应的 checkbox 读取）
+    const b64Checkbox = wrap.querySelector('input[data-base64][data-col="' + col + '"]') as HTMLInputElement;
+    const b64Enabled = b64Checkbox ? b64Checkbox.checked : false;
 
     // 移除已存在的弹窗
     const existing = document.querySelector('.modal-overlay.db-field-modal');
@@ -333,6 +351,10 @@ export function mount(): void {
       '<div class="modal-body" style="display:flex;flex:1;padding:0;overflow:hidden">' +
         '<textarea class="db-field-textarea" placeholder="' + esc(ph) + '">' + esc(val) + '</textarea>' +
       '</div>' +
+      '<div class="db-field-toolbar">' +
+        '<button type="button" class="btn btn-outline btn-sm" id="dbFieldB64Decode" title="将当前 Base64 内容解码为可读文本">B64 → 文本</button>' +
+        '<span class="db-meta" id="dbFieldB64Status"></span>' +
+      '</div>' +
     '</div>';
 
     overlay.classList.add('show');
@@ -340,22 +362,35 @@ export function mount(): void {
 
     const textarea = overlay.querySelector('.db-field-textarea') as HTMLTextAreaElement;
     const closeBtn = overlay.querySelector('.db-field-close') as HTMLElement;
+    const b64DecodeBtn = overlay.querySelector('#dbFieldB64Decode') as HTMLButtonElement;
+    const b64Status = overlay.querySelector('#dbFieldB64Status') as HTMLSpanElement;
 
-    // 关闭弹窗：将 input 替换为 textarea 以保留换行
+    // 检查初始值是否为有效 Base64，显示状态提示
+    function updateB64Status() {
+      const raw = textarea.value;
+      // 尝试检测是否为标准 Base64 编码（不含 b64: 前缀的纯 base64 串）
+      const isLikelyB64 = /^[A-Za-z0-9+/]*={0,2}$/.test(raw) && raw.length > 20 && raw.length % 4 === 0;
+      b64Status.textContent = isLikelyB64 ? '⚡ 检测到 Base64 编码，可点击解码' : '';
+    }
+    updateB64Status();
+
+    // Base64 解码：将 textarea 中的 Base64 内容解码为可读文本
+    b64DecodeBtn.addEventListener('click', () => {
+      try {
+        const decoded = atob(textarea.value);
+        textarea.value = decoded;
+        b64Status.textContent = '✓ 已解码为文本';
+        setTimeout(() => updateB64Status(), 2000);
+      } catch {
+        b64Status.textContent = '✗ 无效的 Base64 内容';
+        setTimeout(() => updateB64Status(), 2000);
+      }
+    });
+
+    // 关闭弹窗：将弹窗内的值写回原字段
     function closePopup() {
       const fullVal = textarea.value;
-      // 替换原 input 为 textarea，使其能保存换行
-      const ta = document.createElement('textarea');
-      ta.className = field.className;
-      ta.rows = 1;
-      ta.value = fullVal;
-      for (const attr of field.attributes) {
-        if (attr.name !== 'class' && attr.name !== 'value' && attr.name !== 'style') {
-          ta.setAttribute(attr.name, attr.value);
-        }
-      }
-      ta.style.cssText = field.style.cssText;
-      field.parentNode!.replaceChild(ta, field);
+      field.value = fullVal;
       overlay.remove();
     }
     closeBtn.addEventListener('click', closePopup);
@@ -378,10 +413,12 @@ export function mount(): void {
     let s: string;
     if (typeof v === 'object') s = JSON.stringify(v);
     else s = String(v);
+    const hasNewline = s.indexOf('\n') !== -1;
+    const tdStyle = hasNewline ? ' style="white-space:pre-wrap;word-break:break-word"' : '';
     if (typeof v === 'number') {
       return '<td class="db-cell-num" title="' + escapeAttr(s) + '">' + esc(s) + '</td>';
     }
-    return '<td title="' + escapeAttr(s) + '">' + esc(s) + '</td>';
+    return '<td title="' + escapeAttr(s) + '"' + tdStyle + '>' + esc(s) + '</td>';
   }
 
   function switchTab(tab: string) {
@@ -786,13 +823,7 @@ export function mount(): void {
 
   insertSubmitBtn.onclick = async () => {
     if (!activeConnId || !activeTable) return;
-    const inputs = insertForm.querySelectorAll('[data-col]:not(:disabled)');
-    const values: any = {};
-    inputs.forEach((inp: any) => {
-      const col = inp.getAttribute('data-col');
-      const v = inp.value;
-      if (v !== '') values[col] = v;
-    });
+    const values = collectFieldValues(insertForm, true);
     if (Object.keys(values).length === 0) { toast('请至少填写一个字段', 'error'); return; }
     insertSubmitBtn.disabled = true; insertSubmitBtn.textContent = '插入中…';
     insertMeta.textContent = '';
@@ -803,7 +834,7 @@ export function mount(): void {
         headers: { 'Content-Type': 'application/json' },
       });
       toast('已插入' + (res.last_row_id ? '，ID=' + res.last_row_id : ''), 'success');
-      inputs.forEach((inp: any) => inp.value = '');
+      insertForm.querySelectorAll('[data-col]').forEach((inp: any) => inp.value = '');
       switchTab('data');
       loadData();
     } catch (e: any) {
@@ -875,14 +906,29 @@ export function mount(): void {
     }
   }
 
-  rowSaveBtn.onclick = async () => {
-    if (!rowEditingState) return;
-    const inputs = rowModalBody.querySelectorAll('[data-col]:not(:disabled)');
-    const set: any = {};
+  function collectFieldValues(container: HTMLElement, skipEmpty = false): Record<string, string> {
+    const values: Record<string, string> = {};
+    const inputs = container.querySelectorAll('[data-col]:not(:disabled)');
     inputs.forEach((inp: any) => {
       const col = inp.getAttribute('data-col');
-      set[col] = inp.value;
+      let val = inp.value;
+      if (skipEmpty && val === '') return;
+      // 检查同行的 Base64 checkbox
+      const wrap = inp.closest('.db-field-wrap');
+      if (wrap) {
+        const b64cb = wrap.querySelector('input[data-base64]') as HTMLInputElement;
+        if (b64cb && b64cb.checked) {
+          val = encodeBase64Field(val);
+        }
+      }
+      values[col] = val;
     });
+    return values;
+  }
+
+  rowSaveBtn.onclick = async () => {
+    if (!rowEditingState) return;
+    const set = collectFieldValues(rowModalBody);
     if (Object.keys(set).length === 0) { toast('请至少填写一个字段', 'error'); return; }
     rowSaveBtn.disabled = true; rowSaveBtn.textContent = '保存中…';
     rowModalMeta.textContent = '';
