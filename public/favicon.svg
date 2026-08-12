@@ -1,19 +1,21 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
   <defs>
-    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0" stop-color="#1e293b"/>
-      <stop offset="1" stop-color="#0f172a"/>
+    <linearGradient id="kbBg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#0b1020"/>
+      <stop offset="0.6" stop-color="#1e1b4b"/>
+      <stop offset="1" stop-color="#312e81"/>
     </linearGradient>
-    <linearGradient id="line" x1="0" y1="0" x2="1" y2="0">
-      <stop offset="0" stop-color="#818cf8"/>
-      <stop offset="1" stop-color="#6366f1"/>
+    <radialGradient id="kbHi" cx="0.3" cy="0.22" r="0.9">
+      <stop offset="0" stop-color="#ffffff" stop-opacity="0.22"/>
+      <stop offset="0.6" stop-color="#ffffff" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="kbK" gradientUnits="userSpaceOnUse" x1="6" y1="4" x2="27" y2="28">
+      <stop offset="0" stop-color="#c4b5fd"/>
+      <stop offset="0.5" stop-color="#818cf8"/>
+      <stop offset="1" stop-color="#38bdf8"/>
     </linearGradient>
   </defs>
-  <rect width="32" height="32" rx="8" fill="url(#bg)"/>
-  <rect x="0.5" y="0.5" width="31" height="31" rx="7.5" fill="none" stroke="#ffffff" stroke-opacity="0.06" stroke-width="1"/>
-  <rect x="8" y="9" width="16" height="3" rx="1.5" fill="url(#line)"/>
-  <rect x="8" y="14.5" width="11" height="3" rx="1.5" fill="url(#line)" opacity="0.7"/>
-  <rect x="8" y="20" width="14" height="3" rx="1.5" fill="url(#line)" opacity="0.5"/>
-  <circle cx="23" cy="15.5" r="2.4" fill="#6366f1"/>
-  <circle cx="23" cy="15.5" r="1" fill="#fff" fill-opacity="0.85"/>
+  <rect width="32" height="32" rx="7.5" fill="url(#kbBg)"/>
+  <rect width="32" height="32" rx="7.5" fill="url(#kbHi)"/>
+  <path transform="translate(-0.5,0)" d="M 6,4 L 11,4 L 11,11 L 27,4 L 27,9 L 11,16 L 27,23 L 27,28 L 11,21 L 11,28 L 6,28 Z" fill="url(#kbK)" stroke="url(#kbK)" stroke-width="1.4" stroke-linejoin="round"/>
 </svg>
