@@ -306,10 +306,16 @@ export function mount(): void {
   function decodeBase64Field(s: string): string {
     if (!isBase64Str(s)) return s;
     const bin = atob(s.slice(4));
-    try { return decodeURIComponent(escape(bin)); } catch { return bin; }
+    const bytes = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+    try { return new TextDecoder('utf-8').decode(bytes); } catch { return bin; }
   }
   function encodeBase64Field(s: string): string {
-    return 'b64:' + btoa(unescape(encodeURIComponent(s)));
+    const encoder = new TextEncoder();
+    const bytes = encoder.encode(s);
+    let binary = '';
+    for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
+    return 'b64:' + btoa(binary);
   }
 
   function renderDbField(col: any, value: string, placeholder: string, disabled: boolean): string {
@@ -380,12 +386,17 @@ export function mount(): void {
     // Base64 解码：将 textarea 中的 Base64 内容解码为可读文本
     b64DecodeBtn.addEventListener('click', () => {
       try {
-        const decoded = atob(textarea.value);
+        const binaryString = atob(textarea.value.trim());
+        const bytes = new Uint8Array(binaryString.length);
+        for (let i = 0; i < binaryString.length; i++) {
+          bytes[i] = binaryString.charCodeAt(i);
+        }
+        const decoded = new TextDecoder('utf-8').decode(bytes);
         textarea.value = decoded;
         b64Status.textContent = '✓ 已解码为文本';
         setTimeout(() => updateB64Status(), 2000);
       } catch {
-        b64Status.textContent = '✗ 无效的 Base64 内容';
+        b64Status.textContent = '✗ 无效的 Base64 内容或解码失败';
         setTimeout(() => updateB64Status(), 2000);
       }
     });
