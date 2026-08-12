@@ -93,7 +93,7 @@ export function render(): string {
         <div id="dbInsertForm"></div>
         <div style="margin-top:12px;display:flex;gap:8px">
           <button class="btn btn-primary btn-sm" id="dbInsertSubmitBtn">插入</button>
-          <button class="btn btn-outline btn-sm" id="dbInsertSubmitB64Btn" title="将所有值 Base64 编码后插入">插入为 B64</button>
+          <button class="btn btn-outline btn-sm" id="dbInsertSubmitB64Btn" style="display:none" title="将 value 字段 Base64 编码后插入">插入为 B64</button>
           <span class="db-meta" id="dbInsertMeta"></span>
         </div>
       </div>
@@ -146,7 +146,7 @@ export function render(): string {
       <span class="db-meta" id="dbRowModalMeta" style="margin-right:auto"></span>
       <button class="btn btn-outline" onclick="closeDbRowModal()">取消</button>
       <button class="btn btn-primary" id="dbRowSaveBtn">保存</button>
-      <button class="btn btn-outline" id="dbRowSaveB64Btn" title="将所有值 Base64 编码后保存">保存为 B64</button>
+      <button class="btn btn-outline" id="dbRowSaveB64Btn" style="display:none" title="将 value 字段 Base64 编码后保存">保存为 B64</button>
     </div>
   </div>
 </div>
@@ -792,6 +792,17 @@ export function mount(): void {
   });
 
   // ─── 新建项 ───
+  // 判断 schema 中是否存在名为 'value' 的字段，控制 B64 按钮显示
+  function hasValueColumn(): boolean {
+    const cols = schemaCache?.columns || [];
+    return cols.some((c: any) => c.name === 'value');
+  }
+  function updateB64ButtonVisibility() {
+    const show = hasValueColumn();
+    insertSubmitB64Btn.style.display = show ? '' : 'none';
+    rowSaveB64Btn.style.display = show ? '' : 'none';
+  }
+
   async function loadInsertForm() {
     if (!activeConnId || !activeTable) return;
     insertForm.innerHTML = '<div class="db-empty-hint">加载字段中…</div>';
@@ -801,6 +812,7 @@ export function mount(): void {
         schemaCache = { ...data, _table: activeTable };
       }
       const cols = schemaCache.columns || [];
+      updateB64ButtonVisibility();
       if (cols.length === 0) {
         insertForm.innerHTML = '<div class="db-empty-hint">无字段信息</div>';
         return;
@@ -818,11 +830,12 @@ export function mount(): void {
     }
   }
 
-  async function handleInsertSubmit(encodeB64: boolean) {
+  async function handleInsertSubmit(asB64: boolean) {
     if (!activeConnId || !activeTable) return;
-    const values = collectFieldValues(insertForm, true, encodeB64);
+    const b64Col = asB64 ? 'value' : '';
+    const values = collectFieldValues(insertForm, true, b64Col);
     if (Object.keys(values).length === 0) { toast('请至少填写一个字段', 'error'); return; }
-    const btn = encodeB64 ? insertSubmitB64Btn : insertSubmitBtn;
+    const btn = asB64 ? insertSubmitB64Btn : insertSubmitBtn;
     btn.disabled = true; btn.textContent = '插入中…';
     insertMeta.textContent = '';
     try {
@@ -831,7 +844,7 @@ export function mount(): void {
         body: JSON.stringify({ values }),
         headers: { 'Content-Type': 'application/json' },
       });
-      toast(encodeB64 ? '已插入（B64 编码）' + (res.last_row_id ? '，ID=' + res.last_row_id : '') : '已插入' + (res.last_row_id ? '，ID=' + res.last_row_id : ''), 'success');
+      toast(asB64 ? '已插入（value 字段已 B64 编码）' + (res.last_row_id ? '，ID=' + res.last_row_id : '') : '已插入' + (res.last_row_id ? '，ID=' + res.last_row_id : ''), 'success');
       insertForm.querySelectorAll('textarea[data-col]').forEach((inp: any) => inp.value = '');
       switchTab('data');
       loadData();
@@ -840,7 +853,7 @@ export function mount(): void {
       insertMeta.textContent = '✗ ' + e.message;
       insertMeta.style.color = '#ef4444';
     } finally {
-      btn.disabled = false; btn.textContent = encodeB64 ? '插入为 B64' : '插入';
+      btn.disabled = false; btn.textContent = asB64 ? '插入为 B64' : '插入';
     }
   }
 
@@ -866,6 +879,7 @@ export function mount(): void {
         const sd = await api('/api/plugins/db-admin/connections/' + activeConnId + '/tables/' + encodeURIComponent(activeTable) + '/schema');
         schemaCache = { ...sd, _table: activeTable };
       }
+      updateB64ButtonVisibility();
       const params = new URLSearchParams(where);
       const data = await api('/api/plugins/db-admin/connections/' + activeConnId + '/tables/' + encodeURIComponent(activeTable) + '/row?' + params.toString());
       const row = data.row;
@@ -893,6 +907,7 @@ export function mount(): void {
         const sd = await api('/api/plugins/db-admin/connections/' + activeConnId + '/tables/' + encodeURIComponent(activeTable) + '/schema');
         schemaCache = { ...sd, _table: activeTable };
       }
+      updateB64ButtonVisibility();
       const cols = schemaCache.columns || [];
       rowModalBody.innerHTML = '<div class="db-form-grid">' + cols.map((c: any) => {
         const pkHint = c.pk ? '<span class="db-form-pk-hint">★ 主键</span>' : '';
@@ -907,14 +922,14 @@ export function mount(): void {
     }
   }
 
-  function collectFieldValues(container: HTMLElement, skipEmpty = false, encodeB64 = false): Record<string, string> {
+  function collectFieldValues(container: HTMLElement, skipEmpty = false, b64Col = ''): Record<string, string> {
     const values: Record<string, string> = {};
     const inputs = container.querySelectorAll('textarea[data-col]:not(:disabled)');
     inputs.forEach((inp: any) => {
       const col = inp.getAttribute('data-col');
       let val = inp.value;
       if (skipEmpty && val === '') return;
-      if (encodeB64) {
+      if (b64Col && col === b64Col) {
         val = encodeBase64Field(val);
       }
       values[col] = val;
@@ -922,11 +937,12 @@ export function mount(): void {
     return values;
   }
 
-  async function handleRowSave(encodeB64: boolean) {
+  async function handleRowSave(asB64: boolean) {
     if (!rowEditingState) return;
-    const set = collectFieldValues(rowModalBody, false, encodeB64);
+    const b64Col = asB64 ? 'value' : '';
+    const set = collectFieldValues(rowModalBody, false, b64Col);
     if (Object.keys(set).length === 0) { toast('请至少填写一个字段', 'error'); return; }
-    const btn = encodeB64 ? rowSaveB64Btn : rowSaveBtn;
+    const btn = asB64 ? rowSaveB64Btn : rowSaveBtn;
     btn.disabled = true; btn.textContent = '保存中…';
     rowModalMeta.textContent = '';
     try {
@@ -936,7 +952,7 @@ export function mount(): void {
           body: JSON.stringify({ set, where: rowEditingState.where }),
           headers: { 'Content-Type': 'application/json' },
         });
-        toast(encodeB64 ? '已保存（B64 编码）' : '已保存', 'success');
+        toast(asB64 ? '已保存（value 字段已 B64 编码）' : '已保存', 'success');
       } else {
         const values: any = {};
         Object.keys(set).forEach(k => { if (set[k] !== '') values[k] = set[k]; });
@@ -945,7 +961,7 @@ export function mount(): void {
           body: JSON.stringify({ values }),
           headers: { 'Content-Type': 'application/json' },
         });
-        toast(encodeB64 ? '已插入（B64 编码）' : '已插入', 'success');
+        toast(asB64 ? '已插入（value 字段已 B64 编码）' : '已插入', 'success');
       }
       closeDbRowModal();
       loadData();
@@ -954,7 +970,7 @@ export function mount(): void {
       rowModalMeta.textContent = '✗ ' + e.message;
       rowModalMeta.style.color = '#ef4444';
     } finally {
-      btn.disabled = false; btn.textContent = encodeB64 ? '保存为 B64' : '保存';
+      btn.disabled = false; btn.textContent = asB64 ? '保存为 B64' : '保存';
     }
   }
 
