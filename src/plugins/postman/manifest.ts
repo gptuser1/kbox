@@ -8,6 +8,6 @@ export const manifest: PluginManifest = {
   version: '1.0.0',
   entry: {
     frontend: 'postman',
-    // 无 backend：请求由浏览器本地 fetch 直接发出，不经过 worker
+    backend: '/api/plugins/postman',
   },
 };

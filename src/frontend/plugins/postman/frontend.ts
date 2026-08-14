@@ -1,8 +1,8 @@
 // 插件：轻量 Postman
 // 独立模块，由 shell 在点击时动态 import('/js/plugins/postman.js') 加载。
-// 请求由浏览器本地 fetch 直接发出，不经过 worker 后端。
+// 请求经 kbox worker 后端转发（/api/plugins/postman/request），绕开浏览器 CORS 限制。
 // 支持自定义请求头（如 Bearer token）、请求体与多种请求方法。
-import { $, esc, toast } from '../../shared.js';
+import { $, esc, toast, api } from '../../shared.js';
 import type { FrontendPlugin } from '../../shared.js';
 
 export function render(id?: string): string {
@@ -27,7 +27,7 @@ export function render(id?: string): string {
     <div class="form-group">
       <label>请求头（每行一个：Key: Value）</label>
       <textarea id="pmHeaders" class="sql-editor" rows="4" placeholder="Authorization: Bearer xxx&#10;Content-Type: application/json" autocorrect="off" spellcheck="false" autocapitalize="off"></textarea>
-      <div style="font-size:12px;color:var(--text-muted);margin-top:4px">示例：<code>Authorization: Bearer &lt;token&gt;</code>、<code>X-Custom: foo</code>。跨域自定义头会触发浏览器 CORS 预检。</div>
+      <div style="font-size:12px;color:var(--text-muted);margin-top:4px">示例：<code>Authorization: Bearer &lt;token&gt;</code>、<code>X-Custom: foo</code>。请求经 worker 转发，不受浏览器 CORS 限制。</div>
     </div>
     <div class="form-group">
       <label>请求体（仅 POST/PUT/PATCH）</label>
@@ -89,58 +89,59 @@ async function runRequest(): Promise<void> {
   const headers = parseHeaders(headersText);
   const hasBody = method === 'POST' || method === 'PUT' || method === 'PATCH';
   const hasBodyContent = bodyText.trim() !== '';
+  // 未显式指定 Content-Type 且 body 是 JSON 时自动补一个（便于服务端解析）
+  if (hasBody && hasBodyContent && !headers['Content-Type'] && /^\s*[\[{]/.test(bodyText)) {
+    headers['Content-Type'] = 'application/json';
+  }
 
   resultBox.classList.add('show');
   resultBox.innerHTML = '<div class="empty">发送中…</div>';
 
   const started = Date.now();
   try {
-    const init: RequestInit = { method, headers };
-    if (hasBody && hasBodyContent) {
-      init.body = bodyText;
-      // 未显式指定 Content-Type 且 body 是 JSON 时自动补一个（便于服务端解析）
-      if (!headers['Content-Type'] && /^\s*[\[{]/.test(bodyText)) {
-        (headers as any)['Content-Type'] = 'application/json';
-      }
-    }
-    const res = await fetch(url, init);
+    const data = await api('/api/plugins/postman/request', {
+      method: 'POST',
+      body: JSON.stringify({
+        method,
+        url,
+        headers,
+        body: hasBody && hasBodyContent ? bodyText : '',
+      }),
+      headers: { 'Content-Type': 'application/json' },
+    });
     const elapsed = Date.now() - started;
-    const resHeaders: Record<string, string> = {};
-    res.headers.forEach((value, key) => { resHeaders[key] = value; });
 
-    let body = '';
-    try { body = await res.text(); } catch { /* CORS 限制无法读取 body */ }
-
-    const statusColor = res.ok ? 'var(--text)' : '#ef4444';
+    const statusColor = data.status >= 200 && data.status < 300 ? 'var(--text)' : '#ef4444';
     let html = '<div class="section-title">响应</div>';
     html += '<div style="display:flex;gap:12px;align-items:center;margin-bottom:10px">';
-    html += '<span style="font-size:18px;font-weight:700;color:' + statusColor + '">' + res.status + ' ' + esc(res.statusText) + '</span>';
+    html += '<span style="font-size:18px;font-weight:700;color:' + statusColor + '">' + data.status + ' ' + esc(data.statusText || '') + '</span>';
     html += '<span style="font-size:12px;color:var(--text-muted)">' + elapsed + ' ms</span>';
     html += '</div>';
 
-    const headerKeys = Object.keys(resHeaders);
+    const headerKeys = Object.keys(data.headers || {});
     html += '<div class="section-title">响应头</div>';
     if (headerKeys.length > 0) {
       html += '<div class="sql-editor" style="white-space:pre-wrap;word-break:break-all;min-height:60px;cursor:default">' +
-        esc(headerKeys.map(k => k + ': ' + resHeaders[k]).join('\n')) + '</div>';
+        esc(headerKeys.map(k => k + ': ' + data.headers[k]).join('\n')) + '</div>';
     } else {
-      html += '<div class="empty">（无响应头 / 受 CORS 限制）</div>';
+      html += '<div class="empty">（无响应头）</div>';
     }
 
     html += '<div class="section-title">响应体</div>';
-    if (body) {
-      html += '<div class="sql-editor" style="white-space:pre-wrap;word-break:break-all;min-height:120px;cursor:default">' + esc(formatBody(body)) + '</div>';
+    if (data.body) {
+      html += '<div class="sql-editor" style="white-space:pre-wrap;word-break:break-all;min-height:120px;cursor:default">' + esc(formatBody(data.body)) + '</div>';
     } else {
-      html += '<div class="empty">（无响应体 或 受 CORS 限制无法读取）</div>';
+      html += '<div class="empty">（无响应体）</div>';
     }
 
     resultBox.innerHTML = html;
   } catch (e: any) {
+    if (e.message === 'UNAUTHORIZED') return;
     const elapsed = Date.now() - started;
     resultBox.innerHTML = '<div class="section-title">响应</div>' +
       '<div style="color:#ef4444;font-size:14px;margin-bottom:8px">请求失败（' + elapsed + ' ms）</div>' +
       '<div class="sql-editor" style="white-space:pre-wrap;word-break:break-all;min-height:60px;cursor:default;color:#ef4444">' +
-      esc(e instanceof TypeError ? '网络错误或 CORS 拦截：' + e.message : e.message) + '</div>';
+      esc(e.message) + '</div>';
   }
 }
 

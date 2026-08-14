@@ -12,6 +12,7 @@ import sysMonitorPlugin from './plugins/sys-monitor/backend';
 import cronPlugin, { runCronTasks } from './plugins/cron/backend';
 import configPlugin from './plugins/config/backend';
 import ghDispatchPlugin from './plugins/gh-dispatch/backend';
+import postmanPlugin from './plugins/postman/backend';
 import shareRoutes from './plugins/share/backend';
 import preferencesRoutes from './plugins/preferences/backend';
 
@@ -57,6 +58,7 @@ registerPlugin(sysMonitorPlugin);
 registerPlugin(cronPlugin);
 registerPlugin(configPlugin);
 registerPlugin(ghDispatchPlugin);
+registerPlugin(postmanPlugin);
 mountPlugins(app);
 
 // ─── 非插件路由（无前端入口） ───
