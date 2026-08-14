@@ -25,9 +25,9 @@ export function render(id?: string): string {
       </div>
     </div>
     <div class="form-group">
-      <label>请求头（每行一个：Key: Value）</label>
-      <textarea id="pmHeaders" class="sql-editor" rows="4" placeholder="Authorization: Bearer xxx&#10;Content-Type: application/json" autocorrect="off" spellcheck="false" autocapitalize="off"></textarea>
-      <div style="font-size:12px;color:var(--text-muted);margin-top:4px">示例：<code>Authorization: Bearer &lt;token&gt;</code>、<code>X-Custom: foo</code>。请求经 worker 转发，不受浏览器 CORS 限制。</div>
+      <label>请求头</label>
+      <div id="pmHeaderRows"></div>
+      <button class="btn btn-outline btn-sm" id="pmAddHeader" type="button">+ 增加一行</button>
     </div>
     <div class="form-group">
       <label>请求体（仅 POST/PUT/PATCH）</label>
@@ -38,6 +38,11 @@ export function render(id?: string): string {
 }
 
 export function mount(id?: string): void {
+  // 请求头：默认一行，点击 + 增加一行
+  addHeaderRow();
+  const addBtn = $('pmAddHeader');
+  if (addBtn) addBtn.onclick = () => addHeaderRow();
+
   const sendBtn = $('pmSend');
   if (!sendBtn) return;
   sendBtn.onclick = () => runRequest();
@@ -50,18 +55,44 @@ export function mount(id?: string): void {
   }
 }
 
-// 解析请求头文本（每行 Key: Value），忽略空行与 # 注释
-function parseHeaders(text: string): Record<string, string> {
+// 新增一行请求头（左 K 右 V 两个输入框）
+function addHeaderRow(k?: string, v?: string): void {
+  const rows = $('pmHeaderRows');
+  if (!rows) return;
+  const row = document.createElement('div');
+  row.className = 'pm-header-row';
+  row.style.cssText = 'display:flex;gap:8px;margin-bottom:6px';
+  const keyInput = document.createElement('input');
+  keyInput.type = 'text';
+  keyInput.placeholder = 'Key';
+  keyInput.value = k || '';
+  keyInput.style.cssText = 'flex:1;min-width:0';
+  keyInput.autocomplete = 'off';
+  keyInput.spellcheck = false;
+  const valInput = document.createElement('input');
+  valInput.type = 'text';
+  valInput.placeholder = 'Value';
+  valInput.value = v || '';
+  valInput.style.cssText = 'flex:1;min-width:0';
+  valInput.autocomplete = 'off';
+  valInput.spellcheck = false;
+  row.appendChild(keyInput);
+  row.appendChild(valInput);
+  rows.appendChild(row);
+}
+
+// 从输入行收集请求头（忽略 Key 或 Value 为空的）
+function collectHeaders(): Record<string, string> {
+  const rows = $('pmHeaderRows');
   const headers: Record<string, string> = {};
-  for (const rawLine of text.split('\n')) {
-    const line = rawLine.trim();
-    if (!line || line.startsWith('#')) continue;
-    const idx = line.indexOf(':');
-    if (idx <= 0) continue;
-    const key = line.slice(0, idx).trim();
-    const value = line.slice(idx + 1).trim();
-    if (key) headers[key] = value;
-  }
+  if (!rows) return headers;
+  rows.querySelectorAll('.pm-header-row').forEach(row => {
+    const inputs = row.querySelectorAll('input');
+    if (inputs.length < 2) return;
+    const k = (inputs[0] as HTMLInputElement).value.trim();
+    const v = (inputs[1] as HTMLInputElement).value.trim();
+    if (k && v) headers[k] = v;
+  });
   return headers;
 }
 
@@ -78,7 +109,6 @@ function formatBody(text: string): string {
 async function runRequest(): Promise<void> {
   const url = (($('pmUrl') as HTMLInputElement)?.value || '').trim();
   const method = (($('pmMethod') as HTMLSelectElement)?.value || 'GET') as string;
-  const headersText = (($('pmHeaders') as HTMLTextAreaElement)?.value || '');
   const bodyText = (($('pmBody') as HTMLTextAreaElement)?.value || '');
 
   const resultBox = $('pmResult');
@@ -86,7 +116,7 @@ async function runRequest(): Promise<void> {
 
   if (!url) { toast('请输入 URL', 'error'); return; }
 
-  const headers = parseHeaders(headersText);
+  const headers = collectHeaders();
   const hasBody = method === 'POST' || method === 'PUT' || method === 'PATCH';
   const hasBodyContent = bodyText.trim() !== '';
   // 未显式指定 Content-Type 且 body 是 JSON 时自动补一个（便于服务端解析）
