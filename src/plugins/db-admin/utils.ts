@@ -1,4 +1,4 @@
-import { DbError } from '../../abstraction/d1';
+import { DbError, SOURCE_HEADER } from '../../abstraction/d1';
 import { createKv } from '../../services/kv';
 
 export type Bindings = {
@@ -75,6 +75,7 @@ export async function callD1Rest(
     headers: {
       'Authorization': `Bearer ${env.D1_API_TOKEN}`,
       'Content-Type': 'application/json',
+      [SOURCE_HEADER]: 'default',
     },
     body: JSON.stringify({ query, params }),
   });

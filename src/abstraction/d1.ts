@@ -1,13 +1,13 @@
 const DEFAULT_API_BASE = 'https://ocean.klinux.dpdns.org';
 const FETCH_TIMEOUT = 15000;
 
-// kbox 定时任务（cron job）发起的子请求标记头，用于在 Cloudflare 可观测日志中区分请求来源
-export const CRON_REQUEST_HEADER = 'X-Kbox-Cron';
-export const CRON_REQUEST_HEADERS = { [CRON_REQUEST_HEADER]: '1' };
+// D1 出站子请求的来源标记头，用于在 Cloudflare 可观测日志中区分请求来源
+export const SOURCE_HEADER = 'X-Kbox-Source';
+export type OutboundSource = 'cron' | 'monitor' | 'default';
 
-// kbox 系统监控定时上报（sys-monitor /report）发起的子请求标记头
-export const MONITOR_REQUEST_HEADER = 'X-Kbox-Monitor';
-export const MONITOR_REQUEST_HEADERS = { [MONITOR_REQUEST_HEADER]: '1' };
+function sourceHeaders(source: OutboundSource): Record<string, string> {
+  return { [SOURCE_HEADER]: source };
+}
 
 interface D1Response {
   success: boolean;
@@ -81,11 +81,12 @@ async function request<T>(
   }
 }
 
-export function createDb(token: string, base?: string, extraHeaders?: Record<string, string>) {
+export function createDb(token: string, base?: string, source: OutboundSource = 'default') {
   const apiBase = base || DEFAULT_API_BASE;
+  const marker = sourceHeaders(source);
 
   const req = <T>(url: string, options: RequestInit = {}) =>
-    request<T>(token, apiBase, url, options, extraHeaders);
+    request<T>(token, apiBase, url, options, marker);
 
   return {
     // 执行任意SQL（支持参数化）

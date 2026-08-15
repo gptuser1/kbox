@@ -1,4 +1,4 @@
-import { createDb, DbError } from '../abstraction/d1';
+import { createDb, DbError, type OutboundSource } from '../abstraction/d1';
 
 // 表结构：namespace + key 联合主键，value 存 JSON 字符串
 
@@ -10,12 +10,12 @@ function connKey(token: string, base?: string): string {
   return token + '|' + (base || '');
 }
 
-async function ensureKvTable(token: string, base?: string, extraHeaders?: Record<string, string>): Promise<boolean> {
+async function ensureKvTable(token: string, base?: string, source?: OutboundSource): Promise<boolean> {
   const ck = connKey(token, base);
   if (kvTableReady.get(ck)) return true;
   if (kvTableError.has(ck)) return false;
 
-  const db = createDb(token, base, extraHeaders);
+  const db = createDb(token, base, source);
   try {
     await db.query(`CREATE TABLE IF NOT EXISTS kbox_kv (
       namespace TEXT NOT NULL,
@@ -40,12 +40,12 @@ export function _resetKvState() {
   kvTableError.clear();
 }
 
-export function createKv(token: string, base?: string, extraHeaders?: Record<string, string>) {
+export function createKv(token: string, base?: string, source: OutboundSource = 'default') {
   const apiBase = base;
   const ck = connKey(token, base);
 
   async function ensure(): Promise<boolean> {
-    return ensureKvTable(token, apiBase, extraHeaders);
+    return ensureKvTable(token, apiBase, source);
   }
 
   // 返回该连接的建表错误（无错误或未尝试返回 null）
@@ -60,7 +60,7 @@ export function createKv(token: string, base?: string, extraHeaders?: Record<str
     // ─── 读单条（原始值，无 JSON 解析）───
     async get(namespace: string, key: string): Promise<string | null> {
       if (!await ensure()) throw new Error(error() || 'KV 表未就绪');
-      const db = createDb(token, apiBase, extraHeaders);
+      const db = createDb(token, apiBase, source);
       const row = await db.queryOne<{ value: string }>(
         `SELECT value FROM kbox_kv WHERE namespace = ? AND key = ?`,
         [namespace, key]
@@ -83,7 +83,7 @@ export function createKv(token: string, base?: string, extraHeaders?: Record<str
     // ─── 读多条（按 namespace） ───
     async list<T = any>(namespace: string, keyPrefix?: string): Promise<Array<{ key: string; value: T }>> {
       if (!await ensure()) throw new Error(error() || 'KV 表未就绪');
-      const db = createDb(token, apiBase, extraHeaders);
+      const db = createDb(token, apiBase, source);
       let rows: Array<{ key: string; value: string }>;
       if (keyPrefix) {
         // 前缀匹配
@@ -107,7 +107,7 @@ export function createKv(token: string, base?: string, extraHeaders?: Record<str
     // ─── 写（upsert） ───
     async set<T = any>(namespace: string, key: string, value: T): Promise<void> {
       if (!await ensure()) throw new Error(error() || 'KV 表未就绪');
-      const db = createDb(token, apiBase, extraHeaders);
+      const db = createDb(token, apiBase, source);
       const jsonStr = JSON.stringify(value);
       await db.execute(
         `INSERT INTO kbox_kv (namespace, key, value, updated_at)
@@ -120,7 +120,7 @@ export function createKv(token: string, base?: string, extraHeaders?: Record<str
     // ─── 删单条 ───
     async delete(namespace: string, key: string): Promise<void> {
       if (!await ensure()) throw new Error(error() || 'KV 表未就绪');
-      const db = createDb(token, apiBase, extraHeaders);
+      const db = createDb(token, apiBase, source);
       await db.execute(
         `DELETE FROM kbox_kv WHERE namespace = ? AND key = ?`,
         [namespace, key]
@@ -130,7 +130,7 @@ export function createKv(token: string, base?: string, extraHeaders?: Record<str
     // ─── 删整个 namespace（或带前缀的子集） ───
     async clear(namespace: string, keyPrefix?: string): Promise<void> {
       if (!await ensure()) throw new Error(error() || 'KV 表未就绪');
-      const db = createDb(token, apiBase, extraHeaders);
+      const db = createDb(token, apiBase, source);
       if (keyPrefix) {
         await db.execute(
           `DELETE FROM kbox_kv WHERE namespace = ? AND key LIKE ?`,

@@ -1,7 +1,6 @@
 import { Hono } from 'hono';
 import { createKv } from '../../services/kv';
 import { getConfig } from '../../services/config';
-import { MONITOR_REQUEST_HEADERS } from '../../abstraction/d1';
 
 type Bindings = {
   D1_API_TOKEN: string;
@@ -90,7 +89,7 @@ interface HostRecord {
 const app = new Hono<{ Bindings: Bindings; Variables: Variables }>();
 
 function kv(c: any) {
-  return createKv(c.env.D1_API_TOKEN, c.env.D1_API_BASE, MONITOR_REQUEST_HEADERS);
+  return createKv(c.env.D1_API_TOKEN, c.env.D1_API_BASE, 'monitor');
 }
 
 function nowMs(): number {

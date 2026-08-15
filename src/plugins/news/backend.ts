@@ -1,7 +1,7 @@
 import { Hono } from 'hono';
 import type { BackendPlugin } from '../../adaptation/types';
 import { manifest } from './manifest';
-import { createDb, DbError } from '../../abstraction/d1';
+import { createDb, DbError, type OutboundSource } from '../../abstraction/d1';
 import { createKv } from '../../services/kv';
 import { crawlAll } from './crawler';
 import { summarizeArticles, extractKeywordsViaLLM, dedupeArticlesByLLM, type KeywordStat } from './llm';
@@ -28,11 +28,11 @@ const KEYWORDS_KEY = 'latest';
 let tableReady = false;
 let tableInitError: string | null = null;
 
-async function ensureTable(token: string, base?: string, extraHeaders?: Record<string, string>): Promise<boolean> {
+async function ensureTable(token: string, base?: string, source: OutboundSource = 'default'): Promise<boolean> {
   if (tableReady) return true;
   if (tableInitError) return false;
 
-  const db = createDb(token, base, extraHeaders);
+  const db = createDb(token, base, source);
   try {
     await db.query(`CREATE TABLE IF NOT EXISTS newsfeed (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -70,11 +70,11 @@ function nowUnix(): number {
 }
 
 // ─── 抓取 + AI 锐评 + 入库 ───
-export async function runCron(env: any, extraHeaders?: Record<string, string>): Promise<{ success: boolean; articles_count: number; error?: string }> {
-  if (!await ensureTable(env.D1_API_TOKEN, env.D1_API_BASE, extraHeaders)) {
+export async function runCron(env: any, source: OutboundSource = 'default'): Promise<{ success: boolean; articles_count: number; error?: string }> {
+  if (!await ensureTable(env.D1_API_TOKEN, env.D1_API_BASE, source)) {
     return { success: false, articles_count: 0, error: tableInitError || '建表失败' };
   }
-  const db = createDb(env.D1_API_TOKEN, env.D1_API_BASE, extraHeaders);
+  const db = createDb(env.D1_API_TOKEN, env.D1_API_BASE, source);
 
   try {
     const now = nowUnix();
