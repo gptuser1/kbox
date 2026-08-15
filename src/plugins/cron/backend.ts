@@ -1,5 +1,6 @@
 import { Hono } from 'hono';
 import { createKv } from '../../services/kv';
+import { CRON_REQUEST_HEADERS } from '../../abstraction/d1';
 import { runCron as runNewsCrawl } from '../news/backend';
 import type { BackendPlugin } from '../../adaptation/types';
 import { manifest } from './manifest';
@@ -49,7 +50,7 @@ export function normalizeHours(input: any): number[] {
 
 // cron 调度入口：每小时触发一次，按当前小时匹配任务的 hours 字段
 export async function runCronTasks(env: any): Promise<{ ran: number; skipped: number; errors: number }> {
-  const kv = createKv(env.D1_API_TOKEN, env.D1_API_BASE);
+  const kv = createKv(env.D1_API_TOKEN, env.D1_API_BASE, CRON_REQUEST_HEADERS);
   const result = { ran: 0, skipped: 0, errors: 0 };
 
   let items: Array<{ key: string; value: CronTask }>;
@@ -80,7 +81,7 @@ export async function runCronTasks(env: any): Promise<{ ran: number; skipped: nu
     }
 
     try {
-      const status = await runTask(env, task);
+      const status = await runTask(env, task, CRON_REQUEST_HEADERS);
       task.lastRunAt = nowUnix();
       task.lastStatus = status.ok ? 'ok' : 'error';
       task.lastError = status.error;
@@ -98,12 +99,12 @@ export async function runCronTasks(env: any): Promise<{ ran: number; skipped: nu
   return result;
 }
 
-async function runTask(env: any, task: CronTask): Promise<{ ok: boolean; error?: string }> {
+async function runTask(env: any, task: CronTask, extraHeaders?: Record<string, string>): Promise<{ ok: boolean; error?: string }> {
   try {
     if (!task.action) return { ok: false, error: '任务缺少 action' };
     switch (task.action) {
       case 'news_crawl': {
-        const r = await runNewsCrawl(env);
+        const r = await runNewsCrawl(env, extraHeaders);
         return { ok: r.success, error: r.error };
       }
       default:

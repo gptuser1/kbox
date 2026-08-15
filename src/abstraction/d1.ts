@@ -1,6 +1,10 @@
 const DEFAULT_API_BASE = 'https://ocean.klinux.dpdns.org';
 const FETCH_TIMEOUT = 15000;
 
+// kbox 定时任务（cron job）发起的子请求标记头，用于在 Cloudflare 可观测日志中区分请求来源
+export const CRON_REQUEST_HEADER = 'X-Kbox-Cron';
+export const CRON_REQUEST_HEADERS = { [CRON_REQUEST_HEADER]: '1' };
+
 interface D1Response {
   success: boolean;
   meta?: { served_by: string; changes?: number; duration: number };
@@ -30,7 +34,8 @@ async function request<T>(
   token: string,
   base: string,
   url: string,
-  options: RequestInit = {}
+  options: RequestInit = {},
+  extraHeaders?: Record<string, string>,
 ): Promise<T> {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), FETCH_TIMEOUT);
@@ -40,7 +45,7 @@ async function request<T>(
     const res = await fetch(fullUrl, {
       ...options,
       signal: controller.signal,
-      headers: { ...headers(token), ...(options.headers as Record<string, string> || {}) },
+      headers: { ...headers(token), ...(extraHeaders || {}), ...(options.headers as Record<string, string> || {}) },
     });
 
     const data = await res.json() as T & { error?: string };
@@ -72,13 +77,16 @@ async function request<T>(
   }
 }
 
-export function createDb(token: string, base?: string) {
+export function createDb(token: string, base?: string, extraHeaders?: Record<string, string>) {
   const apiBase = base || DEFAULT_API_BASE;
+
+  const req = <T>(url: string, options: RequestInit = {}) =>
+    request<T>(token, apiBase, url, options, extraHeaders);
 
   return {
     // 执行任意SQL（支持参数化）
     async query(sql: string, params: any[] = []): Promise<D1Response> {
-      return request<D1Response>(token, apiBase, '/query', {
+      return req<D1Response>('/query', {
         method: 'POST',
         body: JSON.stringify({ query: sql, params }),
       });
@@ -86,7 +94,7 @@ export function createDb(token: string, base?: string) {
 
     // 查询并返回结果数组
     async queryAll<T = any>(sql: string, params: any[] = []): Promise<T[]> {
-      const data = await request<D1Response>(token, apiBase, '/query', {
+      const data = await req<D1Response>('/query', {
         method: 'POST',
         body: JSON.stringify({ query: sql, params }),
       });
@@ -101,7 +109,7 @@ export function createDb(token: string, base?: string) {
 
     // 执行写操作并返回影响行数
     async execute(sql: string, params: any[] = []): Promise<{ changes: number }> {
-      const data = await request<D1Response>(token, apiBase, '/query', {
+      const data = await req<D1Response>('/query', {
         method: 'POST',
         body: JSON.stringify({ query: sql, params }),
       });

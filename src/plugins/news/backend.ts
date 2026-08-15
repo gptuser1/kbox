@@ -28,11 +28,11 @@ const KEYWORDS_KEY = 'latest';
 let tableReady = false;
 let tableInitError: string | null = null;
 
-async function ensureTable(token: string, base?: string): Promise<boolean> {
+async function ensureTable(token: string, base?: string, extraHeaders?: Record<string, string>): Promise<boolean> {
   if (tableReady) return true;
   if (tableInitError) return false;
 
-  const db = createDb(token, base);
+  const db = createDb(token, base, extraHeaders);
   try {
     await db.query(`CREATE TABLE IF NOT EXISTS newsfeed (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -70,11 +70,11 @@ function nowUnix(): number {
 }
 
 // ─── 抓取 + AI 锐评 + 入库 ───
-export async function runCron(env: any): Promise<{ success: boolean; articles_count: number; error?: string }> {
-  if (!await ensureTable(env.D1_API_TOKEN, env.D1_API_BASE)) {
+export async function runCron(env: any, extraHeaders?: Record<string, string>): Promise<{ success: boolean; articles_count: number; error?: string }> {
+  if (!await ensureTable(env.D1_API_TOKEN, env.D1_API_BASE, extraHeaders)) {
     return { success: false, articles_count: 0, error: tableInitError || '建表失败' };
   }
-  const db = createDb(env.D1_API_TOKEN, env.D1_API_BASE);
+  const db = createDb(env.D1_API_TOKEN, env.D1_API_BASE, extraHeaders);
 
   try {
     const now = nowUnix();
