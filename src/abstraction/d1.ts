@@ -5,6 +5,10 @@ const FETCH_TIMEOUT = 15000;
 export const CRON_REQUEST_HEADER = 'X-Kbox-Cron';
 export const CRON_REQUEST_HEADERS = { [CRON_REQUEST_HEADER]: '1' };
 
+// kbox 系统监控定时上报（sys-monitor /report）发起的子请求标记头
+export const MONITOR_REQUEST_HEADER = 'X-Kbox-Monitor';
+export const MONITOR_REQUEST_HEADERS = { [MONITOR_REQUEST_HEADER]: '1' };
+
 interface D1Response {
   success: boolean;
   meta?: { served_by: string; changes?: number; duration: number };
