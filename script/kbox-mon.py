@@ -13,6 +13,8 @@ kbox-mon.py - 系统状态上报客户端（Linux）
   - category 可选：展示的分类卡片（CPU/内存/磁盘/负载/网络/系统 等），缺省放「自定义」
   - 每项字段：label 数据名(必填)、type 类型(必填，percent/bytes/kb/mb/number/float/string/temp)、
     value 值(必填)、unit 单位、warn/crit 告警阈值、summary 是否上列表页摘要（可选）
+  - warn/crit 正值表示「越高越差」（value>=阈值触发，如 CPU 使用率）；负值表示「越低越差」
+    （value<=绝对值触发，如电量 "warn":-60,"crit":-20 表示低于 60 告警、低于 20 严重）
   - type=percent/temp 显示比例条；number/float 等数字类型有历史趋势图
   - 结构不符的 JSON 会被忽略（不解析为指标，也不作附件）
 --extra 仅作附件展示（任意字符串，只保留最新值）。

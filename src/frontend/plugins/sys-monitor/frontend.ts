@@ -462,7 +462,14 @@ function renderHistory(history: HistoryPoint[], customSchema?: HostDetail['custo
 }
 
 // ─── 工具函数 ───
+// 阈值颜色：正值表示「越高越差」（value>=阈值触发，如 CPU/内存使用率），
+// 负值表示「越低越差」（value<=阈值绝对值触发，如电量 warn:-60 表示 value<=60 告警）
 function metricColorClass(val: number, warn?: number, crit?: number): string {
+  if (warn != null && warn < 0) {
+    if (crit != null && crit < 0 && val <= -crit) return 'sm-crit';
+    if (val <= -warn) return 'sm-warn';
+    return 'sm-ok';
+  }
   if (crit != null && val >= crit) return 'sm-crit';
   if (warn != null && val >= warn) return 'sm-warn';
   return 'sm-ok';
