@@ -384,7 +384,9 @@ function renderHistory(history: HistoryPoint[]) {
       if (excludeFromHistory.has(k)) continue;
       if (v != null && (typeof v === 'number' || (typeof v === 'string' && !isNaN(Number(v))))) {
         if (!numericFields.has(k)) {
-          numericFields.set(k, knownLabels[k] || k);
+          // 自定义指标（custom. 前缀）用客户端给的数据名作图表标题
+          const label = k.startsWith('custom.') ? k.slice('custom.'.length) : (knownLabels[k] || k);
+          numericFields.set(k, label);
         }
       }
     }

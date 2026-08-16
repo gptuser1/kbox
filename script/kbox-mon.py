@@ -5,8 +5,12 @@ kbox-mon.py - 系统状态上报客户端（Linux）
 
 用法:
   python3 kbox-mon.py --url https://kbox.example.com --token YOUR_TOKEN \
-      [--hostname NAME] [--cpu] [--mem] [--disk] [--temp] [--load] [--net] [--uptime] [--all] \
-      [--extra "任意字符串"] [--interval N]
+      [--hostname NAME] [--cpu] [--mem] [--disk] [--temp] [--load] [--net] [--ip] [--uptime] [--all] \
+      [--extra "任意字符串或约定 JSON"] [--interval N]
+
+extra 约定 JSON（自定义指标）:
+  {"custom":[{"name":"数据名","type":"number|string","value":...}]}
+  number 类型会展示并有历史趋势图；不符合约定的字符串按附件展示。
 """
 
 import argparse
@@ -312,7 +316,7 @@ def main():
     parser.add_argument('--ip', action='store_true', help='上报内网 IPv4（192.168.0.0/16）')
     parser.add_argument('--uptime', action='store_true', help='上报运行时长')
     parser.add_argument('--all', action='store_true', help='上报全部指标')
-    parser.add_argument('--extra', default=None, help='附加信息字符串（任意内容，只展示最新值）')
+    parser.add_argument('--extra', default=None, help='附加信息：任意字符串（作附件展示）；或约定 JSON {"custom":[{"name":"数据名","type":"number|string","value":...}]}，解析为自定义指标（number 有历史趋势）')
     parser.add_argument('--interval', type=int, default=0, help='定时上报间隔（秒），默认单次')
 
     args = parser.parse_args()

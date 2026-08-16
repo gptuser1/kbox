@@ -97,6 +97,37 @@ function nowMs(): number {
   return Date.now();
 }
 
+// 自定义指标：从 extra 中解析约定 JSON 得到的数据名 / 类型 / 值
+interface CustomMetric {
+  name: string;
+  type: string;
+  value: any;
+}
+
+// extra 约定 JSON 格式：{"custom": [{"name":"数据名","type":"number|string","value":...}]}
+// 解析成功返回指标数组；JSON 解析失败或结构与约定不符返回 null（按任意字符串处理）
+const CUSTOM_PREFIX = 'custom.';
+
+export function parseCustomExtra(extra: string): CustomMetric[] | null {
+  let obj: any;
+  try {
+    obj = JSON.parse(extra);
+  } catch {
+    return null; // 非 JSON：按任意字符串处理
+  }
+  // JSON 但与约定结构不符：同样按任意字符串处理
+  if (!obj || typeof obj !== 'object' || Array.isArray(obj) || !Array.isArray(obj.custom)) return null;
+  const out: CustomMetric[] = [];
+  for (const it of obj.custom) {
+    if (!it || typeof it !== 'object' || Array.isArray(it)) return null;
+    const name = typeof it.name === 'string' ? it.name.trim() : '';
+    const type = typeof it.type === 'string' ? it.type.trim() : '';
+    if (!name || !type) return null;
+    out.push({ name, type, value: it.value });
+  }
+  return out;
+}
+
 // 按 schema 解析原始 data，返回结构化的分类指标
 export function parseMetrics(data: Record<string, any>): Record<string, { label: string; metrics: { key: string; label: string; type: string; value: any; unit?: string; warn?: number; crit?: number }[] }> {
   const result: Record<string, { label: string; metrics: any[] }> = {};
@@ -111,6 +142,14 @@ export function parseMetrics(data: Record<string, any>): Record<string, { label:
       result[def.category].metrics.push({
         key: def.key, label: def.label, type: def.type,
         value: val, unit: def.unit, warn: def.warn, crit: def.crit,
+      });
+    } else if (key.startsWith(CUSTOM_PREFIX)) {
+      // 自定义指标：归入「自定义」分类，label 用客户端给的数据名，类型按实际值推导
+      const customCat = (result['自定义'] || (result['自定义'] = { label: '自定义', metrics: [] }));
+      customCat.metrics.push({
+        key, label: key.slice(CUSTOM_PREFIX.length),
+        type: typeof val === 'number' ? 'number' : 'string',
+        value: val,
       });
     } else {
       others.push({ key, label: key, type: 'string', value: val });
@@ -153,8 +192,17 @@ app.post('/report', async (c) => {
     return c.json({ error: '缺少 hostname 字段' }, 400);
   }
 
-  const reportData = body.data || {};
+  let reportData = body.data || {};
   const extra = typeof body.extra === 'string' ? body.extra : null;
+  // 若 extra 是约定的自定义指标 JSON，解析并合并进 data，与常规指标一致处理（含历史趋势）
+  const customMetrics = extra !== null ? parseCustomExtra(extra) : null;
+  if (customMetrics) {
+    reportData = { ...reportData };
+    for (const cm of customMetrics) {
+      if (cm.value === null) continue;
+      reportData[`${CUSTOM_PREFIX}${cm.name}`] = cm.value;
+    }
+  }
   const ts = nowMs();
   const k = kv(c);
 
