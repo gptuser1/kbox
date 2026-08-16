@@ -58,6 +58,7 @@ export const METRIC_SCHEMA: MetricDef[] = [
   { key: 'load_15m', category: '负载', label: '15分钟负载', type: 'float' },
   { key: 'processes', category: '负载', label: '进程数', type: 'number' },
   { key: 'net_iface', category: '网络', label: '网络接口', type: 'string' },
+  { key: 'lan_ipv4', category: '网络', label: '内网 IPv4', type: 'string' },
   { key: 'net_rx_bytes', category: '网络', label: '接收总量', type: 'bytes', unit: 'B' },
   { key: 'net_tx_bytes', category: '网络', label: '发送总量', type: 'bytes', unit: 'B' },
   { key: 'uptime_seconds', category: '系统', label: '运行时长', type: 'number', unit: 's' },

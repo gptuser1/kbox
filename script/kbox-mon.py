@@ -195,6 +195,45 @@ def collect_net():
     return data
 
 
+def collect_lan_ip():
+    """内网 IPv4 地址（192.168.0.0/16 网段）"""
+    def is_lan(ip):
+        try:
+            parts = list(map(int, ip.split('.')))
+            return len(parts) == 4 and parts[0] == 192 and parts[1] == 168
+        except Exception:
+            return False
+
+    candidates = []
+    # 优先用 ip 命令枚举所有非回环 IPv4
+    try:
+        result = subprocess.run(['ip', '-4', '-o', 'addr', 'show'], capture_output=True, text=True, timeout=5)
+        for line in result.stdout.split('\n'):
+            parts = line.split()
+            for i, tok in enumerate(parts):
+                if tok == 'inet' and i + 1 < len(parts):
+                    ip = parts[i + 1].split('/')[0]
+                    if ip != '127.0.0.1':
+                        candidates.append(ip)
+    except Exception:
+        pass
+
+    # 兜底：UDP 连接法取默认路由出口 IP（不发数据包，仅触发路由选择）
+    if not candidates:
+        try:
+            s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+            s.connect(('8.8.8.8', 80))
+            candidates.append(s.getsockname()[0])
+            s.close()
+        except Exception:
+            pass
+
+    for ip in candidates:
+        if is_lan(ip):
+            return {'lan_ipv4': ip}
+    return {}
+
+
 def collect_uptime():
     """系统运行时长"""
     data = {}
@@ -225,6 +264,8 @@ def build_payload(hostname, opts):
         data.update(collect_load())
     if opts.net:
         data.update(collect_net())
+    if opts.ip:
+        data.update(collect_lan_ip())
     if opts.uptime:
         data.update(collect_uptime())
 
@@ -268,6 +309,7 @@ def main():
     parser.add_argument('--temp', action='store_true', help='上报 CPU 温度')
     parser.add_argument('--load', action='store_true', help='上报系统负载')
     parser.add_argument('--net', action='store_true', help='上报网络流量')
+    parser.add_argument('--ip', action='store_true', help='上报内网 IPv4（192.168.0.0/16）')
     parser.add_argument('--uptime', action='store_true', help='上报运行时长')
     parser.add_argument('--all', action='store_true', help='上报全部指标')
     parser.add_argument('--extra', default=None, help='附加信息字符串（任意内容，只展示最新值）')
@@ -276,7 +318,7 @@ def main():
     args = parser.parse_args()
 
     if args.all:
-        args.cpu = args.mem = args.disk = args.temp = args.load = args.net = args.uptime = True
+        args.cpu = args.mem = args.disk = args.temp = args.load = args.net = args.ip = args.uptime = True
 
     hostname = args.hostname or socket.gethostname() or 'unknown'
 
