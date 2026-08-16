@@ -442,8 +442,10 @@ function renderHistory(history: HistoryPoint[], customSchema?: HostDetail['custo
     let svg = chart.line({ labels, data: values, minY: yMin, maxY: yMax });
     if (!svg) continue;
 
-    // 替换颜色以匹配主题（circle 已通过 CSS 隐藏，不显示数据点）
+    // 替换颜色以匹配主题（circle 已通过 CSS 隐藏，不显示数据点）；
+    // height="auto" 对 SVG 是非法值（浏览器报错并致高度塌陷），替换为合法高度
     svg = svg
+      .replace(/height="auto"/g, 'height="200"')
       .replace(/stroke="black"/g, 'stroke="var(--text-muted)"')
       .replace(/stroke="#ddd"/g, 'stroke="var(--border)"')
       .replace(/stroke="steelblue"/g, 'stroke="var(--primary)"');
