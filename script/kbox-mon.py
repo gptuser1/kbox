@@ -6,11 +6,16 @@ kbox-mon.py - 系统状态上报客户端（Linux）
 用法:
   python3 kbox-mon.py --url https://kbox.example.com --token YOUR_TOKEN \
       [--hostname NAME] [--cpu] [--mem] [--disk] [--temp] [--load] [--net] [--ip] [--uptime] [--all] \
-      [--extra "任意字符串或约定 JSON"] [--interval N]
+      [--extra "任意字符串"] [--custom "约定 JSON"] [--interval N]
 
-extra 约定 JSON（自定义指标）:
-  {"custom":[{"name":"数据名","type":"number|string","value":...}]}
-  number 类型会展示并有历史趋势图；不符合约定的字符串按附件展示。
+--custom 约定 JSON（自定义指标，与 --extra 职责分离）:
+  {"category":"系统","custom":[{"label":"电量","type":"percent","value":61,"unit":"%","warn":30,"crit":10,"summary":true}]}
+  - category 可选：展示的分类卡片（CPU/内存/磁盘/负载/网络/系统 等），缺省放「自定义」
+  - 每项字段：label 数据名(必填)、type 类型(必填，percent/bytes/kb/mb/number/float/string/temp)、
+    value 值(必填)、unit 单位、warn/crit 告警阈值、summary 是否上列表页摘要（可选）
+  - type=percent/temp 显示比例条；number/float 等数字类型有历史趋势图
+  - 结构不符的 JSON 会被忽略（不解析为指标，也不作附件）
+--extra 仅作附件展示（任意字符串，只保留最新值）。
 """
 
 import argparse
@@ -276,6 +281,8 @@ def build_payload(hostname, opts):
     payload = {'hostname': hostname, 'data': data}
     if opts.extra is not None:
         payload['extra'] = opts.extra
+    if opts.custom is not None:
+        payload['custom'] = opts.custom
     return payload
 
 
@@ -316,7 +323,8 @@ def main():
     parser.add_argument('--ip', action='store_true', help='上报内网 IPv4（192.168.0.0/16）')
     parser.add_argument('--uptime', action='store_true', help='上报运行时长')
     parser.add_argument('--all', action='store_true', help='上报全部指标')
-    parser.add_argument('--extra', default=None, help='附加信息：任意字符串（作附件展示）；或约定 JSON {"custom":[{"name":"数据名","type":"number|string","value":...}]}，解析为自定义指标（number 有历史趋势）')
+    parser.add_argument('--extra', default=None, help='附加信息：任意字符串，作附件展示（只保留最新值）')
+    parser.add_argument('--custom', default=None, help='约定 JSON 自定义指标：{"category":"系统","custom":[{"label":"电量","type":"percent","value":61,"unit":"%","warn":30,"crit":10,"summary":true}]}')
     parser.add_argument('--interval', type=int, default=0, help='定时上报间隔（秒），默认单次')
 
     args = parser.parse_args()
@@ -330,14 +338,14 @@ def main():
         print(f"开始定时上报，间隔 {args.interval}s，主机名: {hostname}")
         while True:
             payload = build_payload(hostname, args)
-            if payload['data'] or 'extra' in payload:
+            if payload['data'] or 'extra' in payload or 'custom' in payload:
                 report(args.url, args.token, payload)
             else:
                 print("未开启任何上报项，跳过")
             time.sleep(args.interval)
     else:
         payload = build_payload(hostname, args)
-        if not payload['data'] and 'extra' not in payload:
+        if not payload['data'] and 'extra' not in payload and 'custom' not in payload:
             print("未开启任何上报项，使用 --cpu --mem 等参数开启，或 --all")
             sys.exit(1)
         report(args.url, args.token, payload)

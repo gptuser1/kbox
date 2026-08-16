@@ -42,6 +42,7 @@ interface HostDetail {
   online: boolean;
   categories: Record<string, CategoryGroup>;
   extra: string | null;
+  customSchema?: Record<string, { label: string; type: string; unit?: string }>;
 }
 
 interface HistoryPoint {
@@ -172,7 +173,7 @@ async function loadHosts() {
       const statusClass = host.online ? 'sm-dot-online' : 'sm-dot-offline';
       const statusText = host.online ? '在线' : '离线';
 
-      // 摘要指标迷你条
+      // 摘要指标迷你条：percent/temp 显示进度条，其余类型显示数值文本
       let summaryHtml = '';
       for (const m of host.summary) {
         if (m.type === 'percent' || m.type === 'temp') {
@@ -183,6 +184,11 @@ async function loadHosts() {
             <span class="sm-mini-label">${esc(m.label)}</span>
             <div class="sm-mini-bar"><div class="sm-mini-fill ${colorClass}" style="width:${pct}%"></div></div>
             <span class="sm-mini-val">${val}${esc(m.unit || '')}</span>
+          </div>`;
+        } else {
+          summaryHtml += `<div class="sm-mini-metric">
+            <span class="sm-mini-label">${esc(m.label)}</span>
+            <span class="sm-mini-val">${esc(String(m.value))}${esc(m.unit || '')}</span>
           </div>`;
         }
       }
@@ -240,7 +246,7 @@ async function showHostDetail(id: string) {
     metricsEl.innerHTML = renderCategories(data.host.categories);
 
     // 历史
-    renderHistory(data.history);
+    renderHistory(data.history, data.host.customSchema);
 
     // 浮动返回：点击返回回到主机列表，并自动 pop 栈
     (window as any).pushFloatBack(() => {
@@ -357,7 +363,7 @@ function niceYRange(_min: number, _max: number): [number, number] {
 }
 
 // ─── 历史趋势（使用 light-chart.js） ───
-function renderHistory(history: HistoryPoint[]) {
+function renderHistory(history: HistoryPoint[], customSchema?: HostDetail['customSchema']) {
   const el = $('smHistory')!;
   if (history.length === 0) {
     el.innerHTML = '';
@@ -384,8 +390,14 @@ function renderHistory(history: HistoryPoint[]) {
       if (excludeFromHistory.has(k)) continue;
       if (v != null && (typeof v === 'number' || (typeof v === 'string' && !isNaN(Number(v))))) {
         if (!numericFields.has(k)) {
-          // 自定义指标（custom. 前缀）用客户端给的数据名作图表标题
-          const label = k.startsWith('custom.') ? k.slice('custom.'.length) : (knownLabels[k] || k);
+          // 自定义指标优先用动态注册的 customSchema 的数据名，否则去 custom. 前缀
+          let label = knownLabels[k] || k;
+          const customDef = customSchema?.[k];
+          if (customDef?.label) {
+            label = customDef.label;
+          } else if (k.startsWith('custom.')) {
+            label = k.slice('custom.'.length);
+          }
           numericFields.set(k, label);
         }
       }

@@ -84,6 +84,7 @@ interface HostRecord {
   lastSeen: number;  // ms unix 时间戳
   data: Record<string, any>; // 最新合并的指标数据
   extra: string | null; // 最近一次 extra，只保留最新值，无历史
+  customSchema?: Record<string, CustomDef>; // 客户端动态注册的自定义指标定义（key → 定义）
   history: HistoryEntry[]; // FIFO 数组，按配置最大数量限制
 }
 
@@ -97,18 +98,32 @@ function nowMs(): number {
   return Date.now();
 }
 
-// 自定义指标：从 extra 中解析约定 JSON 得到的数据名 / 类型 / 值
-interface CustomMetric {
-  name: string;
-  type: string;
+// ─── 自定义指标 ───
+// 客户端通过 extra 约定 JSON 动态注册指标，字段对齐 MetricDef：
+//   {"category":"系统","custom":[{"label":"电量","type":"percent","value":61,"unit":"%","warn":30,"crit":10,"summary":true}]}
+// - 顶层 category 可选：指定这些指标展示的分类卡片，缺省放「自定义」
+// - 每项字段：label(数据名，必填)、type(对齐 MetricDef，必填)、value(必填)、unit/warn/crit/summary(可选)
+// 解析成功返回 {category, items}；JSON 解析失败或结构与约定不符返回 null（按任意字符串处理）
+const CUSTOM_PREFIX = 'custom.';
+const CUSTOM_TYPES: MetricDef['type'][] = ['percent', 'bytes', 'kb', 'mb', 'number', 'float', 'string', 'temp'];
+
+interface CustomDef {
+  key: string;       // custom.<label>
+  category: string;  // 展示分类卡片
+  label: string;
+  type: MetricDef['type'];
+  unit?: string;
+  warn?: number;
+  crit?: number;
+  summary?: boolean;
+}
+
+interface ParsedCustomItem {
+  def: Omit<CustomDef, 'key' | 'category'>;
   value: any;
 }
 
-// extra 约定 JSON 格式：{"custom": [{"name":"数据名","type":"number|string","value":...}]}
-// 解析成功返回指标数组；JSON 解析失败或结构与约定不符返回 null（按任意字符串处理）
-const CUSTOM_PREFIX = 'custom.';
-
-export function parseCustomExtra(extra: string): CustomMetric[] | null {
+export function parseCustomExtra(extra: string): { category: string | null; items: ParsedCustomItem[] } | null {
   let obj: any;
   try {
     obj = JSON.parse(extra);
@@ -117,19 +132,26 @@ export function parseCustomExtra(extra: string): CustomMetric[] | null {
   }
   // JSON 但与约定结构不符：同样按任意字符串处理
   if (!obj || typeof obj !== 'object' || Array.isArray(obj) || !Array.isArray(obj.custom)) return null;
-  const out: CustomMetric[] = [];
+  const category = typeof obj.category === 'string' && obj.category.trim() ? obj.category.trim() : null;
+  const items: ParsedCustomItem[] = [];
   for (const it of obj.custom) {
     if (!it || typeof it !== 'object' || Array.isArray(it)) return null;
-    const name = typeof it.name === 'string' ? it.name.trim() : '';
-    const type = typeof it.type === 'string' ? it.type.trim() : '';
-    if (!name || !type) return null;
-    out.push({ name, type, value: it.value });
+    const label = typeof it.label === 'string' ? it.label.trim() : '';
+    const rawType = typeof it.type === 'string' ? it.type.trim() : '';
+    if (!label || !rawType || !(CUSTOM_TYPES as readonly string[]).includes(rawType)) return null;
+    const def: Omit<CustomDef, 'key' | 'category'> = { label, type: rawType as MetricDef['type'] };
+    if (typeof it.unit === 'string' && it.unit) def.unit = it.unit;
+    if (typeof it.warn === 'number') def.warn = it.warn;
+    if (typeof it.crit === 'number') def.crit = it.crit;
+    if (typeof it.summary === 'boolean') def.summary = it.summary;
+    items.push({ def, value: it.value });
   }
-  return out;
+  return { category, items };
 }
 
 // 按 schema 解析原始 data，返回结构化的分类指标
-export function parseMetrics(data: Record<string, any>): Record<string, { label: string; metrics: { key: string; label: string; type: string; value: any; unit?: string; warn?: number; crit?: number }[] }> {
+// customSchema 为客户端动态注册的自定义指标定义，缺省时对自定义字段做类型兜底
+export function parseMetrics(data: Record<string, any>, customSchema?: Record<string, CustomDef>): Record<string, { label: string; metrics: { key: string; label: string; type: string; value: any; unit?: string; warn?: number; crit?: number }[] }> {
   const result: Record<string, { label: string; metrics: any[] }> = {};
   for (const cat of CATEGORIES) result[cat] = { label: cat, metrics: [] };
 
@@ -144,13 +166,23 @@ export function parseMetrics(data: Record<string, any>): Record<string, { label:
         value: val, unit: def.unit, warn: def.warn, crit: def.crit,
       });
     } else if (key.startsWith(CUSTOM_PREFIX)) {
-      // 自定义指标：归入「自定义」分类，label 用客户端给的数据名，类型按实际值推导
-      const customCat = (result['自定义'] || (result['自定义'] = { label: '自定义', metrics: [] }));
-      customCat.metrics.push({
-        key, label: key.slice(CUSTOM_PREFIX.length),
-        type: typeof val === 'number' ? 'number' : 'string',
-        value: val,
-      });
+      // 自定义指标：优先用动态注册的 customSchema 提供分类/类型/单位等，走与常规指标相同的渲染
+      const def = customSchema?.[key];
+      if (def) {
+        const cat = (result[def.category] || (result[def.category] = { label: def.category, metrics: [] }));
+        cat.metrics.push({
+          key, label: def.label, type: def.type,
+          value: val, unit: def.unit, warn: def.warn, crit: def.crit,
+        });
+      } else {
+        // 无 schema（历史数据兜底）：归「自定义」分类，类型按实际值推导
+        const customCat = (result['自定义'] || (result['自定义'] = { label: '自定义', metrics: [] }));
+        customCat.metrics.push({
+          key, label: key.slice(CUSTOM_PREFIX.length),
+          type: typeof val === 'number' ? 'number' : 'string',
+          value: val,
+        });
+      }
     } else {
       others.push({ key, label: key, type: 'string', value: val });
     }
@@ -164,12 +196,19 @@ export function parseMetrics(data: Record<string, any>): Record<string, { label:
   return result;
 }
 
-// 提取摘要指标（用于列表页）
-export function extractSummary(data: Record<string, any>): { key: string; label: string; value: any; unit?: string; warn?: number; crit?: number }[] {
+// 提取摘要指标（用于列表页）：常规 schema + 动态注册的自定义指标（summary=true 的项）
+export function extractSummary(data: Record<string, any>, customSchema?: Record<string, CustomDef>): { key: string; label: string; value: any; unit?: string; warn?: number; crit?: number }[] {
   const summary: any[] = [];
   for (const def of METRIC_SCHEMA) {
     if (def.summary && data[def.key] != null) {
       summary.push({ key: def.key, label: def.label, value: data[def.key], unit: def.unit, warn: def.warn, crit: def.crit });
+    }
+  }
+  if (customSchema) {
+    for (const def of Object.values(customSchema)) {
+      if (def.summary && data[def.key] != null) {
+        summary.push({ key: def.key, label: def.label, value: data[def.key], unit: def.unit, warn: def.warn, crit: def.crit });
+      }
     }
   }
   return summary;
@@ -194,13 +233,19 @@ app.post('/report', async (c) => {
 
   let reportData = body.data || {};
   const extra = typeof body.extra === 'string' ? body.extra : null;
-  // 若 extra 是约定的自定义指标 JSON，解析并合并进 data，与常规指标一致处理（含历史趋势）
-  const customMetrics = extra !== null ? parseCustomExtra(extra) : null;
-  if (customMetrics) {
+  // 自定义指标通过独立字段 custom 携带约定 JSON：值合并进 data（custom.<label>），
+  // 定义注册到 customSchema；extra 仅作附件展示，两者职责分离
+  const customStr = typeof body.custom === 'string' ? body.custom : null;
+  const parsedCustom = customStr !== null ? parseCustomExtra(customStr) : null;
+  let customDefs: Record<string, CustomDef> | null = null;
+  if (parsedCustom) {
     reportData = { ...reportData };
-    for (const cm of customMetrics) {
-      if (cm.value === null) continue;
-      reportData[`${CUSTOM_PREFIX}${cm.name}`] = cm.value;
+    customDefs = {};
+    for (const it of parsedCustom.items) {
+      if (it.value === null) continue;
+      const key = `${CUSTOM_PREFIX}${it.def.label}`;
+      reportData[key] = it.value;
+      customDefs[key] = { key, category: parsedCustom.category || '自定义', ...it.def };
     }
   }
   const ts = nowMs();
@@ -222,7 +267,11 @@ app.post('/report', async (c) => {
         host.data[key] = reportData[key];
       }
     }
-    // extra 只保留最新值
+    // 合并动态注册的自定义指标定义（新定义覆盖旧定义）
+    if (customDefs) {
+      host.customSchema = { ...(host.customSchema || {}), ...customDefs };
+    }
+    // extra 只保留最新值（纯附件，不参与指标解析）
     if (extra !== null) host.extra = extra;
   } else {
     // 新主机
@@ -233,6 +282,7 @@ app.post('/report', async (c) => {
       lastSeen: ts,
       data: { ...reportData },
       extra: extra,
+      customSchema: customDefs || undefined,
       history: [],
     };
     // 清除 null 值
@@ -265,7 +315,7 @@ app.get('/hosts', async (c) => {
       firstSeen: item.value.firstSeen,
       lastSeen: item.value.lastSeen,
       online: await isOnline(c, item.value.lastSeen),
-      summary: extractSummary(item.value.data),
+      summary: extractSummary(item.value.data, item.value.customSchema),
       hasExtra: !!item.value.extra,
     }))));
     hosts.sort((a, b) => b.lastSeen - a.lastSeen);
@@ -294,8 +344,9 @@ app.get('/hosts/:id', async (c) => {
       firstSeen: host.firstSeen,
       lastSeen: host.lastSeen,
       online: await isOnline(c, host.lastSeen),
-      categories: parseMetrics(host.data),
+      categories: parseMetrics(host.data, host.customSchema),
       extra: host.extra,
+      customSchema: host.customSchema || {},
     },
     history: host.history.slice(-100),
   });
