@@ -409,30 +409,33 @@ function renderHistory(history: HistoryPoint[], customSchema?: HostDetail['custo
     return;
   }
 
-  // 格式化时间标签
-  const times = history.map(pt => {
-    const d = new Date(pt.ts);
-    return String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0');
-  });
-
   let html = '<div class="section-title" style="margin-top:20px">历史趋势</div>';
   html += '<div class="sm-chart-grid">';
 
+  // 时间标签格式
+  const fmtTime = (ts: number) => {
+    const d = new Date(ts);
+    return String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0');
+  };
+
   for (const [field, label] of numericFields) {
-    const values = history
-      .map(pt => parseFloat(pt.data[field]))
-      .filter(v => !isNaN(v));
+    // 按字段对齐：某次上报缺少该字段时，value 为 NaN，需同时剔除对应的时间标签，
+    // 否则 labels 与 data 长度不一致会导致 light-chart 返回空串、图表不渲染
+    const pairs = history
+      .map(pt => ({ ts: pt.ts, v: parseFloat(pt.data[field]) }))
+      .filter(p => !isNaN(p.v));
 
-    if (values.length < 2) continue;
+    if (pairs.length < 2) continue;
 
+    const values = pairs.map(p => p.v);
     const max = Math.max(...values);
     const min = Math.min(...values);
 
     // 标签太多时采样，避免拥挤
-    let labels = times;
+    let labels = pairs.map(p => fmtTime(p.ts));
     if (labels.length > 10) {
       const step = Math.ceil(labels.length / 8);
-      labels = times.map((t, i) => i % step === 0 ? t : '');
+      labels = pairs.map((p, i) => i % step === 0 ? fmtTime(p.ts) : '');
     }
 
     // 计算动态纵坐标范围（不从0开始，基于数据最大值最小值）
