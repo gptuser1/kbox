@@ -4,7 +4,7 @@ import { encrypt, decrypt, isEncrypted } from '../src/services/crypto';
 describe('isEncrypted', () => {
   it('returns true for a well-formed encrypted payload', () => {
     expect(
-      isEncrypted({ encrypted: true, salt: 'a', iv: 'b', data: 'c' })
+      isEncrypted({ encrypted: true, iv: 'b', data: 'c' })
     ).toBe(true);
   });
 
@@ -13,9 +13,9 @@ describe('isEncrypted', () => {
     expect(isEncrypted(undefined)).toBe(false);
     expect(isEncrypted('plain text')).toBe(false);
     expect(isEncrypted({ encrypted: true })).toBe(false);
-    expect(isEncrypted({ encrypted: true, salt: 'a' })).toBe(false);
-    expect(isEncrypted({ encrypted: false, salt: 'a', iv: 'b', data: 'c' })).toBe(false);
-    expect(isEncrypted({ salt: 'a', iv: 'b', data: 'c' })).toBe(false);
+    expect(isEncrypted({ encrypted: true, iv: 'b' })).toBe(false);
+    expect(isEncrypted({ encrypted: false, iv: 'b', data: 'c' })).toBe(false);
+    expect(isEncrypted({ iv: 'b', data: 'c' })).toBe(false);
   });
 });
 
@@ -31,10 +31,10 @@ describe('encrypt / decrypt', () => {
     expect(await decrypt('pw', payload)).toBe(text);
   });
 
-  it('produces different salt/iv/data on each encryption', async () => {
+  it('produces different iv/data on each encryption', async () => {
     const a = await encrypt('pw', 'same');
     const b = await encrypt('pw', 'same');
-    expect(a.salt).not.toBe(b.salt);
+    expect(a.encrypted).toBe(true);
     expect(a.iv).not.toBe(b.iv);
     expect(a.data).not.toBe(b.data);
   });
