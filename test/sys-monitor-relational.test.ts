@@ -167,29 +167,69 @@ describe('sys-monitor 关系化改造集成验证', () => {
     }
   });
 
-  it('legacy 迁移：旧 kbox_kv blob 拆进新表', async () => {
+  it('legacy 手动 SQL 迁移：kbox_kv blob 拆进新表', async () => {
     const oldFetch = globalThis.fetch;
     globalThis.fetch = fakeFetch as any;
     try {
       const db = dbState.sqlite!;
-      db.exec(`CREATE TABLE IF NOT EXISTS kbox_kv (namespace TEXT, key TEXT, value TEXT, PRIMARY KEY(namespace, key))`);
       const oldBlob = JSON.stringify({
-        hostname: 'legacy1', name: '旧主机', firstSeen: 100, lastSeen: 200,
-        data: { cpu_usage: 33 }, extra: null,
+        hostname: 'WS1608', name: 'WS1608', firstSeen: 100, lastSeen: 200,
+        data: { cpu_usage: 33, 'custom.电量': 80 }, extra: '备注',
+        customSchema: { 'custom.电量': { key: 'custom.电量', category: '系统', label: '电量', type: 'percent', unit: '%' } },
         history: [{ ts: 150, data: { cpu_usage: 30 } }, { ts: 200, data: { cpu_usage: 33 } }],
       });
-      db.prepare(`INSERT INTO kbox_kv (namespace,key,value) VALUES ('sys_monitor:hosts','legacy1',?)`).run(oldBlob);
+      db.exec(`CREATE TABLE IF NOT EXISTS kbox_kv (namespace TEXT, key TEXT, value TEXT, PRIMARY KEY(namespace, key))`);
+      db.prepare(`INSERT INTO kbox_kv (namespace,key,value) VALUES ('sys_monitor:hosts','WS1608',?)`).run(oldBlob);
 
-      // 触发 GET /hosts（内联 ensureTables 会建表 + 迁移）
-      const res = await appReq('GET', '/hosts');
-      expect(res.status).toBe(200, await res.text());
+      // 手动执行迁移 SQL（与交付给用户的语句一致），先建好目标表
+      db.exec(`CREATE TABLE IF NOT EXISTS kbox_sm_hosts (hostname TEXT NOT NULL PRIMARY KEY, name TEXT NOT NULL, first_seen INTEGER NOT NULL, last_seen INTEGER NOT NULL, data_json TEXT NOT NULL, extra TEXT, custom_schema_json TEXT)`);
+      db.exec(`CREATE TABLE IF NOT EXISTS kbox_sm_history (hostname TEXT NOT NULL, ts INTEGER NOT NULL, data_json TEXT NOT NULL, PRIMARY KEY(hostname, ts))`);
 
-      const host = db.prepare(`SELECT * FROM kbox_sm_hosts WHERE hostname='legacy1'`).get() as any;
-      expect(host).toBeTruthy();
-      expect(JSON.parse(host.data_json).cpu_usage).toBe(33);
-      expect(host.name).toBe('旧主机');
-      const his = db.prepare(`SELECT COUNT(*) AS c FROM kbox_sm_history WHERE hostname='legacy1'`).get() as any;
-      expect(Number(his.c)).toBe(2);
+      // hosts 行
+      db.prepare(
+        `INSERT INTO kbox_sm_hosts (hostname, name, first_seen, last_seen, data_json, extra, custom_schema_json)
+         SELECT
+           json_extract(value, '$.hostname') AS hostname,
+           COALESCE(json_extract(value, '$.name'), json_extract(value, '$.hostname')) AS name,
+           COALESCE(json_extract(value, '$.firstSeen'), 0) AS first_seen,
+           COALESCE(json_extract(value, '$.lastSeen'), 0) AS last_seen,
+           COALESCE(json_extract(value, '$.data'), '{}') AS data_json,
+           json_extract(value, '$.extra') AS extra,
+           json_extract(value, '$.customSchema') AS custom_schema_json
+         FROM kbox_kv
+         WHERE namespace = 'sys_monitor:hosts' AND key = 'WS1608'
+         ON CONFLICT(hostname) DO UPDATE SET
+           name = excluded.name,
+           first_seen = excluded.first_seen,
+           last_seen = excluded.last_seen,
+           data_json = excluded.data_json,
+           extra = excluded.extra,
+           custom_schema_json = excluded.custom_schema_json`
+      ).run();
+
+      // history 行
+      db.prepare(
+        `INSERT INTO kbox_sm_history (hostname, ts, data_json)
+         SELECT
+           json_extract(kv.value, '$.hostname') AS hostname,
+           json_extract(h.value, '$.ts') AS ts,
+           COALESCE(json_extract(h.value, '$.data'), '{}') AS data_json
+         FROM kbox_kv AS kv, json_each(kv.value, '$.history') AS h
+         WHERE kv.namespace = 'sys_monitor:hosts' AND kv.key = 'WS1608'
+         ON CONFLICT(hostname, ts) DO UPDATE SET data_json = excluded.data_json`
+      ).run();
+
+      // 通过 API 读，验证迁移结果
+      const res = await appReq('GET', '/hosts/WS1608');
+      expect(res.status).toBe(200);
+      const detail = await res.json();
+      expect(detail.host.name).toBe('WS1608');
+      expect(detail.host.extra).toBe('备注');
+      expect(detail.history).toHaveLength(2);
+      expect(detail.history[0].data.cpu_usage).toBe(30);
+      expect(detail.history[1].data.cpu_usage).toBe(33);
+      const batt = detail.host.categories['系统'].metrics.find((m: any) => m.key === 'custom.电量');
+      expect(batt.label).toBe('电量');
     } finally {
       globalThis.fetch = oldFetch;
     }

@@ -18,22 +18,47 @@ const DEFAULT_ONLINE_TIMEOUT_MIN = 30;
 // 从「整条 host + history 塞一个 JSON blob」改为两张规范化表：
 //  - kbox_sm_hosts: 每主机一行，只存最新合并数据，不含历史
 //  - kbox_sm_history: 每主机每次上报一行，供历史趋势走索引查询
+//
+// 旧数据迁移（手动执行，从 kbox_kv 的 sys_monitor:hosts blob 拆到新表）：
+// 对每个旧主机，把下面两条 SQL 中的 'WS1608' 换成实际 hostname 后执行。
+//   hosts 行：
+//   INSERT INTO kbox_sm_hosts (hostname, name, first_seen, last_seen, data_json, extra, custom_schema_json)
+//   SELECT
+//     json_extract(value, '$.hostname') AS hostname,
+//     COALESCE(json_extract(value, '$.name'), json_extract(value, '$.hostname')) AS name,
+//     COALESCE(json_extract(value, '$.firstSeen'), 0) AS first_seen,
+//     COALESCE(json_extract(value, '$.lastSeen'), 0) AS last_seen,
+//     COALESCE(json_extract(value, '$.data'), '{}') AS data_json,
+//     json_extract(value, '$.extra') AS extra,
+//     json_extract(value, '$.customSchema') AS custom_schema_json
+//   FROM kbox_kv
+//   WHERE namespace = 'sys_monitor:hosts' AND key = 'WS1608'
+//   ON CONFLICT(hostname) DO UPDATE SET
+//     name = excluded.name, first_seen = excluded.first_seen, last_seen = excluded.last_seen,
+//     data_json = excluded.data_json, extra = excluded.extra, custom_schema_json = excluded.custom_schema_json;
+//
+//   history 行：
+//   INSERT INTO kbox_sm_history (hostname, ts, data_json)
+//   SELECT
+//     json_extract(kv.value, '$.hostname') AS hostname,
+//     json_extract(h.value, '$.ts') AS ts,
+//     COALESCE(json_extract(h.value, '$.data'), '{}') AS data_json
+//   FROM kbox_kv AS kv, json_each(kv.value, '$.history') AS h
+//   WHERE kv.namespace = 'sys_monitor:hosts' AND kv.key = 'WS1608'
+//   ON CONFLICT(hostname, ts) DO UPDATE SET data_json = excluded.data_json;
 const T_HOSTS = 'kbox_sm_hosts';
 const T_HISTORY = 'kbox_sm_history';
-// 旧 KV 模拟表（namespace 前缀），供一次性迁移
-const LEGACY_NS = 'sys_monitor:hosts';
-const T_LEGACY = 'kbox_kv';
 
 type Db = ReturnType<typeof createDb>;
 
-// 按连接缓存建表/迁移状态
+// 按连接缓存建表状态
 const smReady = new Map<string, boolean>();
 
 function connKey(token: string, base?: string): string {
   return token + '|' + (base || '');
 }
 
-// 重置表就绪/迁移状态（仅测试用）
+// 重置表就绪状态（仅测试用）
 export function _resetSmState() {
   smReady.clear();
 }
@@ -269,65 +294,7 @@ async function ensureTables(k: Db, c: any): Promise<void> {
   for (const sql of ensureSql()) {
     await k.execute(sql);
   }
-  await migrateLegacyOnce(k, c, kkey);
   smReady.set(kkey, true);
-}
-
-// 一次性迁移：把旧 kbox_kv 中 sys_monitor:hosts 的整条 blob 拆进新表。
-// 分片执行到「新表已存在任一主机」为止，避免每次请求重复迁移（幂等由 INSERT OR IGNORE 保证）。
-async function migrateLegacyOnce(k: Db, c: any, kkey: string): Promise<void> {
-  try {
-    const probe = await k.queryOne<{ c: number }>(`SELECT COUNT(*) AS c FROM ${T_HOSTS}`);
-    if (probe && Number(probe.c) > 0) return; // 已有数据，跳过
-
-    // 读取旧表该 namespace 全部行（value 为整条 host blob，含 history）
-    const rows = await k.queryAll<{ key: string; value: string }>(
-      `SELECT key, value FROM ${T_LEGACY} WHERE namespace = ?`,
-      [LEGACY_NS]
-    );
-
-    for (const row of rows) {
-      let old: any;
-      try {
-        old = JSON.parse(row.value);
-      } catch {
-        continue;
-      }
-      if (!old || typeof old !== 'object') continue;
-
-      const hostname = (old.hostname || row.key || '').toString();
-      if (!hostname) continue;
-
-      // hosts 行
-      await k.execute(
-        `INSERT OR IGNORE INTO ${T_HOSTS} (hostname, name, first_seen, last_seen, data_json, extra, custom_schema_json)
-         VALUES (?, ?, ?, ?, ?, ?, ?)`,
-        [
-          hostname,
-          old.name != null ? String(old.name) : hostname,
-          Number(old.firstSeen) || 0,
-          Number(old.lastSeen) || 0,
-          JSON.stringify(old.data || {}),
-          old.extra != null ? String(old.extra) : null,
-          old.customSchema ? JSON.stringify(old.customSchema) : null,
-        ]
-      );
-
-      // history 行
-      if (Array.isArray(old.history)) {
-        for (const h of old.history) {
-          if (!h || typeof h.ts === 'undefined') continue;
-          await k.execute(
-            `INSERT OR IGNORE INTO ${T_HISTORY} (hostname, ts, data_json) VALUES (?, ?, ?)`,
-            [hostname, Number(h.ts) || 0, JSON.stringify(h.data || {})]
-          );
-        }
-      }
-    }
-  } catch (e) {
-    // 旧表不存在或无权限等：忽略迁移，新表仍可正常使用
-    console.error('sys-monitor legacy migration skipped:', e instanceof Error ? e.message : e);
-  }
 }
 
 function rowToHost(row: any): HostRow {
