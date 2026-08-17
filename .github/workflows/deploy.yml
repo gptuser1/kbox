@@ -21,26 +21,26 @@ jobs:
       - name: Build frontend (esbuild ESM modules)
         run: npm run build:frontend
 
-      - name: Deploy to Cloudflare Workers
-        run: |
-          COMMIT_SHORT="${GITHUB_SHA:0:7}"
-          BUILD_TS="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
-          npx wrangler deploy \
-            --var "BUILD_COMMIT:${COMMIT_SHORT}" \
-            --var "BUILD_TS:${BUILD_TS}"
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CF_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CF_ACCOUNT_ID }}
-          GITHUB_SHA: ${{ github.sha }}
-
-      - name: Set secrets
+      # 一条命令完成「部署 + 注入构建变量 + 批量设置所有敏感密钥」。
+      # 说明：wrangler 没有"部署与设置 secret 一步到位"的单命令，secret 必须用独立的
+      # `wrangler secret bulk`；这里把它们收敛进同一个 run 步骤，作为一个整体执行。
+      - name: Deploy & set env vars/secrets
         run: |
           if [ -z "${{ secrets.KBOX_TOKEN }}" ]; then
             echo "::error::Please set KBOX_TOKEN secret"
             exit 1
           fi
-          echo "${{ secrets.KBOX_TOKEN }}" | npx wrangler secret put ACCESS_TOKEN
-          echo "${{ secrets.KBOX_TOKEN }}" | npx wrangler secret put D1_API_TOKEN
+          COMMIT_SHORT="${GITHUB_SHA:0:7}"
+          # 1) 部署 Worker，注入非敏感构建变量（会持久化到环境变量）
+          npx wrangler deploy --var "BUILD_COMMIT:${COMMIT_SHORT}"
+          # 2) 一次性批量写入所有敏感密钥（每行 NAME=VALUE）
+          cat > /tmp/kbox-secrets.env <<'EOF'
+ACCESS_TOKEN=${{ secrets.KBOX_TOKEN }}
+D1_API_TOKEN=${{ secrets.KBOX_TOKEN }}
+EOF
+          npx wrangler secret bulk /tmp/kbox-secrets.env
+          rm -f /tmp/kbox-secrets.env
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CF_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CF_ACCOUNT_ID }}
+          GITHUB_SHA: ${{ github.sha }}

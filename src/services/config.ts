@@ -15,7 +15,7 @@ const APP_CONFIG_SCHEMA: ConfigField[] = [
   { key: 'openai_api_key',  desc: 'OpenAI API Key',    sensitive: true,  placeholder: 'sk-...', envName: 'OPENAI_API_KEY' },
   { key: 'openai_base_url', desc: 'LLM API 地址',      sensitive: false, default: 'https://api.siliconflow.cn/v1', envName: 'OPENAI_BASE_URL' },
   { key: 'openai_model',    desc: 'LLM 模型名',        sensitive: false, default: 'THUDM/GLM-4-9B-0414', envName: 'OPENAI_MODEL' },
-  { key: 'gh_token',        desc: 'GitHub Token',      sensitive: true,  placeholder: 'ghp_...', envName: 'GH_TOKEN' },
+  { key: 'gh_token',        desc: 'GitHub Token',      sensitive: true,  placeholder: 'ghp_...' },
   { key: 'tencent_api_base', desc: '腾讯行情 API',     sensitive: false, default: 'https://qt.gtimg.cn' },
   { key: 'yahoo_api_base',  desc: 'Yahoo 行情 API',    sensitive: false, default: 'https://query1.finance.yahoo.com' },
   { key: 'tavily_api_key',  desc: 'Tavily 搜索 API Key', sensitive: true, placeholder: 'tvly-...', envName: 'TAVILY_API_KEY' },

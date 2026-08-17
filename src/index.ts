@@ -28,7 +28,6 @@ type Bindings = {
   YAHOO_API_BASE?: string;
   // 构建部署信息（由 deploy.yml 经 wrangler --var 注入）
   BUILD_COMMIT?: string;
-  BUILD_TS?: string;
 };
 
 type Variables = {

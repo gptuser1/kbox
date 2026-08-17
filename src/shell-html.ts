@@ -2,7 +2,7 @@ function esc(s: string): string {
   return s.replace(/[&<>"']/g, m => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[m]!));
 }
 
-// 构建部署信息由 CI 注入环境变量（BUILD_COMMIT / BUILD_TS），SSR 渲染到页面底部。
+// 构建部署信息由 CI 注入环境变量（BUILD_COMMIT），SSR 渲染到页面底部。
 export function renderShellHTML(env?: Record<string, string | undefined>): string {
   const commit = env?.BUILD_COMMIT;
   const buildMeta = commit ? ` <code>${esc(commit)}</code>` : '';
