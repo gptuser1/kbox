@@ -1,7 +1,7 @@
 // 配置管理路由：全局配置 + 插件级覆盖配置 CRUD
 
 import { Hono } from 'hono';
-import { getConfig, getAppConfig, getPluginConfig, setAppConfig, deleteAppConfig, getConfigSchema, listPluginOverrides, setPluginConfig, deletePluginConfig, ConfigField } from '../../services/config';
+import { getAppConfig, getPluginConfig, setAppConfig, deleteAppConfig, getConfigSchema, listPluginOverrides, setPluginConfig, deletePluginConfig, hasAppConfig, hasPluginConfig } from '../../services/config';
 
 type Bindings = {};
 type Variables = {};
@@ -20,55 +20,62 @@ const PLUGIN_LIST = [
   { id: 'sys-monitor', name: '系统监控' },
 ];
 
-// 敏感值脱敏：用多个 * 号代替明文
-function maskField(field: ConfigField, value: string | null) {
-  if (value == null || value === '') {
-    return { hasValue: false, value: null };
-  }
-  if (field.sensitive) {
-    return { hasValue: true, value: '******' };
-  }
-  return { hasValue: true, value };
-}
-
 // GET /api/config/schema — 所有配置项定义
 router.get('/schema', (c) => {
   return c.json({ schema: getConfigSchema(), plugins: PLUGIN_LIST });
 });
 
 // GET /api/config — 列出所有全局配置（敏感脱敏）
+// 敏感项只判断「是否已配置」不触发解密，避免每次 PBKDF2 的无谓 CPU；
+// 用串行读而非并行，避免同时打 D1 网关造成网关侧压力叠加（不拆东墙补西墙）。
 router.get('/', async (c) => {
   const schema = getConfigSchema();
   const configs = [];
   for (const field of schema) {
     if (field.plugins) continue;
-    const raw = await getAppConfig(c, field.key);
-    const masked = maskField(field, raw);
+    let hasValue: boolean;
+    let value: string | null;
+    if (field.sensitive) {
+      hasValue = await hasAppConfig(c, field.key);
+      value = null;
+    } else {
+      const raw = await getAppConfig(c, field.key);
+      hasValue = raw != null;
+      value = raw;
+    }
     configs.push({
       key: field.key,
       desc: field.desc,
       sensitive: field.sensitive,
       placeholder: field.placeholder,
       default: field.default || null,
-      hasValue: masked.hasValue,
-      value: masked.value,
+      hasValue,
+      value,
     });
   }
   return c.json({ configs });
 });
 
-// GET /api/config/:key — 读取单条全局配置（敏感脱敏）
+// GET /api/config/:key — 读取单条全局配置（敏感脱敏，不触发解密）
 router.get('/:key', async (c) => {
   const key = c.req.param('key');
   const field = getConfigSchema().find(f => f.key === key);
   if (!field) return c.json({ error: '未知配置项: ' + key }, 404);
-  const raw = await getAppConfig(c, key);
-  const masked = maskField(field, raw);
+  let hasValue: boolean;
+  let value: string | null;
+  if (field.sensitive) {
+    hasValue = await hasAppConfig(c, key);
+    value = null;
+  } else {
+    const raw = await getAppConfig(c, key);
+    hasValue = raw != null;
+    value = raw;
+  }
   return c.json({
     key, desc: field.desc, sensitive: field.sensitive,
     default: field.default || null,
-    hasValue: masked.hasValue,
-    value: masked.value,
+    hasValue,
+    value,
   });
 });
 
@@ -107,11 +114,19 @@ router.get('/plugins/:plugin', async (c) => {
   for (const key of overrideKeys) {
     const field = schema.find(f => f.key === key);
     if (!field) continue;
-    const raw = await getPluginConfig(c, plugin, key);
-    const masked = maskField(field, raw);
+    let hasValue: boolean;
+    let value: string | null;
+    if (field.sensitive) {
+      hasValue = await hasPluginConfig(c, plugin, key);
+      value = null;
+    } else {
+      const raw = await getPluginConfig(c, plugin, key);
+      hasValue = raw != null;
+      value = raw;
+    }
     overrides.push({
       key, desc: field.desc, sensitive: field.sensitive,
-      hasValue: masked.hasValue, value: masked.value,
+      hasValue, value,
     });
   }
   return c.json({ plugin, overrides });

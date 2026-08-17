@@ -126,6 +126,22 @@ export async function getAppConfig(c: any, key: string): Promise<string | null> 
   return readConfig(c, NS_APP, key);
 }
 
+// 仅判断指定 namespace 下某 key 是否已存值，不需要明文时不触发解密。
+// 敏感配置在列表/读取接口只用于显示「是否已配置」，避免每次 PBKDF2 解密的无谓 CPU。
+async function hasStoredConfig(c: any, ns: string, key: string): Promise<boolean> {
+  const kv = createKv(c.env.D1_API_TOKEN, c.env.D1_API_BASE);
+  const raw = await kv.get(ns, key);
+  return raw != null && raw !== '';
+}
+
+export async function hasAppConfig(c: any, key: string): Promise<boolean> {
+  return hasStoredConfig(c, NS_APP, key);
+}
+
+export async function hasPluginConfig(c: any, plugin: string, key: string): Promise<boolean> {
+  return hasStoredConfig(c, pluginNs(plugin), key);
+}
+
 export async function getPluginConfig(c: any, plugin: string, key: string): Promise<string | null> {
   return readConfig(c, pluginNs(plugin), key);
 }
