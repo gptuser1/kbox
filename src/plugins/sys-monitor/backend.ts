@@ -1,5 +1,5 @@
 import { Hono } from 'hono';
-import { createKv } from '../../services/kv';
+import { createDb } from '../../abstraction/d1';
 import { getConfig } from '../../services/config';
 
 type Bindings = {
@@ -11,9 +11,53 @@ type Variables = {
   token: string;
 };
 
-const NS_HOSTS = 'sys_monitor:hosts';
 const DEFAULT_HISTORY_MAX = 60;
 const DEFAULT_ONLINE_TIMEOUT_MIN = 30;
+
+// ─── 关系化表 ───
+// 从「整条 host + history 塞一个 JSON blob」改为两张规范化表：
+//  - kbox_sm_hosts: 每主机一行，只存最新合并数据，不含历史
+//  - kbox_sm_history: 每主机每次上报一行，供历史趋势走索引查询
+const T_HOSTS = 'kbox_sm_hosts';
+const T_HISTORY = 'kbox_sm_history';
+// 旧 KV 模拟表（namespace 前缀），供一次性迁移
+const LEGACY_NS = 'sys_monitor:hosts';
+const T_LEGACY = 'kbox_kv';
+
+type Db = ReturnType<typeof createDb>;
+
+// 按连接缓存建表/迁移状态
+const smReady = new Map<string, boolean>();
+
+function connKey(token: string, base?: string): string {
+  return token + '|' + (base || '');
+}
+
+// 重置表就绪/迁移状态（仅测试用）
+export function _resetSmState() {
+  smReady.clear();
+}
+
+// 幂等建表（IF NOT EXISTS）
+function ensureSql(): string[] {
+  return [
+    `CREATE TABLE IF NOT EXISTS ${T_HOSTS} (
+      hostname TEXT NOT NULL PRIMARY KEY,
+      name TEXT NOT NULL,
+      first_seen INTEGER NOT NULL,
+      last_seen INTEGER NOT NULL,
+      data_json TEXT NOT NULL,
+      extra TEXT,
+      custom_schema_json TEXT
+    )`,
+    `CREATE TABLE IF NOT EXISTS ${T_HISTORY} (
+      hostname TEXT NOT NULL,
+      ts INTEGER NOT NULL,
+      data_json TEXT NOT NULL,
+      PRIMARY KEY (hostname, ts)
+    )`,
+  ];
+}
 
 // 从插件级配置读取，带默认值
 async function historyMax(c: any): Promise<number> {
@@ -70,28 +114,26 @@ for (const m of METRIC_SCHEMA) SCHEMA_MAP[m.key] = m;
 const CATEGORIES = ['CPU', '内存', '磁盘', '负载', '网络', '系统'];
 
 // ─── 数据模型 ───
-// 每个主机存为一个 KV，key 为 hostname，value 包含主机信息 + 历史数组（FIFO）
+// kbox_sm_hosts 行对应的内存形态（不含 history；history 在 kbox_sm_history）
+interface HostRow {
+  hostname: string;
+  name: string;
+  firstSeen: number;
+  lastSeen: number;
+  data: Record<string, any>;
+  extra: string | null;
+  customSchema?: Record<string, CustomDef>;
+}
 
 interface HistoryEntry {
   ts: number; // ms unix 时间戳
   data: Record<string, any>;
 }
 
-interface HostRecord {
-  hostname: string;
-  name: string;
-  firstSeen: number; // ms unix 时间戳
-  lastSeen: number;  // ms unix 时间戳
-  data: Record<string, any>; // 最新合并的指标数据
-  extra: string | null; // 最近一次 extra，只保留最新值，无历史
-  customSchema?: Record<string, CustomDef>; // 客户端动态注册的自定义指标定义（key → 定义）
-  history: HistoryEntry[]; // FIFO 数组，按配置最大数量限制
-}
-
 const app = new Hono<{ Bindings: Bindings; Variables: Variables }>();
 
-function kv(c: any) {
-  return createKv(c.env.D1_API_TOKEN, c.env.D1_API_BASE, 'monitor');
+function db(c: any): Db {
+  return createDb(c.env.D1_API_TOKEN, c.env.D1_API_BASE, 'monitor');
 }
 
 function nowMs(): number {
@@ -99,7 +141,7 @@ function nowMs(): number {
 }
 
 // ─── 自定义指标 ───
-// 客户端通过 extra 约定 JSON 动态注册指标，字段对齐 MetricDef：
+// 客户端通过 custom 约定 JSON 动态注册指标，字段对齐 MetricDef：
 //   {"category":"系统","custom":[{"label":"电量","type":"percent","value":61,"unit":"%","warn":30,"crit":10,"summary":true}]}
 // - 顶层 category 可选：指定这些指标展示的分类卡片，缺省放「自定义」
 // - 每项字段：label(数据名，必填)、type(对齐 MetricDef，必填)、value(必填)、unit/warn/crit/summary(可选)
@@ -150,7 +192,6 @@ export function parseCustomExtra(extra: string): { category: string | null; item
 }
 
 // 按 schema 解析原始 data，返回结构化的分类指标
-// customSchema 为客户端动态注册的自定义指标定义，缺省时对自定义字段做类型兜底
 export function parseMetrics(data: Record<string, any>, customSchema?: Record<string, CustomDef>): Record<string, { label: string; metrics: { key: string; label: string; type: string; value: any; unit?: string; warn?: number; crit?: number }[] }> {
   const result: Record<string, { label: string; metrics: any[] }> = {};
   for (const cat of CATEGORIES) result[cat] = { label: cat, metrics: [] };
@@ -219,6 +260,129 @@ export async function isOnline(c: any, lastSeen: number): Promise<boolean> {
   return Date.now() - lastSeen < timeout * 60 * 1000;
 }
 
+// ─── 数据访问（关系化） ───
+
+// 表就绪检查 + 一次性建表
+async function ensureTables(k: Db, c: any): Promise<void> {
+  const kkey = connKey(c.env.D1_API_TOKEN, c.env.D1_API_BASE);
+  if (smReady.get(kkey)) return;
+  for (const sql of ensureSql()) {
+    await k.execute(sql);
+  }
+  await migrateLegacyOnce(k, c, kkey);
+  smReady.set(kkey, true);
+}
+
+// 一次性迁移：把旧 kbox_kv 中 sys_monitor:hosts 的整条 blob 拆进新表。
+// 分片执行到「新表已存在任一主机」为止，避免每次请求重复迁移（幂等由 INSERT OR IGNORE 保证）。
+async function migrateLegacyOnce(k: Db, c: any, kkey: string): Promise<void> {
+  try {
+    const probe = await k.queryOne<{ c: number }>(`SELECT COUNT(*) AS c FROM ${T_HOSTS}`);
+    if (probe && Number(probe.c) > 0) return; // 已有数据，跳过
+
+    // 读取旧表该 namespace 全部行（value 为整条 host blob，含 history）
+    const rows = await k.queryAll<{ key: string; value: string }>(
+      `SELECT key, value FROM ${T_LEGACY} WHERE namespace = ?`,
+      [LEGACY_NS]
+    );
+
+    for (const row of rows) {
+      let old: any;
+      try {
+        old = JSON.parse(row.value);
+      } catch {
+        continue;
+      }
+      if (!old || typeof old !== 'object') continue;
+
+      const hostname = (old.hostname || row.key || '').toString();
+      if (!hostname) continue;
+
+      // hosts 行
+      await k.execute(
+        `INSERT OR IGNORE INTO ${T_HOSTS} (hostname, name, first_seen, last_seen, data_json, extra, custom_schema_json)
+         VALUES (?, ?, ?, ?, ?, ?, ?)`,
+        [
+          hostname,
+          old.name != null ? String(old.name) : hostname,
+          Number(old.firstSeen) || 0,
+          Number(old.lastSeen) || 0,
+          JSON.stringify(old.data || {}),
+          old.extra != null ? String(old.extra) : null,
+          old.customSchema ? JSON.stringify(old.customSchema) : null,
+        ]
+      );
+
+      // history 行
+      if (Array.isArray(old.history)) {
+        for (const h of old.history) {
+          if (!h || typeof h.ts === 'undefined') continue;
+          await k.execute(
+            `INSERT OR IGNORE INTO ${T_HISTORY} (hostname, ts, data_json) VALUES (?, ?, ?)`,
+            [hostname, Number(h.ts) || 0, JSON.stringify(h.data || {})]
+          );
+        }
+      }
+    }
+  } catch (e) {
+    // 旧表不存在或无权限等：忽略迁移，新表仍可正常使用
+    console.error('sys-monitor legacy migration skipped:', e instanceof Error ? e.message : e);
+  }
+}
+
+function rowToHost(row: any): HostRow {
+  let data: Record<string, any> = {};
+  try { data = row.data_json ? JSON.parse(row.data_json) : {}; } catch { data = {}; }
+  let customSchema: Record<string, CustomDef> | undefined;
+  if (row.custom_schema_json) {
+    try { customSchema = JSON.parse(row.custom_schema_json); } catch { /* 忽略 */ }
+  }
+  return {
+    hostname: row.hostname,
+    name: row.name,
+    firstSeen: Number(row.first_seen),
+    lastSeen: Number(row.last_seen),
+    data,
+    extra: row.extra,
+    customSchema,
+  };
+}
+
+// 读主机（hosts 行，不含 history）
+async function getHost(k: Db, hostname: string): Promise<HostRow | null> {
+  const row = await k.queryOne(
+    `SELECT hostname, name, first_seen, last_seen, data_json, extra, custom_schema_json
+     FROM ${T_HOSTS} WHERE hostname = ?`,
+    [hostname]
+  );
+  if (!row) return null;
+  return rowToHost(row);
+}
+
+// upsert 主机行（局部写本次合并后的最新数据）
+async function upsertHost(k: Db, host: HostRow): Promise<void> {
+  await k.execute(
+    `INSERT INTO ${T_HOSTS} (hostname, name, first_seen, last_seen, data_json, extra, custom_schema_json)
+     VALUES (?, ?, ?, ?, ?, ?, ?)
+     ON CONFLICT(hostname) DO UPDATE SET
+       name = excluded.name,
+       first_seen = excluded.first_seen,
+       last_seen = excluded.last_seen,
+       data_json = excluded.data_json,
+       extra = excluded.extra,
+       custom_schema_json = excluded.custom_schema_json`,
+    [
+      host.hostname,
+      host.name,
+      host.firstSeen,
+      host.lastSeen,
+      JSON.stringify(host.data),
+      host.extra,
+      host.customSchema ? JSON.stringify(host.customSchema) : null,
+    ]
+  );
+}
+
 // ─── 客户端上报 ───
 app.post('/report', async (c) => {
   let body: any;
@@ -249,16 +413,22 @@ app.post('/report', async (c) => {
     }
   }
   const ts = nowMs();
-  const k = kv(c);
-
-  let host: HostRecord | null = null;
+  const k = db(c);
   try {
-    host = await k.getJson<HostRecord>(NS_HOSTS, hostname);
-  } catch { /* 不存在 */ }
+    await ensureTables(k, c);
+  } catch (e: any) {
+    console.error('sys-monitor ensureTables failed:', e?.message);
+    return c.json({ error: `表初始化失败：${e.message}` }, 503);
+  }
 
+  let host = await getHost(k, hostname);
+
+  let firstSeen = ts;
+  let name = hostname;
   if (host) {
     // 更新已有主机
-    host.lastSeen = ts;
+    firstSeen = host.firstSeen;
+    name = host.name;
     // 合并：客户端上报的字段覆盖旧值
     for (const key of Object.keys(reportData)) {
       if (reportData[key] === null) {
@@ -273,17 +443,17 @@ app.post('/report', async (c) => {
     }
     // extra 只保留最新值（纯附件，不参与指标解析）
     if (extra !== null) host.extra = extra;
+    host.lastSeen = ts;
   } else {
     // 新主机
     host = {
       hostname,
-      name: hostname,
-      firstSeen: ts,
+      name,
+      firstSeen,
       lastSeen: ts,
       data: { ...reportData },
       extra: extra,
       customSchema: customDefs || undefined,
-      history: [],
     };
     // 清除 null 值
     for (const key of Object.keys(host.data)) {
@@ -291,34 +461,52 @@ app.post('/report', async (c) => {
     }
   }
 
-  // 添加历史记录（FIFO）
-  host.history.push({ ts, data: reportData });
-  const maxHistory = await historyMax(c);
-  if (host.history.length > maxHistory) {
-    host.history = host.history.slice(-maxHistory);
-  }
+  // 写主机行（只存最新，不重复序列化 history）
+  await upsertHost(k, host);
 
-  await k.set(NS_HOSTS, hostname, host);
+  // 追加一条 history
+  await k.execute(
+    `INSERT INTO ${T_HISTORY} (hostname, ts, data_json) VALUES (?, ?, ?)`,
+    [hostname, ts, JSON.stringify(reportData)]
+  );
+
+  // history 超限清理：仅保留最近 maxHistory 条（hostname+ts 唯一，ts 无重复）
+  const maxHistory = await historyMax(c);
+  await k.execute(
+    `DELETE FROM ${T_HISTORY}
+     WHERE hostname = ? AND ts NOT IN (
+       SELECT ts FROM (
+         SELECT ts FROM ${T_HISTORY} WHERE hostname = ? ORDER BY ts DESC LIMIT ?
+       )
+     )`,
+    [hostname, hostname, maxHistory]
+  );
 
   return c.json({ ok: true, hostname });
 });
 
-// ─── 列出所有主机（含摘要指标） ───
+// ─── 列出所有主机（含摘要指标，不含历史） ───
 app.get('/hosts', async (c) => {
-  const k = kv(c);
+  const k = db(c);
   try {
-    const items = await k.list<HostRecord>(NS_HOSTS);
-    const hosts = (await Promise.all(items.map(async (item) => ({
-      id: item.key,
-      hostname: item.value.hostname,
-      name: item.value.name,
-      firstSeen: item.value.firstSeen,
-      lastSeen: item.value.lastSeen,
-      online: await isOnline(c, item.value.lastSeen),
-      summary: extractSummary(item.value.data, item.value.customSchema),
-      hasExtra: !!item.value.extra,
-    }))));
-    hosts.sort((a, b) => b.lastSeen - a.lastSeen);
+    await ensureTables(k, c);
+    const rows = await k.queryAll(
+      `SELECT hostname, name, first_seen, last_seen, data_json, extra, custom_schema_json
+       FROM ${T_HOSTS} ORDER BY last_seen DESC`
+    );
+    const hosts = await Promise.all(rows.map(async (row: any) => {
+      const host = rowToHost(row);
+      return {
+        id: host.hostname,
+        hostname: host.hostname,
+        name: host.name,
+        firstSeen: host.firstSeen,
+        lastSeen: host.lastSeen,
+        online: await isOnline(c, host.lastSeen),
+        summary: extractSummary(host.data, host.customSchema),
+        hasExtra: !!host.extra,
+      };
+    }));
     return c.json({ hosts });
   } catch (e) {
     return c.json({ error: e instanceof Error ? e.message : '查询失败' }, 500);
@@ -328,13 +516,30 @@ app.get('/hosts', async (c) => {
 // ─── 查询单个主机详情 + 历史 ───
 app.get('/hosts/:id', async (c) => {
   const id = c.req.param('id');
-  const k = kv(c);
-
-  let host: HostRecord | null = null;
+  const k = db(c);
   try {
-    host = await k.getJson<HostRecord>(NS_HOSTS, id);
-  } catch { /* 忽略 */ }
+    await ensureTables(k, c);
+  } catch (e: any) {
+    console.error('sys-monitor ensureTables failed:', e?.message);
+    return c.json({ error: `表初始化失败：${e.message}` }, 503);
+  }
+
+  let host = await getHost(k, id);
   if (!host) return c.json({ error: '主机不存在' }, 404);
+
+  // 从 history 表读最近 100 条（走索引，只取所需）
+  const historyRows = await k.queryAll<{ ts: number; data_json: string }>(
+    `SELECT ts, data_json FROM ${T_HISTORY}
+     WHERE hostname = ? ORDER BY ts DESC LIMIT 100`,
+    [id]
+  );
+  const history: HistoryEntry[] = historyRows
+    .map<HistoryEntry>(r => {
+      let data: Record<string, any> = {};
+      try { data = r.data_json ? JSON.parse(r.data_json) : {}; } catch { data = {}; }
+      return { ts: Number(r.ts), data };
+    })
+    .reverse(); // 时间正序返回，与旧实现一致
 
   return c.json({
     host: {
@@ -348,7 +553,7 @@ app.get('/hosts/:id', async (c) => {
       extra: host.extra,
       customSchema: host.customSchema || {},
     },
-    history: host.history.slice(-100),
+    history,
   });
 });
 
@@ -363,23 +568,33 @@ app.put('/hosts/:id', async (c) => {
   const name = (body.name || '').trim();
   if (!name) return c.json({ error: '缺少 name 字段' }, 400);
 
-  const k = kv(c);
-  let host: HostRecord | null = null;
+  const k = db(c);
   try {
-    host = await k.getJson<HostRecord>(NS_HOSTS, id);
-  } catch { /* 忽略 */ }
+    await ensureTables(k, c);
+  } catch (e: any) {
+    console.error('sys-monitor ensureTables failed:', e?.message);
+    return c.json({ error: `表初始化失败：${e.message}` }, 503);
+  }
+
+  const host = await getHost(k, id);
   if (!host) return c.json({ error: '主机不存在' }, 404);
 
   host.name = name;
-  await k.set(NS_HOSTS, id, host);
+  await upsertHost(k, host);
   return c.json({ ok: true, name });
 });
 
-// ─── 删除主机 ───
+// ─── 删除主机（含其历史） ───
 app.delete('/hosts/:id', async (c) => {
   const id = c.req.param('id');
-  const k = kv(c);
-  await k.delete(NS_HOSTS, id);
+  const k = db(c);
+  try {
+    await ensureTables(k, c);
+    await k.execute(`DELETE FROM ${T_HISTORY} WHERE hostname = ?`, [id]);
+    await k.execute(`DELETE FROM ${T_HOSTS} WHERE hostname = ?`, [id]);
+  } catch (e: any) {
+    return c.json({ error: `删除失败：${e.message}` }, 500);
+  }
   return c.json({ ok: true });
 });
 
