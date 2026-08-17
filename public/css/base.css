@@ -144,6 +144,20 @@ input, select, button, textarea { font-family: inherit; }
 .container { max-width: 920px; margin: 0 auto; padding: 32px 20px 80px; display: none; }
 .container.active { display: block; }
 
+/* ─── 页脚：构建部署版本信息 ─── */
+.app-footer {
+  display: flex; flex-wrap: wrap; align-items: center; justify-content: center;
+  gap: 4px 10px; padding: 20px;
+  font-size: 12.5px; color: var(--text-muted);
+}
+.app-footer__meta code {
+  padding: 1px 5px; border-radius: 5px;
+  background: var(--bg); border: 1px solid var(--border, rgba(0,0,0,0.08));
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 11.5px;
+}
+.app-footer__powered { opacity: 0.8; }
+
 /* ─── 加载层 ─── */
 .app-loader {
   position: fixed; inset: 0; z-index: 9999;

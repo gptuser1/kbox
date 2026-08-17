@@ -26,6 +26,9 @@ type Bindings = {
   OPENAI_MODEL?: string;
   TENCENT_API_BASE?: string;
   YAHOO_API_BASE?: string;
+  // 构建部署信息（由 deploy.yml 经 wrangler --var 注入）
+  BUILD_COMMIT?: string;
+  BUILD_TS?: string;
 };
 
 type Variables = {
@@ -38,7 +41,7 @@ const app = new Hono<{ Bindings: Bindings; Variables: Variables }>();
 app.use('/api/*', authMiddleware);
 
 // ─── 前端页面与静态资源 ───
-app.get('/', (c) => c.html(renderShellHTML()));
+app.get('/', (c) => c.html(renderShellHTML(c.env as Record<string, string | undefined>)));
 
 // ─── 鉴权验证 ───
 app.get('/api/verify', (c) => c.json({ ok: true, message: '令牌有效' }));
