@@ -3,9 +3,10 @@
 
 import { Hono } from 'hono';
 import { createKv } from '../../services/kv';
+import { masterKey } from '../../services/config';
 
 type Bindings = {
-  D1_API_TOKEN: string;
+  SECRET: SecretsStoreSecret;
   D1_API_BASE?: string;
 };
 
@@ -17,7 +18,7 @@ const router = new Hono<{ Bindings: Bindings; Variables: Variables }>();
 
 // 列出所有偏好
 router.get('/', async (c) => {
-  const kv = createKv(c.env.D1_API_TOKEN, c.env.D1_API_BASE);
+  const kv = createKv(await masterKey(c), c.env.D1_API_BASE);
   try {
     const items = await kv.list<any>(NS_PREFS);
     const prefs: Record<string, any> = {};
@@ -32,7 +33,7 @@ router.get('/', async (c) => {
 // 读取单条偏好
 router.get('/:key', async (c) => {
   const key = c.req.param('key');
-  const kv = createKv(c.env.D1_API_TOKEN, c.env.D1_API_BASE);
+  const kv = createKv(await masterKey(c), c.env.D1_API_BASE);
   try {
     const value = await kv.getJson<any>(NS_PREFS, key);
     return c.json({ key, value: value === null ? null : value });
@@ -52,7 +53,7 @@ router.put('/:key', async (c) => {
   if (!('value' in body)) {
     return c.json({ error: '请求体需为 { value: any }' }, 400);
   }
-  const kv = createKv(c.env.D1_API_TOKEN, c.env.D1_API_BASE);
+  const kv = createKv(await masterKey(c), c.env.D1_API_BASE);
   try {
     await kv.set(NS_PREFS, key, body.value);
     return c.json({ ok: true });
@@ -65,7 +66,7 @@ router.put('/:key', async (c) => {
 // 删除单条偏好
 router.delete('/:key', async (c) => {
   const key = c.req.param('key');
-  const kv = createKv(c.env.D1_API_TOKEN, c.env.D1_API_BASE);
+  const kv = createKv(await masterKey(c), c.env.D1_API_BASE);
   try {
     await kv.delete(NS_PREFS, key);
     return c.json({ ok: true });

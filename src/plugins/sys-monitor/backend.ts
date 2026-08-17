@@ -1,9 +1,9 @@
 import { Hono } from 'hono';
 import { createDb } from '../../abstraction/d1';
-import { getConfig } from '../../services/config';
+import { getConfig, masterKey } from '../../services/config';
 
 type Bindings = {
-  D1_API_TOKEN: string;
+  SECRET: SecretsStoreSecret;
   D1_API_BASE?: string;
 };
 
@@ -157,8 +157,8 @@ interface HistoryEntry {
 
 const app = new Hono<{ Bindings: Bindings; Variables: Variables }>();
 
-function db(c: any): Db {
-  return createDb(c.env.D1_API_TOKEN, c.env.D1_API_BASE, 'monitor');
+async function db(c: any): Promise<Db> {
+  return createDb(await masterKey(c), c.env.D1_API_BASE, 'monitor');
 }
 
 function nowMs(): number {
@@ -289,7 +289,8 @@ export async function isOnline(c: any, lastSeen: number): Promise<boolean> {
 
 // 表就绪检查 + 一次性建表
 async function ensureTables(k: Db, c: any): Promise<void> {
-  const kkey = connKey(c.env.D1_API_TOKEN, c.env.D1_API_BASE);
+  const tk = await masterKey(c);
+  const kkey = connKey(tk, c.env.D1_API_BASE);
   if (smReady.get(kkey)) return;
   for (const sql of ensureSql()) {
     await k.execute(sql);
@@ -380,7 +381,7 @@ app.post('/report', async (c) => {
     }
   }
   const ts = nowMs();
-  const k = db(c);
+  const k = await db(c);
   try {
     await ensureTables(k, c);
   } catch (e: any) {
@@ -454,7 +455,7 @@ app.post('/report', async (c) => {
 
 // ─── 列出所有主机（含摘要指标，不含历史） ───
 app.get('/hosts', async (c) => {
-  const k = db(c);
+  const k = await db(c);
   try {
     await ensureTables(k, c);
     const rows = await k.queryAll(
@@ -483,7 +484,7 @@ app.get('/hosts', async (c) => {
 // ─── 查询单个主机详情 + 历史 ───
 app.get('/hosts/:id', async (c) => {
   const id = c.req.param('id');
-  const k = db(c);
+  const k = await db(c);
   try {
     await ensureTables(k, c);
   } catch (e: any) {
@@ -535,7 +536,7 @@ app.put('/hosts/:id', async (c) => {
   const name = (body.name || '').trim();
   if (!name) return c.json({ error: '缺少 name 字段' }, 400);
 
-  const k = db(c);
+  const k = await db(c);
   try {
     await ensureTables(k, c);
   } catch (e: any) {
@@ -554,7 +555,7 @@ app.put('/hosts/:id', async (c) => {
 // ─── 删除主机（含其历史） ───
 app.delete('/hosts/:id', async (c) => {
   const id = c.req.param('id');
-  const k = db(c);
+  const k = await db(c);
   try {
     await ensureTables(k, c);
     await k.execute(`DELETE FROM ${T_HISTORY} WHERE hostname = ?`, [id]);

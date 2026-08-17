@@ -4,7 +4,7 @@
 import { Context, Next } from 'hono';
 
 type Bindings = {
-  ACCESS_TOKEN: string;
+  SECRET: SecretsStoreSecret;
 };
 
 type Variables = {
@@ -28,7 +28,8 @@ export async function authMiddleware(c: Context<{ Bindings: Bindings; Variables:
   if (!token) {
     return c.json({ error: '缺少鉴权信息，格式: Bearer <token> 或 ?token=<token>' }, 401);
   }
-  if (token !== c.env.ACCESS_TOKEN) {
+  const expected = await c.env.SECRET.get();
+  if (token !== expected) {
     return c.json({ error: '令牌无效' }, 401);
   }
   c.set('token', token);

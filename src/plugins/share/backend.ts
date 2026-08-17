@@ -1,11 +1,11 @@
 // Share Text 端点（公开只读，简单 token 认证）
 
 import { Hono } from 'hono';
-import { getConfig } from '../../services/config';
+import { getConfig, masterKey } from '../../services/config';
 import { createKv } from '../../services/kv';
 
 type Bindings = {
-  D1_API_TOKEN: string;
+  SECRET: SecretsStoreSecret;
   D1_API_BASE?: string;
 };
 
@@ -28,7 +28,7 @@ router.get('/text', async (c) => {
   }
   const diskBase = await getConfig(c, 'disk', 'disk_d1_base');
   const diskToken = await getConfig(c, 'disk', 'disk_d1_token');
-  const kv = createKv(diskToken || c.env.D1_API_TOKEN, diskBase || c.env.D1_API_BASE);
+  const kv = createKv(diskToken || await masterKey(c), diskBase || c.env.D1_API_BASE);
   try {
     const value = await kv.get('share_text', key);
     if (value === null) {

@@ -35,14 +35,16 @@ async function fakeFetch(input: any, init?: RequestInit): Promise<Response> {
 }
 
 // config mock：让 getConfig 走默认值（历史上限 60，在线超时 30min）
+// masterKey mock 返回固定 token，避免依赖真实 SECRET binding
 vi.mock('../../src/services/config', () => ({
   getConfig: vi.fn(async () => null),
+  masterKey: vi.fn(async () => 'test-token'),
 }));
 
 import sysMonitorPlugin from '../src/plugins/sys-monitor/backend';
 
 function makeEnv() {
-  return { D1_API_TOKEN: 'test-token', D1_API_BASE: 'http://d1.test' };
+  return { SECRET: { get: async () => 'test-token' }, D1_API_BASE: 'http://d1.test' };
 }
 
 function appReq(method: string, path: string, body?: unknown, env = makeEnv()) {

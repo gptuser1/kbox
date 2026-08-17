@@ -1,5 +1,6 @@
 import { Hono } from 'hono';
 import { createKv } from '../../services/kv';
+import { masterKey } from '../../services/config';
 import type { OutboundSource } from '../../abstraction/d1';
 import { runCron as runNewsCrawl } from '../news/backend';
 import type { BackendPlugin } from '../../adaptation/types';
@@ -50,7 +51,7 @@ export function normalizeHours(input: any): number[] {
 
 // cron 调度入口：每小时触发一次，按当前小时匹配任务的 hours 字段
 export async function runCronTasks(env: any): Promise<{ ran: number; skipped: number; errors: number }> {
-  const kv = createKv(env.D1_API_TOKEN, env.D1_API_BASE, 'cron');
+  const kv = createKv(await masterKey(env), env.D1_API_BASE, 'cron');
   const result = { ran: 0, skipped: 0, errors: 0 };
 
   let items: Array<{ key: string; value: CronTask }>;
@@ -118,14 +119,14 @@ async function runTask(env: any, task: CronTask, source: OutboundSource = 'defau
 // ─── CRUD 辅助函数（供路由使用） ───
 
 export async function listTasks(env: any): Promise<CronTask[]> {
-  const kv = createKv(env.D1_API_TOKEN, env.D1_API_BASE);
+  const kv = createKv(await masterKey(env), env.D1_API_BASE);
   const items = await kv.list<CronTask>(NS_CRON_TASKS);
   return items.map(i => ({ ...i.value, id: i.key }))
     .sort((a, b) => b.createdAt - a.createdAt);
 }
 
 export async function createTask(env: any, data: Partial<CronTask>): Promise<CronTask> {
-  const kv = createKv(env.D1_API_TOKEN, env.D1_API_BASE);
+  const kv = createKv(await masterKey(env), env.D1_API_BASE);
   if (!data.action || !CRON_ACTIONS[data.action]) {
     throw new Error('action 必须是 ' + Object.keys(CRON_ACTIONS).join('/'));
   }
@@ -143,7 +144,7 @@ export async function createTask(env: any, data: Partial<CronTask>): Promise<Cro
 }
 
 export async function updateTask(env: any, id: string, data: Partial<CronTask>): Promise<CronTask | null> {
-  const kv = createKv(env.D1_API_TOKEN, env.D1_API_BASE);
+  const kv = createKv(await masterKey(env), env.D1_API_BASE);
   const existing = await kv.getJson<CronTask>(NS_CRON_TASKS, id);
   if (!existing) return null;
   if (data.name !== undefined) existing.name = (data.name || '').trim() || existing.name;
@@ -155,13 +156,13 @@ export async function updateTask(env: any, id: string, data: Partial<CronTask>):
 }
 
 export async function deleteTask(env: any, id: string): Promise<boolean> {
-  const kv = createKv(env.D1_API_TOKEN, env.D1_API_BASE);
+  const kv = createKv(await masterKey(env), env.D1_API_BASE);
   await kv.delete(NS_CRON_TASKS, id);
   return true;
 }
 
 export async function triggerTask(env: any, id: string): Promise<{ ok: boolean; error?: string }> {
-  const kv = createKv(env.D1_API_TOKEN, env.D1_API_BASE);
+  const kv = createKv(await masterKey(env), env.D1_API_BASE);
   const task = await kv.getJson<CronTask>(NS_CRON_TASKS, id);
   if (!task) return { ok: false, error: '任务不存在' };
   const status = await runTask(env, task);

@@ -1,7 +1,7 @@
-import { getConfigByEnv } from '../../services/config'
+import { getConfigByEnv, masterKey } from '../../services/config'
 
 interface Env {
-  D1_API_TOKEN: string
+  SECRET: SecretsStoreSecret;
   D1_API_BASE?: string
   OPENAI_API_KEY?: string
   OPENAI_BASE_URL?: string

@@ -13,3 +13,8 @@ crons = ["5 * * * *"]
 [observability.logs]
 enabled = true
 invocation_logs = true
+
+[[secrets_store_secrets]]
+store_id = "4cac25c20606481c9e202263d45a1d03"
+binding = "SECRET"
+secret_name = "0xffff"

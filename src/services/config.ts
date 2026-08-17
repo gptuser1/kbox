@@ -60,8 +60,9 @@ function cacheInvalidate(ns: string, key?: string) {
   }
 }
 
-function masterKey(c: any): string {
-  return c.env.D1_API_TOKEN || c.env.ACCESS_TOKEN || '';
+// 主令牌：从绑定的 secrets store 异步读取
+export async function masterKey(c: any): Promise<string> {
+  return await c.env.SECRET.get();
 }
 
 // 读单条配置（含解密）
@@ -69,7 +70,7 @@ async function readConfig(c: any, ns: string, key: string): Promise<string | nul
   const cached = cacheGet(ns, key);
   if (cached !== undefined) return cached;
 
-  const kv = createKv(c.env.D1_API_TOKEN, c.env.D1_API_BASE);
+  const kv = createKv(await masterKey(c), c.env.D1_API_BASE);
   const value = await kv.getJson<any>(ns, key);
 
   let result: string | null = null;
@@ -79,7 +80,7 @@ async function readConfig(c: any, ns: string, key: string): Promise<string | nul
     result = value;
   } else if (isEncrypted(value)) {
     try {
-      result = await decrypt(masterKey(c), value);
+      result = await decrypt(await masterKey(c), value);
     } catch (e) {
       console.error('Config decrypt failed:', ns, key, e instanceof Error ? e.message : e);
       result = null;
@@ -95,10 +96,10 @@ async function readConfig(c: any, ns: string, key: string): Promise<string | nul
 
 // 写单条配置
 async function writeConfig(c: any, ns: string, key: string, value: string, sensitive: boolean) {
-  const kv = createKv(c.env.D1_API_TOKEN, c.env.D1_API_BASE);
+  const kv = createKv(await masterKey(c), c.env.D1_API_BASE);
   let stored: any = value;
   if (sensitive && value) {
-    stored = await encrypt(masterKey(c), value);
+    stored = await encrypt(await masterKey(c), value);
   }
   await kv.set(ns, key, stored);
   cacheInvalidate(ns, key);
@@ -129,7 +130,7 @@ export async function getAppConfig(c: any, key: string): Promise<string | null> 
 // 仅判断指定 namespace 下某 key 是否已存值，不需要明文时不触发解密。
 // 敏感配置在列表/读取接口只用于显示「是否已配置」，避免每次 PBKDF2 解密的无谓 CPU。
 async function hasStoredConfig(c: any, ns: string, key: string): Promise<boolean> {
-  const kv = createKv(c.env.D1_API_TOKEN, c.env.D1_API_BASE);
+  const kv = createKv(await masterKey(c), c.env.D1_API_BASE);
   const raw = await kv.get(ns, key);
   return raw != null && raw !== '';
 }
@@ -156,7 +157,7 @@ export async function setAppConfig(c: any, key: string, value: string) {
 
 // 删除全局配置
 export async function deleteAppConfig(c: any, key: string) {
-  const kv = createKv(c.env.D1_API_TOKEN, c.env.D1_API_BASE);
+  const kv = createKv(await masterKey(c), c.env.D1_API_BASE);
   await kv.delete(NS_APP, key);
   cacheInvalidate(NS_APP, key);
 }
@@ -171,7 +172,7 @@ export async function setPluginConfig(c: any, plugin: string, key: string, value
 
 // 删除插件级覆盖
 export async function deletePluginConfig(c: any, plugin: string, key: string) {
-  const kv = createKv(c.env.D1_API_TOKEN, c.env.D1_API_BASE);
+  const kv = createKv(await masterKey(c), c.env.D1_API_BASE);
   await kv.delete(pluginNs(plugin), key);
   cacheInvalidate(pluginNs(plugin), key);
 }
@@ -183,7 +184,7 @@ export function getConfigSchema(): ConfigField[] {
 
 // 列出某插件的所有覆盖配置 key
 export async function listPluginOverrides(c: any, plugin: string): Promise<string[]> {
-  const kv = createKv(c.env.D1_API_TOKEN, c.env.D1_API_BASE);
+  const kv = createKv(await masterKey(c), c.env.D1_API_BASE);
   const items = await kv.list(pluginNs(plugin));
   return items.map(i => i.key);
 }

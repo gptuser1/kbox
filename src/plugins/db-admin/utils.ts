@@ -1,8 +1,9 @@
 import { DbError, SOURCE_HEADER } from '../../abstraction/d1';
+import { masterKey } from '../../services/config';
 import { createKv } from '../../services/kv';
 
 export type Bindings = {
-  D1_API_TOKEN: string;
+  SECRET: SecretsStoreSecret;
   D1_API_BASE?: string;
 };
 
@@ -33,8 +34,8 @@ export function genId(): string {
   return Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
 }
 
-export function getKv(c: any) {
-  return createKv(c.env.D1_API_TOKEN, c.env.D1_API_BASE);
+export async function getKv(c: any) {
+  return createKv(await masterKey(c), c.env.D1_API_BASE);
 }
 
 export function errorResponse(c: any, e: unknown, defaultMsg = '服务器内部错误') {
@@ -46,7 +47,7 @@ export function errorResponse(c: any, e: unknown, defaultMsg = '服务器内部�
 }
 
 export function kvError(c: any, kv: any) {
-  return c.json({ error: kv.error() || 'KV 表初始化失败，请检查 D1_API_TOKEN' }, 503);
+  return c.json({ error: kv.error() || 'KV 表初始化失败，请检查主令牌' }, 503);
 }
 
 // 表名/列名仅允许字母数字下划线，防止注入
@@ -70,10 +71,11 @@ export async function callD1Rest(
   params: any[] = [],
 ): Promise<{ ok: boolean; status: number; data: any }> {
   const url = buildQueryUrl(conn);
+  const tk = await masterKey({ env });
   const res = await fetch(url, {
     method: 'POST',
     headers: {
-      'Authorization': `Bearer ${env.D1_API_TOKEN}`,
+      'Authorization': `Bearer ${tk}`,
       'Content-Type': 'application/json',
       [SOURCE_HEADER]: 'default',
     },
@@ -86,7 +88,7 @@ export async function callD1Rest(
 
 // 取连接（404 友好）：成功返回 DbConnection，失败返回 Response
 export async function getConn(c: any, id: string): Promise<DbConnection | Response> {
-  const kv = getKv(c);
+  const kv = await getKv(c);
   try {
     const conn = await kv.getJson<DbConnection>(NS, id);
     if (!conn) return c.json({ error: '连接不存在' }, 404);

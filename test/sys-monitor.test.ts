@@ -4,9 +4,10 @@ import { METRIC_SCHEMA, SCHEMA_MAP, parseMetrics, extractSummary, isOnline } fro
 // Mock getConfig to return null (fall back to default), so isOnline uses default 30min timeout
 vi.mock('../src/services/config', () => ({
   getConfig: vi.fn().mockResolvedValue(null),
+  masterKey: vi.fn(async () => 'master'),
 }));
 
-const mockC = { env: { D1_API_TOKEN: 'test', D1_API_BASE: 'http://test' } };
+const mockC = { env: { SECRET: { get: async () => 'master' }, D1_API_BASE: 'http://test' } };
 
 describe('METRIC_SCHEMA', () => {
   it('has 19 metric definitions', () => {

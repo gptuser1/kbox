@@ -1,5 +1,6 @@
 import { Hono } from 'hono';
 import { createKv } from '../../services/kv';
+import { masterKey } from '../../services/config';
 import { listNews, getTopKeywords } from '../news/backend';
 import { listFunds } from '../stock/backend';
 import { listDiskFiles, getDiskStats } from '../disk/backend';
@@ -7,7 +8,7 @@ import type { BackendPlugin } from '../../adaptation/types';
 import { manifest } from './manifest';
 
 type Bindings = {
-  D1_API_TOKEN: string;
+  SECRET: SecretsStoreSecret;
   D1_API_BASE?: string;
 };
 
@@ -59,8 +60,8 @@ function nowUnix(): number {
   return Date.now();
 }
 
-function getKv(c: any) {
-  return createKv(c.env.D1_API_TOKEN, c.env.D1_API_BASE);
+async function getKv(c: any) {
+  return createKv(await masterKey(c), c.env.D1_API_BASE);
 }
 
 // ─── kbox 对象构造 ───
@@ -90,21 +91,21 @@ function buildKbox(env: any, logs: string[]): any {
 
     kv: {
       get: async (ns: string, key: string) => {
-        const kv = createKv(env.D1_API_TOKEN, env.D1_API_BASE);
+        const kv = createKv(await masterKey(env), env.D1_API_BASE);
         return await kv.getJson(ns, key);
       },
       set: async (ns: string, key: string, value: any) => {
         if (isWriteForbidden(ns)) throw new Error('禁止写入系统 namespace: ' + ns);
-        const kv = createKv(env.D1_API_TOKEN, env.D1_API_BASE);
+        const kv = createKv(await masterKey(env), env.D1_API_BASE);
         await kv.set(ns, key, value);
       },
       delete: async (ns: string, key: string) => {
         if (isWriteForbidden(ns)) throw new Error('禁止写入系统 namespace: ' + ns);
-        const kv = createKv(env.D1_API_TOKEN, env.D1_API_BASE);
+        const kv = createKv(await masterKey(env), env.D1_API_BASE);
         await kv.delete(ns, key);
       },
       list: async (ns: string) => {
-        const kv = createKv(env.D1_API_TOKEN, env.D1_API_BASE);
+        const kv = createKv(await masterKey(env), env.D1_API_BASE);
         return await kv.list(ns);
       },
     },
@@ -187,7 +188,7 @@ function timeout(ms: number): Promise<never> {
 
 // 列出所有脚本
 app.get('/scripts', async (c) => {
-  const kv = getKv(c);
+  const kv = await getKv(c);
   try {
     const items = await kv.list<JsScript>(NS_SCRIPTS);
     const scripts = items.map(i => ({ ...i.value, id: i.key }))
@@ -201,7 +202,7 @@ app.get('/scripts', async (c) => {
 
 // 列出已发布脚本（供首页卡片）
 app.get('/published', async (c) => {
-  const kv = getKv(c);
+  const kv = await getKv(c);
   try {
     const items = await kv.list<JsScript>(NS_SCRIPTS);
     const published = items
@@ -217,7 +218,7 @@ app.get('/published', async (c) => {
 
 // 新建脚本
 app.post('/scripts', async (c) => {
-  const kv = getKv(c);
+  const kv = await getKv(c);
   let body: any;
   try { body = await c.req.json(); } catch {
     return c.json({ error: '请求体必须是有效的JSON' }, 400);
@@ -245,7 +246,7 @@ app.post('/scripts', async (c) => {
 
 // 获取单条
 app.get('/scripts/:id', async (c) => {
-  const kv = getKv(c);
+  const kv = await getKv(c);
   const id = c.req.param('id');
   try {
     const script = await kv.getJson<JsScript>(NS_SCRIPTS, id);
@@ -259,7 +260,7 @@ app.get('/scripts/:id', async (c) => {
 
 // 更新脚本
 app.put('/scripts/:id', async (c) => {
-  const kv = getKv(c);
+  const kv = await getKv(c);
   const id = c.req.param('id');
   let body: any;
   try { body = await c.req.json(); } catch {
@@ -287,7 +288,7 @@ app.put('/scripts/:id', async (c) => {
 
 // 删除脚本
 app.delete('/scripts/:id', async (c) => {
-  const kv = getKv(c);
+  const kv = await getKv(c);
   const id = c.req.param('id');
   try {
     await kv.delete(NS_SCRIPTS, id);
@@ -300,7 +301,7 @@ app.delete('/scripts/:id', async (c) => {
 
 // 切换发布状态
 app.post('/scripts/:id/publish', async (c) => {
-  const kv = getKv(c);
+  const kv = await getKv(c);
   const id = c.req.param('id');
   let body: any;
   try { body = await c.req.json(); } catch {
@@ -335,7 +336,7 @@ app.post('/run', async (c) => {
 
 // ─── 通用 KV 读写（供前端 kbox.kv 调用，带黑名单校验） ───
 app.get('/kv/:ns/:key', async (c) => {
-  const kv = getKv(c);
+  const kv = await getKv(c);
   const ns = c.req.param('ns');
   const key = c.req.param('key');
   try {
@@ -348,7 +349,7 @@ app.get('/kv/:ns/:key', async (c) => {
 });
 
 app.post('/kv/:ns/:key', async (c) => {
-  const kv = getKv(c);
+  const kv = await getKv(c);
   const ns = c.req.param('ns');
   const key = c.req.param('key');
   if (isWriteForbidden(ns)) return c.json({ error: '禁止写入系统 namespace: ' + ns }, 403);
@@ -364,7 +365,7 @@ app.post('/kv/:ns/:key', async (c) => {
 });
 
 app.delete('/kv/:ns/:key', async (c) => {
-  const kv = getKv(c);
+  const kv = await getKv(c);
   const ns = c.req.param('ns');
   const key = c.req.param('key');
   if (isWriteForbidden(ns)) return c.json({ error: '禁止写入系统 namespace: ' + ns }, 403);
@@ -378,7 +379,7 @@ app.delete('/kv/:ns/:key', async (c) => {
 });
 
 app.get('/kv/:ns', async (c) => {
-  const kv = getKv(c);
+  const kv = await getKv(c);
   const ns = c.req.param('ns');
   try {
     const items = await kv.list(ns);
@@ -391,7 +392,7 @@ app.get('/kv/:ns', async (c) => {
 
 // 运行已保存脚本
 app.post('/scripts/:id/run', async (c) => {
-  const kv = getKv(c);
+  const kv = await getKv(c);
   const id = c.req.param('id');
   let body: any = {};
   try { body = await c.req.json(); } catch { /* 无 body 也行 */ }
@@ -417,7 +418,7 @@ app.post('/scripts/:id/run', async (c) => {
 
 // 记录脚本运行结果（前端执行后调用，仅更新 last_run）
 app.post('/scripts/:id/record-run', async (c) => {
-  const kv = getKv(c);
+  const kv = await getKv(c);
   const id = c.req.param('id');
   let body: any;
   try { body = await c.req.json(); } catch { body = {}; }

@@ -1,7 +1,7 @@
-import { getConfigByEnv } from '../../services/config';
+import { getConfigByEnv, masterKey } from '../../services/config';
 
 interface Env {
-  D1_API_TOKEN: string;
+  SECRET: SecretsStoreSecret;
   D1_API_BASE?: string;
   TAVILY_API_KEY?: string;
 }

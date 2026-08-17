@@ -1,10 +1,10 @@
 import { Hono } from 'hono';
 import { createDb, DbError } from '../../abstraction/d1';
 import { createKv } from '../../services/kv';
-import { getConfig } from '../../services/config';
+import { getConfig, masterKey } from '../../services/config';
 
 type Bindings = {
-  D1_API_TOKEN: string;
+  SECRET: SecretsStoreSecret;
   D1_API_BASE?: string;
 };
 
@@ -23,7 +23,7 @@ async function diskD1Creds(c: any): Promise<{ token: string; base?: string }> {
   const base = await getConfig(c, 'disk', 'disk_d1_base');
   const token = await getConfig(c, 'disk', 'disk_d1_token');
   return {
-    token: token || c.env.D1_API_TOKEN,
+    token: token || await masterKey(c),
     base: base || c.env.D1_API_BASE,
   };
 }
@@ -82,7 +82,7 @@ function getDb(c: any, creds: { token: string; base?: string }) {
 // ensureTable 失败时返回该连接对应的错误
 function tableError(c: any, creds: { token: string; base?: string }) {
   const ck = connKey(creds.token, creds.base);
-  return c.json({ error: tableInitError.get(ck) || '数据库初始化失败，请检查 D1_API_TOKEN' }, 503);
+  return c.json({ error: tableInitError.get(ck) || '数据库初始化失败，请检查主令牌' }, 503);
 }
 
 // ─── 全库占用统计 ───
@@ -357,7 +357,7 @@ app.delete('/files/:id', async (c) => {
 // 注意：云盘支持插件级 D1 覆盖，这里读全局凭据（与 kbox 注入语义一致）
 export async function listDiskFiles(env: any): Promise<any[]> {
   const base = env.D1_API_BASE;
-  const token = env.D1_API_TOKEN;
+  const token = await masterKey(env);
   if (!await ensureTable(token, base)) return [];
   const db = createDb(token, base);
   try {
@@ -369,7 +369,7 @@ export async function listDiskFiles(env: any): Promise<any[]> {
 
 export async function getDiskStats(env: any): Promise<any> {
   const base = env.D1_API_BASE;
-  const token = env.D1_API_TOKEN;
+  const token = await masterKey(env);
   if (!await ensureTable(token, base)) return { file_count: 0, total_size: 0, db_size: 0 };
   const db = createDb(token, base);
   try {

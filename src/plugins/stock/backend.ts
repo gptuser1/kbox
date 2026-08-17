@@ -1,13 +1,14 @@
 import { Hono } from 'hono';
 import { DbError } from '../../abstraction/d1';
 import { createKv } from '../../services/kv';
+import { masterKey } from '../../services/config';
 import { refreshValuations } from './stock-fetcher';
 import { getConfig } from '../../services/config';
 import type { BackendPlugin } from '../../adaptation/types';
 import { manifest } from './manifest';
 
 type Bindings = {
-  D1_API_TOKEN: string;
+  SECRET: SecretsStoreSecret;
   D1_API_BASE?: string;
   TENCENT_API_BASE?: string;
   YAHOO_API_BASE?: string;
@@ -45,12 +46,12 @@ function genId(): string {
   return Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
 }
 
-function getKv(c: any) {
-  return createKv(c.env.D1_API_TOKEN, c.env.D1_API_BASE);
+async function getKv(c: any) {
+  return createKv(await masterKey(c), c.env.D1_API_BASE);
 }
 
 function kvError(c: any, kv: any) {
-  return c.json({ error: kv.error() || 'KV 表初始化失败，请检查 D1_API_TOKEN' }, 503);
+  return c.json({ error: kv.error() || 'KV 表初始化失败，请检查主令牌' }, 503);
 }
 
 // 验证 holdings JSON
@@ -90,7 +91,7 @@ interface FundBody {
 
 // 列出所有基金（按 created_at DESC）
 app.get('/funds', async (c) => {
-  const kv = getKv(c);
+  const kv = await getKv(c);
   try {
     const items = await kv.list<FundRecord>(NS_STOCK);
     const funds = items
@@ -105,7 +106,7 @@ app.get('/funds', async (c) => {
 
 // 获取单个基金
 app.get('/funds/:id', async (c) => {
-  const kv = getKv(c);
+  const kv = await getKv(c);
   try {
     const fund = await kv.getJson<FundRecord>(NS_STOCK, c.req.param('id'));
     if (!fund) return c.json({ error: '记录不存在' }, 404);
@@ -118,7 +119,7 @@ app.get('/funds/:id', async (c) => {
 
 // 新增基金
 app.post('/funds', async (c) => {
-  const kv = getKv(c);
+  const kv = await getKv(c);
 
   let body: FundBody;
   try {
@@ -162,7 +163,7 @@ app.post('/funds', async (c) => {
 
 // 批量导入基金
 app.post('/funds/batch', async (c) => {
-  const kv = getKv(c);
+  const kv = await getKv(c);
 
   let body: any;
   try {
@@ -229,7 +230,7 @@ app.post('/funds/batch', async (c) => {
 
 // 更新基金
 app.put('/funds/:id', async (c) => {
-  const kv = getKv(c);
+  const kv = await getKv(c);
   const id = c.req.param('id');
 
   let body: FundBody;
@@ -271,7 +272,7 @@ app.put('/funds/:id', async (c) => {
 
 // 删除基金
 app.delete('/funds/:id', async (c) => {
-  const kv = getKv(c);
+  const kv = await getKv(c);
   try {
     await kv.delete(NS_STOCK, c.req.param('id'));
     return c.json({ ok: true, message: '删除成功' });
@@ -283,7 +284,7 @@ app.delete('/funds/:id', async (c) => {
 
 // 手动触发刷新估值
 app.post('/refresh', async (c) => {
-  const kv = getKv(c);
+  const kv = await getKv(c);
 
   try {
     const tencentBase = await getConfig(c, 'stock', 'tencent_api_base');
@@ -334,7 +335,7 @@ app.post('/refresh', async (c) => {
 
 // ─── 供 JS Runner / kbox 对象内部直调的读函数 ───
 export async function listFunds(env: any): Promise<any[]> {
-  const kv = createKv(env.D1_API_TOKEN, env.D1_API_BASE);
+  const kv = createKv(await masterKey(env), env.D1_API_BASE);
   try {
     const items = await kv.list<FundRecord>(NS_STOCK);
     return items

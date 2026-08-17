@@ -1,11 +1,11 @@
 // GitHub Workflow Dispatch 路由：工作流列表、触发、运行状态、配置 CRUD
 
 import { Hono } from 'hono';
-import { getConfig } from '../../services/config';
+import { getConfig, masterKey } from '../../services/config';
 import { createKv } from '../../services/kv';
 
 type Bindings = {
-  D1_API_TOKEN: string;
+  SECRET: SecretsStoreSecret;
   D1_API_BASE?: string;
 };
 
@@ -341,12 +341,12 @@ interface DispatchConfig {
 const NS_DISPATCH = 'dispatch_configs';
 
 function kvError(c: any, kv: any) {
-  return c.json({ error: kv.error() || 'KV 表初始化失败，请检查 D1_API_TOKEN' }, 503);
+  return c.json({ error: kv.error() || 'KV 表初始化失败，请检查主令牌' }, 503);
 }
 
 // 列出所有 dispatch 配置
 router.get('/dispatch-configs', async (c) => {
-  const kv = createKv(c.env.D1_API_TOKEN, c.env.D1_API_BASE);
+  const kv = createKv(await masterKey(c), c.env.D1_API_BASE);
   try {
     const items = await kv.list<DispatchConfig>(NS_DISPATCH);
     const configs = items.map(item => ({
@@ -362,7 +362,7 @@ router.get('/dispatch-configs', async (c) => {
 
 // 新增配置
 router.post('/dispatch-configs', async (c) => {
-  const kv = createKv(c.env.D1_API_TOKEN, c.env.D1_API_BASE);
+  const kv = createKv(await masterKey(c), c.env.D1_API_BASE);
 
   let body: any;
   try { body = await c.req.json(); } catch {
@@ -394,7 +394,7 @@ router.post('/dispatch-configs', async (c) => {
 
 // 删除配置
 router.delete('/dispatch-configs/:id', async (c) => {
-  const kv = createKv(c.env.D1_API_TOKEN, c.env.D1_API_BASE);
+  const kv = createKv(await masterKey(c), c.env.D1_API_BASE);
   const id = c.req.param('id');
 
   try {

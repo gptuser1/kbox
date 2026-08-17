@@ -21,8 +21,8 @@ jobs:
       - name: Build frontend (esbuild ESM modules)
         run: npm run build:frontend
 
-      # 只部署一次：敏感 secret（ACCESS_TOKEN / D1_API_TOKEN）在 Cloudflare 面板手动维护，
-      # CI 不再运行任何 wrangler secret 命令。这里仅注入非敏感构建变量并 deploy。
+      # 只部署一次：成员变量与密钥绑定在 Cloudflare 控制台维护，
+      # 注入多个非敏感绑定的变量时也仅走一次 deploy。这里仅注入非敏感构建变量。
       - name: Deploy to Cloudflare Workers
         run: |
           COMMIT_SHORT="${GITHUB_SHA:0:7}"

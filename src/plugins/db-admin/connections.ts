@@ -5,7 +5,7 @@ const router = new Hono<{ Bindings: Bindings; Variables: Variables }>();
 
 // 列出所有连接
 router.get('/', async (c) => {
-  const kv = getKv(c);
+  const kv = await getKv(c);
   try {
     const items = await kv.list<DbConnection>(NS);
     const conns = items
@@ -20,7 +20,7 @@ router.get('/', async (c) => {
 
 // 创建连接
 router.post('/', async (c) => {
-  const kv = getKv(c);
+  const kv = await getKv(c);
   try {
     const body = await c.req.json();
     if (!body.name || !body.base_url) {
@@ -45,7 +45,7 @@ router.post('/', async (c) => {
 
 // 更新连接
 router.put('/:id', async (c) => {
-  const kv = getKv(c);
+  const kv = await getKv(c);
   try {
     const id = c.req.param('id');
     const existing = await kv.getJson<DbConnection>(NS, id);
@@ -68,7 +68,7 @@ router.put('/:id', async (c) => {
 
 // 删除连接
 router.delete('/:id', async (c) => {
-  const kv = getKv(c);
+  const kv = await getKv(c);
   try {
     const id = c.req.param('id');
     const existing = await kv.getJson<DbConnection>(NS, id);

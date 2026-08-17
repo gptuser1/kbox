@@ -3,11 +3,12 @@ import type { BackendPlugin } from '../../adaptation/types';
 import { manifest } from './manifest';
 import { createDb, DbError, type OutboundSource } from '../../abstraction/d1';
 import { createKv } from '../../services/kv';
+import { masterKey } from '../../services/config';
 import { crawlAll } from './crawler';
 import { summarizeArticles, extractKeywordsViaLLM, dedupeArticlesByLLM, type KeywordStat } from './llm';
 
 type Bindings = {
-  D1_API_TOKEN: string;
+  SECRET: SecretsStoreSecret;
   D1_API_BASE?: string;
   OPENAI_API_KEY: string;
   OPENAI_BASE_URL: string;
@@ -53,16 +54,16 @@ async function ensureTable(token: string, base?: string, source: OutboundSource 
   }
 }
 
-function getDb(c: any) {
-  return createDb(c.env.D1_API_TOKEN, c.env.D1_API_BASE);
+async function getDb(c: any) {
+  return createDb(await masterKey(c), c.env.D1_API_BASE);
 }
 
-function getKv(c: any) {
-  return createKv(c.env.D1_API_TOKEN, c.env.D1_API_BASE);
+async function getKv(c: any) {
+  return createKv(await masterKey(c), c.env.D1_API_BASE);
 }
 
 function tableError(c: any) {
-  return c.json({ error: tableInitError || '数据库初始化失败，请检查 D1_API_TOKEN' }, 503);
+  return c.json({ error: tableInitError || '数据库初始化失败，请检查主令牌' }, 503);
 }
 
 function nowUnix(): number {
@@ -71,10 +72,10 @@ function nowUnix(): number {
 
 // ─── 抓取 + AI 锐评 + 入库 ───
 export async function runCron(env: any, source: OutboundSource = 'default'): Promise<{ success: boolean; articles_count: number; error?: string }> {
-  if (!await ensureTable(env.D1_API_TOKEN, env.D1_API_BASE, source)) {
+  if (!await ensureTable(await masterKey(env), env.D1_API_BASE, source)) {
     return { success: false, articles_count: 0, error: tableInitError || '建表失败' };
   }
-  const db = createDb(env.D1_API_TOKEN, env.D1_API_BASE, source);
+  const db = createDb(await masterKey(env), env.D1_API_BASE, source);
 
   try {
     const now = nowUnix();
@@ -151,11 +152,11 @@ export async function runCron(env: any, source: OutboundSource = 'default'): Pro
 
 // ─── 生成 Top 10 关键词快照 ───
 export async function generateTopKeywords(env: any): Promise<{ success: boolean; generated_at: number | null; count: number; error?: string }> {
-  if (!await ensureTable(env.D1_API_TOKEN, env.D1_API_BASE)) {
+  if (!await ensureTable(await masterKey(env), env.D1_API_BASE)) {
     return { success: false, generated_at: null, count: 0, error: tableInitError || '建表失败' };
   }
-  const db = createDb(env.D1_API_TOKEN, env.D1_API_BASE);
-  const kv = createKv(env.D1_API_TOKEN, env.D1_API_BASE);
+  const db = createDb(await masterKey(env), env.D1_API_BASE);
+  const kv = createKv(await masterKey(env), env.D1_API_BASE);
 
   try {
     const allRows = await db.queryAll<{ title: string; source: string; url: string; summary: string; category: string; crawled_at: string }>(
@@ -190,8 +191,8 @@ export async function generateTopKeywords(env: any): Promise<{ success: boolean;
 
 // 获取最新新闻列表（默认 30 条）
 app.get('/list', async (c) => {
-  if (!await ensureTable(c.env.D1_API_TOKEN, c.env.D1_API_BASE)) return tableError(c);
-  const db = getDb(c);
+  if (!await ensureTable(await masterKey(c), c.env.D1_API_BASE)) return tableError(c);
+  const db = await getDb(c);
   try {
     const limit = Math.min(Number(c.req.query('limit')) || 30, 100);
     const items = await db.queryAll(
@@ -218,8 +219,8 @@ app.post('/top/refresh', async (c) => {
 
 // 获取 Top 10 关键词
 app.get('/top', async (c) => {
-  if (!await ensureTable(c.env.D1_API_TOKEN, c.env.D1_API_BASE)) return tableError(c);
-  const kv = getKv(c);
+  if (!await ensureTable(await masterKey(c), c.env.D1_API_BASE)) return tableError(c);
+  const kv = await getKv(c);
   try {
     const latest = await kv.getJson<{ generated_at: number; keywords: KeywordStat[] }>(NS_KEYWORDS, KEYWORDS_KEY);
     if (!latest) {
@@ -234,8 +235,8 @@ app.get('/top', async (c) => {
 
 // 删除单条
 app.delete('/items/:id', async (c) => {
-  if (!await ensureTable(c.env.D1_API_TOKEN, c.env.D1_API_BASE)) return tableError(c);
-  const db = getDb(c);
+  if (!await ensureTable(await masterKey(c), c.env.D1_API_BASE)) return tableError(c);
+  const db = await getDb(c);
   try {
     await db.execute(
       `DELETE FROM newsfeed WHERE id = ?`,
@@ -251,8 +252,8 @@ app.delete('/items/:id', async (c) => {
 // 这些函数不走 HTTP，直接复用内部逻辑，避免 token 透传与子请求消耗
 
 export async function listNews(env: any, limit = 30): Promise<any[]> {
-  if (!await ensureTable(env.D1_API_TOKEN, env.D1_API_BASE)) return [];
-  const db = createDb(env.D1_API_TOKEN, env.D1_API_BASE);
+  if (!await ensureTable(await masterKey(env), env.D1_API_BASE)) return [];
+  const db = createDb(await masterKey(env), env.D1_API_BASE);
   try {
     return await db.queryAll(
       `SELECT * FROM newsfeed ORDER BY id DESC LIMIT ?`,
@@ -262,7 +263,7 @@ export async function listNews(env: any, limit = 30): Promise<any[]> {
 }
 
 export async function getTopKeywords(env: any): Promise<{ generated_at: number | null; keywords: any[] }> {
-  const kv = createKv(env.D1_API_TOKEN, env.D1_API_BASE);
+  const kv = createKv(await masterKey(env), env.D1_API_BASE);
   try {
     const latest = await kv.getJson<{ generated_at: number; keywords: any[] }>(NS_KEYWORDS, KEYWORDS_KEY);
     return latest || { generated_at: null, keywords: [] };

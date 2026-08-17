@@ -17,10 +17,8 @@ import shareRoutes from './plugins/share/backend';
 import preferencesRoutes from './plugins/preferences/backend';
 
 type Bindings = {
-  ACCESS_TOKEN: string;
-  D1_API_TOKEN: string;
+  SECRET: SecretsStoreSecret;
   D1_API_BASE?: string;
-  GH_TOKEN?: string;
   OPENAI_API_KEY?: string;
   OPENAI_BASE_URL?: string;
   OPENAI_MODEL?: string;
@@ -40,14 +38,19 @@ const app = new Hono<{ Bindings: Bindings; Variables: Variables }>();
 app.use('/api/*', authMiddleware);
 
 // ─── 前端页面与静态资源 ───
-app.get('/', (c) => c.html(renderShellHTML(c.env as Record<string, string | undefined>)));
+app.get('/', (c) => c.html(renderShellHTML(c.env as unknown as Record<string, string | undefined>)));
 
 // ─── 鉴权验证 ───
 app.get('/api/verify', (c) => c.json({ ok: true, message: '令牌有效' }));
 
 // ─── 健康检查 ───
-app.get('/api/health', (c) => {
-  return c.json({ status: 'ok', d1_token: !!c.env.D1_API_TOKEN });
+app.get('/api/health', async (c) => {
+  let secret = false;
+  try {
+    await c.env.SECRET.get();
+    secret = true;
+  } catch { /* 未配置 */ }
+  return c.json({ status: 'ok', secretConfigured: secret });
 });
 
 // ─── 注册所有插件 ───
