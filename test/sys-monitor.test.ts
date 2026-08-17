@@ -9,8 +9,8 @@ vi.mock('../src/services/config', () => ({
 const mockC = { env: { D1_API_TOKEN: 'test', D1_API_BASE: 'http://test' } };
 
 describe('METRIC_SCHEMA', () => {
-  it('has 18 metric definitions', () => {
-    expect(METRIC_SCHEMA).toHaveLength(18);
+  it('has 19 metric definitions', () => {
+    expect(METRIC_SCHEMA).toHaveLength(19);
   });
 
   it('has summary metrics defined', () => {
