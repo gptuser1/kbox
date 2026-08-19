@@ -72,10 +72,10 @@ function nowUnix(): number {
 
 // ─── 抓取 + AI 锐评 + 入库 ───
 export async function runCron(env: any, source: OutboundSource = 'default'): Promise<{ success: boolean; articles_count: number; error?: string }> {
-  if (!await ensureTable(await masterKey(env), env.D1_API_BASE, source)) {
+  if (!await ensureTable(await masterKey({ env }), env.D1_API_BASE, source)) {
     return { success: false, articles_count: 0, error: tableInitError || '建表失败' };
   }
-  const db = createDb(await masterKey(env), env.D1_API_BASE, source);
+  const db = createDb(await masterKey({ env }), env.D1_API_BASE, source);
 
   try {
     const now = nowUnix();
@@ -152,11 +152,11 @@ export async function runCron(env: any, source: OutboundSource = 'default'): Pro
 
 // ─── 生成 Top 10 关键词快照 ───
 export async function generateTopKeywords(env: any): Promise<{ success: boolean; generated_at: number | null; count: number; error?: string }> {
-  if (!await ensureTable(await masterKey(env), env.D1_API_BASE)) {
+  if (!await ensureTable(await masterKey({ env }), env.D1_API_BASE)) {
     return { success: false, generated_at: null, count: 0, error: tableInitError || '建表失败' };
   }
-  const db = createDb(await masterKey(env), env.D1_API_BASE);
-  const kv = createKv(await masterKey(env), env.D1_API_BASE);
+  const db = createDb(await masterKey({ env }), env.D1_API_BASE);
+  const kv = createKv(await masterKey({ env }), env.D1_API_BASE);
 
   try {
     const allRows = await db.queryAll<{ title: string; source: string; url: string; summary: string; category: string; crawled_at: string }>(
@@ -252,8 +252,8 @@ app.delete('/items/:id', async (c) => {
 // 这些函数不走 HTTP，直接复用内部逻辑，避免 token 透传与子请求消耗
 
 export async function listNews(env: any, limit = 30): Promise<any[]> {
-  if (!await ensureTable(await masterKey(env), env.D1_API_BASE)) return [];
-  const db = createDb(await masterKey(env), env.D1_API_BASE);
+  if (!await ensureTable(await masterKey({ env }), env.D1_API_BASE)) return [];
+  const db = createDb(await masterKey({ env }), env.D1_API_BASE);
   try {
     return await db.queryAll(
       `SELECT * FROM newsfeed ORDER BY id DESC LIMIT ?`,
@@ -263,7 +263,7 @@ export async function listNews(env: any, limit = 30): Promise<any[]> {
 }
 
 export async function getTopKeywords(env: any): Promise<{ generated_at: number | null; keywords: any[] }> {
-  const kv = createKv(await masterKey(env), env.D1_API_BASE);
+  const kv = createKv(await masterKey({ env }), env.D1_API_BASE);
   try {
     const latest = await kv.getJson<{ generated_at: number; keywords: any[] }>(NS_KEYWORDS, KEYWORDS_KEY);
     return latest || { generated_at: null, keywords: [] };

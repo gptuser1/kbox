@@ -357,7 +357,7 @@ app.delete('/files/:id', async (c) => {
 // 注意：云盘支持插件级 D1 覆盖，这里读全局凭据（与 kbox 注入语义一致）
 export async function listDiskFiles(env: any): Promise<any[]> {
   const base = env.D1_API_BASE;
-  const token = await masterKey(env);
+  const token = await masterKey({ env });
   if (!await ensureTable(token, base)) return [];
   const db = createDb(token, base);
   try {
@@ -369,7 +369,7 @@ export async function listDiskFiles(env: any): Promise<any[]> {
 
 export async function getDiskStats(env: any): Promise<any> {
   const base = env.D1_API_BASE;
-  const token = await masterKey(env);
+  const token = await masterKey({ env });
   if (!await ensureTable(token, base)) return { file_count: 0, total_size: 0, db_size: 0 };
   const db = createDb(token, base);
   try {

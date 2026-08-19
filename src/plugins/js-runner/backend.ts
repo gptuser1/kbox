@@ -91,21 +91,21 @@ function buildKbox(env: any, logs: string[]): any {
 
     kv: {
       get: async (ns: string, key: string) => {
-        const kv = createKv(await masterKey(env), env.D1_API_BASE);
+        const kv = createKv(await masterKey({ env }), env.D1_API_BASE);
         return await kv.getJson(ns, key);
       },
       set: async (ns: string, key: string, value: any) => {
         if (isWriteForbidden(ns)) throw new Error('禁止写入系统 namespace: ' + ns);
-        const kv = createKv(await masterKey(env), env.D1_API_BASE);
+        const kv = createKv(await masterKey({ env }), env.D1_API_BASE);
         await kv.set(ns, key, value);
       },
       delete: async (ns: string, key: string) => {
         if (isWriteForbidden(ns)) throw new Error('禁止写入系统 namespace: ' + ns);
-        const kv = createKv(await masterKey(env), env.D1_API_BASE);
+        const kv = createKv(await masterKey({ env }), env.D1_API_BASE);
         await kv.delete(ns, key);
       },
       list: async (ns: string) => {
-        const kv = createKv(await masterKey(env), env.D1_API_BASE);
+        const kv = createKv(await masterKey({ env }), env.D1_API_BASE);
         return await kv.list(ns);
       },
     },

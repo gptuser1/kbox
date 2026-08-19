@@ -335,7 +335,7 @@ app.post('/refresh', async (c) => {
 
 // ─── 供 JS Runner / kbox 对象内部直调的读函数 ───
 export async function listFunds(env: any): Promise<any[]> {
-  const kv = createKv(await masterKey(env), env.D1_API_BASE);
+  const kv = createKv(await masterKey({ env }), env.D1_API_BASE);
   try {
     const items = await kv.list<FundRecord>(NS_STOCK);
     return items
