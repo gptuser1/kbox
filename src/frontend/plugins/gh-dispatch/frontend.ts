@@ -172,6 +172,7 @@ export function mount(): void {
   let selectedWf: string | null = null;
   let selectedWfPath: string | null = null;
   let wfInputs: any[] = [];
+  let currentDefaultBranch = 'main';   // 当前仓库默认分支
 
   // 执行状态轮询
   let runPollTimer: any = null;
@@ -434,18 +435,19 @@ export function mount(): void {
     runSection.style.display = 'none';
 
     try {
-      const defaultBranch = 'main';
-      const [wfData, branchData, commitData] = await Promise.all([
+      const [wfData, branchData] = await Promise.all([
         api('/api/plugins/workflows?owner=' + encodeURIComponent(owner) + '&repo=' + encodeURIComponent(repoName)),
         api('/api/plugins/branches?owner=' + encodeURIComponent(owner) + '&repo=' + encodeURIComponent(repoName)),
-        api('/api/plugins/branch-commit?owner=' + encodeURIComponent(owner) + '&repo=' + encodeURIComponent(repoName) + '&branch=' + encodeURIComponent(defaultBranch)),
       ]);
 
       const branches = branchData.branches || [];
+      currentDefaultBranch = branchData.default_branch || (branches.length ? branches[0].name : 'main');
+      const commitData = await api('/api/plugins/branch-commit?owner=' + encodeURIComponent(owner) + '&repo=' + encodeURIComponent(repoName) + '&branch=' + encodeURIComponent(currentDefaultBranch));
+
       if (branches.length) {
         branchSelect.style.display = '';
         branchSelect.innerHTML = branches.map((b: any) =>
-          '<option value="' + esc(b.name) + '"' + (b.name === 'main' ? ' selected' : '') + '>' + esc(b.name) + '</option>'
+          '<option value="' + esc(b.name) + '"' + (b.name === currentDefaultBranch ? ' selected' : '') + '>' + esc(b.name) + '</option>'
         ).join('');
       }
 
@@ -567,7 +569,7 @@ export function mount(): void {
     triggerBtn.disabled = true; triggerBtn.textContent = '触发中…';
     resultBox.className = 'result-box';
     try {
-      const ref = branchSelect.value || 'main';
+      const ref = branchSelect.value || currentDefaultBranch;
       const data = await api('/api/plugins/dispatch', {
         method: 'POST',
         body: JSON.stringify({ owner, repo: repoName, workflow_id: selectedWf, ref, inputs }),
@@ -610,7 +612,7 @@ export function mount(): void {
     try {
       await api('/api/plugins/dispatch-configs', {
         method: 'POST',
-        body: JSON.stringify({ repo, workflow_id: selectedWf, branch: branchSelect.value || 'main', inputs }),
+        body: JSON.stringify({ repo, workflow_id: selectedWf, branch: branchSelect.value || currentDefaultBranch, inputs }),
         headers: { 'Content-Type': 'application/json' },
       });
       toast('配置已保存', 'success');

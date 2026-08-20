@@ -420,25 +420,32 @@ router.get('/branches', async (c) => {
   }
 
   try {
-    const res = await fetch(
-      `https://api.github.com/repos/${owner}/${repo}/branches?per_page=100`,
-      {
+    const [bnRes, repoRes] = await Promise.all([
+      fetch(`https://api.github.com/repos/${owner}/${repo}/branches?per_page=100`, {
         headers: {
           'Authorization': `Bearer ${ghToken}`,
           'Accept': 'application/vnd.github+json',
           'User-Agent': 'kbox',
         },
-      }
-    );
-    const data: any = await res.json();
-    if (!res.ok) {
-      return c.json({ error: data?.message || `GitHub API ${res.status}` }, res.status as any);
+      }),
+      fetch(`https://api.github.com/repos/${owner}/${repo}`, {
+        headers: {
+          'Authorization': `Bearer ${ghToken}`,
+          'Accept': 'application/vnd.github+json',
+          'User-Agent': 'kbox',
+        },
+      }),
+    ]);
+    const bnData: any = await bnRes.json();
+    const repoData: any = await repoRes.json();
+    if (!bnRes.ok) {
+      return c.json({ error: bnData?.message || `GitHub API ${bnRes.status}` }, bnRes.status as any);
     }
-    const branches = (Array.isArray(data) ? data : []).map((b: any) => ({
+    const branches = (Array.isArray(bnData) ? bnData : []).map((b: any) => ({
       name: b.name,
       protected: b.protected,
     }));
-    return c.json({ branches });
+    return c.json({ branches, default_branch: repoData.default_branch || null });
   } catch (e) {
     return c.json({ error: e instanceof Error ? e.message : '请求失败' }, 500);
   }
