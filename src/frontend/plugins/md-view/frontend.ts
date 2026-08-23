@@ -127,7 +127,7 @@ export function render(): string {
       <button class="btn btn-outline btn-sm" id="mdToggle" type="button" disabled>原文</button>
       <span id="mdMeta" style="font-size:12px;color:var(--text-muted)">未选择文件</span>
     </div>
-    <div class="result-box" id="mdOutput" style="display:none">
+    <div class="result-box" id="mdOutput">
       <div class="section-title">内容</div>
       <div id="mdContent"></div>
     </div>
@@ -164,7 +164,7 @@ export function mount(): void {
       rawText = String(reader.result || '');
       if (!rawText) { toast('文件为空', 'error'); return; }
       showRaw = false;
-      output.style.display = '';
+      output.classList.add('show');
       ($('mdMeta') as HTMLElement).textContent = f.name + ' · ' + (f.size / 1024).toFixed(1) + ' KB';
       toggle.disabled = false;
       refresh();
