@@ -21,6 +21,7 @@ export const PLUGIN_REGISTRY: PluginMeta[] = [
   { id: 'cron', name: '定时任务', icon: '⏰', desc: '定时执行任务' },
   { id: 'config', name: '配置管理', icon: '⚙️', desc: '管理 API 密钥与插件配置' },
   { id: 'sys-monitor', name: '系统监控', icon: '📊', desc: '多主机系统状态监控看板' },
+  { id: 'md-view', name: 'MD 阅读', icon: '📖', desc: '本地渲染 Markdown 文档' },
   { id: 'postman', name: '轻量 Postman', icon: '🚀', desc: '发送 HTTP 请求的轻量级工具' },
   { id: 'qr-transfer', name: 'QR 传输', icon: '📡', desc: '通过 QR 码在设备间传输文件，无需网络' },
 ];
