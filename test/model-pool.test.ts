@@ -42,29 +42,32 @@ describe('compilePool', () => {
         { id: 'google/c', pricing: { prompt: '0', completion: '0' } },       // 无 :free 后缀，剔除
       ] } },
       { url: 'https://opencode.ai/zen/v1/models', body: { data: [
-        { id: 'muse-spark-1.2-contributor-free' },
+        { id: 'muse-spark-1.1-free' },
         { id: 'paid-model' },
       ] } },
       {
         url: 'https://artificialanalysis.ai/api/v2/data/llms/models',
         headers: { 'x-api-key': 'aa-key' },
         body: { data: [
-          { name: 'A', evaluations: { artificial_analysis_intelligence_index: 1 } },
+          // 均 ≥ 35 门槛，保证两源都能过过滤后保留
+          { name: 'A', slug: 'a', evaluations: { artificial_analysis_intelligence_index: 80 } },
+          { name: 'Muse Spark 1.1 (xhigh)', slug: 'muse-spark-1-1', evaluations: { artificial_analysis_intelligence_index: 86 } },
         ] },
       },
     ]);
     const pool = await compilePool({ AA_API_KEY: 'aa-key' } as any);
     expect(pool).toEqual([
-      { model: 'google/a:free', baseurl: 'https://openrouter.ai/api/v1' },
-      { model: 'muse-spark-1.2-contributor-free', baseurl: 'https://opencode.ai/zen/v1' },
+      { model: 'muse-spark-1.1-free', baseurl: 'https://opencode.ai/zen/v1' }, // 86 最前
+      { model: 'google/a:free', baseurl: 'https://openrouter.ai/api/v1' },     // 80
     ]);
   });
 
-  it('AA 有评分的按指数降序在前，无评分者落后', async () => {
+  it('AA ≥35 指数按降序，低分与无分者一律剔除', async () => {
     stubFetch([
       { url: 'https://openrouter.ai/api/v1/models', body: { data: [
-        { id: 'vendor/low:free', pricing: { prompt: '0', completion: '0' } },
+        { id: 'vendor/mid:free', pricing: { prompt: '0', completion: '0' } },
         { id: 'vendor/high:free', pricing: { prompt: '0', completion: '0' } },
+        { id: 'vendor/low:free', pricing: { prompt: '0', completion: '0' } },
         { id: 'vendor/noscore:free', pricing: { prompt: '0', completion: '0' } },
       ] } },
       { url: 'https://opencode.ai/zen/v1/models', body: { data: [] } },
@@ -72,16 +75,45 @@ describe('compilePool', () => {
         url: 'https://artificialanalysis.ai/api/v2/data/llms/models',
         headers: { 'x-api-key': 'test-key' },
         body: { data: [
-          { name: 'High', evaluations: { artificial_analysis_intelligence_index: 90 } },
-          { name: 'Low', evaluations: { artificial_analysis_intelligence_index: 40 } },
+          { name: 'High', slug: 'high', evaluations: { artificial_analysis_intelligence_index: 90 } },
+          { name: 'Mid', slug: 'mid', evaluations: { artificial_analysis_intelligence_index: 40 } },
+          { name: 'Low', slug: 'low', evaluations: { artificial_analysis_intelligence_index: 20 } },
+          // noscore 配不上、Low 20<35，均剔除
         ] },
       },
     ]);
     const pool = await compilePool({ AA_API_KEY: 'test-key' } as any);
     expect(pool.map(e => e.model)).toEqual([
-      'vendor/high:free',   // 90 → 最前
-      'vendor/low:free',    // 40
-      'vendor/noscore:free' // 无评分 → 最后
+      'vendor/high:free',   // 90
+      'vendor/mid:free',    // 40 ≥35 保留
+      // vendor/low(20) 与 vendor/noscore 均被剔除
+    ]);
+  });
+
+  it('AA 以 slug 建表，id 尾部纯标注词剥离后可命中且得同分', async () => {
+    stubFetch([
+      { url: 'https://openrouter.ai/api/v1/models', body: { data: [
+        { id: 'vendor/high:free', pricing: { prompt: '0', completion: '0' } },
+      ] } },
+      { url: 'https://opencode.ai/zen/v1/models', body: { data: [
+        // 带 contributor 标注，AA slug 是 muse-spark-1-2 无该词
+        { id: 'muse-spark-1.2-contributor-free' },
+      ] } },
+      {
+        url: 'https://artificialanalysis.ai/api/v2/data/llms/models',
+        headers: { 'x-api-key': 'slug-key' },
+        body: { data: [
+          // 用 slug 建表，验证不再依赖 name 的变体后缀
+          { name: 'Muse Spark 1.2 (xhigh)', slug: 'muse-spark-1-2', evaluations: { artificial_analysis_intelligence_index: 56.8 } },
+          { name: 'High (variants)', slug: 'high', evaluations: { artificial_analysis_intelligence_index: 90 } },
+        ] },
+      },
+    ]);
+    const pool = await compilePool({ AA_API_KEY: 'slug-key' } as any);
+    // high 精确命中 90 最前；muse 剥离 contributor 命中 56.8 其次
+    expect(pool.map(e => [e.model, e.baseurl])).toEqual([
+      ['vendor/high:free', 'https://openrouter.ai/api/v1'],   // 90 最前
+      ['muse-spark-1.2-contributor-free', 'https://opencode.ai/zen/v1'], // 56.8
     ]);
   });
 

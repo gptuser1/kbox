@@ -36,8 +36,8 @@ async function fetchJson<T>(url: string, headers: Record<string, string> = {}): 
   }
 }
 
-// 归一化模型名，用于 OpenRouter/zen id 与 AA name/别名 的宽松匹配。
-// OpenRouter id 形如 "google/gemma-4-26b-a4b-it:free"，AA 的 name 形如 "Gemma 4 26B A4B IT"。
+// 归一化模型名，用于 OpenRouter/zen id 与 AA slug 的宽松匹配。
+// OpenRouter id 形如 "google/gemma-4-26b-a4b-it:free"，AA 的 slug 形如 "gemma-4-26b-a4b"。
 function normalize(name: string): string {
   return name
     .toLowerCase()
@@ -51,16 +51,52 @@ function normalize(name: string): string {
     .trim();
 }
 
-// 从 AA 返回中抽取 name -> 智能指数 映射，用户名归一化建表
+// 纯标注后缀：提供方 id 常带而 AA slug 省略、且不改变模型身份的词。
+// 只在精确命中失败时剥掉尾部此类 token 生成候选，避免误配到不同模型。
+const STRIP_TOKENS = new Set(['contributor', 'fin', 'it', 'instruct', 'preview', 'latest', 'thinking', 'chat']);
+
+// 对某提供方模型取 AA 分数：先精确命中，失败则逐个剥掉尾部纯标注词再试。
+function aaScore(index: Map<string, number>, rawModel: string): number | undefined {
+  // 候选 key 生成：保留原始 token，尾部是纯标注词时剥掉（最多剥 2 层）。
+  const base = rawModel
+    .toLowerCase()
+    .replace(/:free$/, '')
+    .replace(/-free$/, '')
+    .replace(/:[a-z]+$/, '')
+    .replace(/^[a-z0-9-]+\//, '');
+  const tokens = base.split(/[^a-z0-9]+/).filter(Boolean);
+
+  const keys: string[] = [tokens.join('')];
+  for (let depth = 0; depth < 2; depth++) {
+    const last = tokens[tokens.length - 1];
+    if (!last || !STRIP_TOKENS.has(last)) break;
+    tokens.pop();
+    keys.push(tokens.join(''));
+  }
+
+  for (const key of keys) {
+    const s = index.get(key);
+    if (s !== undefined) return s;
+  }
+  return undefined;
+}
+
+// 从 AA 返回中抽取模型 -> 智能指数 映射，以 slug 建表。
+// slug 是 AA 的稳定机器标识（name 带变体后缀如 "(Reasoning, Max Effort)" 不可精确匹配；
+// id 归属同一模型的不同评测变体，slug 归一化后即可对齐各提供方 id）。
 function buildAaIndex(data: any[]): { index: Map<string, number>; names: Map<string, string> } {
   const index = new Map<string, number>();
   const names = new Map<string, string>();
   for (const m of data || []) {
     const score = m?.evaluations?.artificial_analysis_intelligence_index;
     if (typeof score !== 'number' || !m?.name) continue;
-    const key = normalize(m.name);
-    index.set(key, score);
-    names.set(key, m.name);
+    const key = normalize(m.slug || m.name);
+    const prev = index.get(key);
+    // 同一 slug 下多评测变体（如 max/reasoning effort 不同），取最高分作为该模型代表分
+    if (prev === undefined || score > prev) {
+      index.set(key, score);
+      names.set(key, m.name);
+    }
   }
   return { index, names };
 }
@@ -109,8 +145,11 @@ async function fetchAaIndex(apiKey?: string): Promise<{ index: Map<string, numbe
   return buildAaIndex(data?.data || []);
 }
 
+// 质量门槛：AA 智能指数低于此值的模型不入池，宁缺毋滥。
+const POOL_MIN_SCORE = 35;
+
 // 合成最终清单：多源免费模型 + AA 指数，按智能指数降序。
-// AA 分数只用于局部排序，不下发。无 AA 指数者排在有分数者之后。
+// 只保留 AA 指数 ≥ POOL_MIN_SCORE 的模型；无 AA 分数者一律剔除（宁缺毋滥）。
 export async function compilePool(env: any): Promise<PoolEntry[]> {
   const sources = await Promise.all([
     fetchOpenRouterFree().catch(() => []),
@@ -121,15 +160,14 @@ export async function compilePool(env: any): Promise<PoolEntry[]> {
 
   const aa = await fetchAaIndex(env.AA_API_KEY);
   const scored: { entry: PoolEntry; score: number }[] = [];
-  const unscored: PoolEntry[] = [];
   for (const entry of free) {
-    const score = aa.index.get(normalize(entry.model));
-    if (score !== undefined) scored.push({ entry, score });
-    else unscored.push(entry);
+    const score = aaScore(aa.index, entry.model);
+    // 配不上分或分数低于门槛者直接丢弃
+    if (score !== undefined && score >= POOL_MIN_SCORE) scored.push({ entry, score });
   }
 
   scored.sort((a, b) => b.score - a.score);
-  return [...scored.map(s => s.entry), ...unscored];
+  return scored.map(s => s.entry);
 }
 
 // 定时/手动刷新：编译并写入 KV
