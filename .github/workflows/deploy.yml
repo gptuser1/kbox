@@ -21,21 +21,13 @@ jobs:
       - name: Build frontend (esbuild ESM modules)
         run: npm run build:frontend
 
-      # 只部署一次：把运行期密钥通过 --secrets-file 与本次部署同步写入，
-      # 不额外触发 secret 部署。文件里未列的旧密钥不会被删除。
+      # 只部署一次：成员变量与密钥绑定在 Cloudflare 控制台维护，
+      # 注入多个非敏感绑定的变量时也仅走一次 deploy。这里仅注入非敏感构建变量。
       - name: Deploy to Cloudflare Workers
         run: |
           COMMIT_SHORT="${GITHUB_SHA:0:7}"
-          # 用 .env 格式临时 secret 文件：AA_API_KEY 来自 GitHub Actions secret。
-          # 该 key 为模型池排序所必需，缺失时直接让部署失败，避免上生产出乱序池。
-          if [ -z "$AA_API_KEY" ]; then
-            echo "AA_API_KEY secret 未设置，模型池无法排序，中止部署。" >&2
-            exit 1
-          fi
-          printf 'AA_API_KEY=%s\n' "$AA_API_KEY" > .secrets.env
-          npx wrangler deploy --var "BUILD_COMMIT:${COMMIT_SHORT}" --secrets-file .secrets.env
+          npx wrangler deploy --var "BUILD_COMMIT:${COMMIT_SHORT}"
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CF_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CF_ACCOUNT_ID }}
-          AA_API_KEY: ${{ secrets.AA_API_KEY }}
           GITHUB_SHA: ${{ github.sha }}
