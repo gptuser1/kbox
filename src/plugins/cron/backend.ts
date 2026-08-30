@@ -3,6 +3,7 @@ import { createKv } from '../../services/kv';
 import { masterKey } from '../../services/config';
 import type { OutboundSource } from '../../abstraction/d1';
 import { runCron as runNewsCrawl } from '../news/backend';
+import { refreshModelPool } from '../../services/model-pool';
 import type { BackendPlugin } from '../../adaptation/types';
 import { manifest } from './manifest';
 
@@ -11,6 +12,7 @@ export const NS_CRON_TASKS = 'cron_tasks';
 // 可设为定时任务的 action 清单：只有仓库里已有的原生动作才能被定时触发
 export const CRON_ACTIONS: Record<string, string> = {
   news_crawl: '新闻抓取',
+  model_pool_refresh: '刷新免费模型池',
 };
 
 export interface CronTask {
@@ -106,6 +108,10 @@ async function runTask(env: any, task: CronTask, source: OutboundSource = 'defau
     switch (task.action) {
       case 'news_crawl': {
         const r = await runNewsCrawl(env, source);
+        return { ok: r.success, error: r.error };
+      }
+      case 'model_pool_refresh': {
+        const r = await refreshModelPool(env);
         return { ok: r.success, error: r.error };
       }
       default:
